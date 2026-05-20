@@ -27,6 +27,8 @@ pub struct App {
     window: Size,
     buttons: Vec<Button>,
     hovered: Option<ButtonId>,
+    safe_area_top: f32,
+    safe_area_bottom: f32,
 }
 
 impl App {
@@ -38,9 +40,24 @@ impl App {
             },
             buttons: Vec::new(),
             hovered: None,
+            safe_area_top: 0.0,
+            safe_area_bottom: 0.0,
         };
         app.relayout(width, height);
         app
+    }
+
+    pub fn set_safe_area(&mut self, top: f32, bottom: f32) {
+        self.safe_area_top = top.max(0.0);
+        self.safe_area_bottom = bottom.max(0.0);
+    }
+
+    pub fn safe_area_top(&self) -> f32 {
+        self.safe_area_top
+    }
+
+    pub fn safe_area_bottom(&self) -> f32 {
+        self.safe_area_bottom
     }
 
     pub fn relayout(&mut self, width: usize, height: usize) {
@@ -50,21 +67,26 @@ impl App {
         };
 
         let button_width = self.window.width - (PANEL_PADDING * 2.0);
-        let top = PANEL_PADDING + 96.0;
+        let min_top = self.safe_area_top + PANEL_PADDING;
+        let content_top = min_top + 96.0;
+        let total_buttons_height = BUTTON_HEIGHT * 3.0 + BUTTON_GAP * 2.0;
+        let bottom_limit =
+            self.window.height - self.safe_area_bottom - PANEL_PADDING - total_buttons_height;
+        let top = content_top.min(bottom_limit).max(min_top);
 
         self.buttons = vec![
-            self.make_button(ButtonId::Settings, "Settings", top, button_width),
+            self.make_button(ButtonId::Settings, "Settings", top, button_width.max(0.0)),
             self.make_button(
                 ButtonId::Contacts,
                 "Contacts",
                 top + BUTTON_HEIGHT + BUTTON_GAP,
-                button_width,
+                button_width.max(0.0),
             ),
             self.make_button(
                 ButtonId::Camera,
                 "Camera",
                 top + ((BUTTON_HEIGHT + BUTTON_GAP) * 2.0),
-                button_width,
+                button_width.max(0.0),
             ),
         ];
     }

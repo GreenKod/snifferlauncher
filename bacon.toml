@@ -2,26 +2,28 @@
 
 default_job = "check"
 
-# ---- ANA TUŞ ATAMALARI ----
+# Keybindings
 [keybindings]
-a = "job:android-yukle" # KESİN EMİR: 'a' tuşuna basınca bu işi tetikle!
-c = "job:check"         # 'c' tuşuna basınca sadece check moduna dön
+a = "job:android-debug" 
+c = "job:android-check"         
 
-# ---- İŞ TANIMLARI ----
 
-# [c] modu (Sadece hataları tarar)
-[jobs.check]
-command = ["cargo", "check", "--color", "always"]
-need_stdout = false
-watch = ["src"]
-
-# [a] modu (Derler ve Emülatöre Yükler)
-[jobs.android-yukle]
+# Android debug mode
+[jobs.android-debug]
 command = [
     "sh",
     "-c",
     "cargo apk build --target x86_64-linux-android --lib && adb -s emulator-5554 install target/debug/apk/launcher.apk && adb -s emulator-5554 shell am start -W -n com.greenkod.launcher/android.app.NativeActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER --user 0",
 ]
+
+# Check android project files
+[jobs.android-check]
+command = [
+    "sh",
+    "-c",
+    "cargo check --target x86_64-linux-android --lib && cargo check --target aarch64-linux-android",
+]
 need_stdout = true
 allow_warnings = true
+# run when source code is changed
 watch = ["src"]

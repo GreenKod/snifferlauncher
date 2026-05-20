@@ -5,9 +5,6 @@ pub mod intent;
 pub use intent::launch_action;
 
 #[cfg(target_os = "android")]
-use crate::core::App;
-
-#[cfg(target_os = "android")]
 #[no_mangle]
 pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::{App, Point};
@@ -28,6 +25,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
     let mut running = true;
     let mut needs_redraw = true;
 
+    // Android app in action
     while running {
         app.poll_events(Some(Duration::from_millis(16)), |event| match event {
             PollEvent::Wake | PollEvent::Timeout => {
@@ -39,6 +37,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
             PollEvent::Main(main_event) => match main_event {
                 MainEvent::InitWindow { .. }
                 | MainEvent::WindowResized { .. }
+                | MainEvent::ContentRectChanged { .. }
                 | MainEvent::RedrawNeeded { .. } => {
                     sync_layout_to_window(&app, &mut launcher);
                     render(&app, &launcher);
@@ -113,9 +112,20 @@ fn sync_layout_to_window(app: &android_activity::AndroidApp, launcher: &mut crat
     if let Some(window) = app.native_window() {
         let width = window.width().max(1);
         let height = window.height().max(1);
-        let _ =
-            window.set_buffers_geometry(width, height, Some(HardwareBufferFormat::R8G8B8A8_UNORM));
 
+        let (safe_area_top, safe_area_bottom) = crate::android::intent::get_safe_area(app)
+            .map(|(top, bottom)| (top as f32, bottom as f32))
+            .unwrap_or_else(|| {
+                let content_rect = app.content_rect();
+                (
+                    content_rect.top.max(0) as f32,
+                    (height - content_rect.bottom).max(0) as f32,
+                )
+            });
+
+        launcher.set_safe_area(safe_area_top, safe_area_bottom);
+
+        let _ = window.set_buffers_geometry(width, height, Some(HardwareBufferFormat::R8G8B8A8_UNORM));
         launcher.relayout(width as usize, height as usize);
     }
 }
@@ -147,7 +157,7 @@ fn render(app: &android_activity::AndroidApp, launcher: &crate::core::App) {
     };
 
     clear(bytes, stride, height, BACKGROUND);
-    draw_header(bytes, stride, width, height);
+    draw_header(bytes, stride, width, height, launcher.safe_area_top());
 
     for button in launcher.buttons() {
         let (fill, shadow) = button_colors(button.id, launcher.hovered() == Some(button.id));
@@ -178,12 +188,13 @@ fn draw_header(
     stride: usize,
     width: usize,
     height: usize,
+    safe_area_top: f32,
 ) {
     use crate::core::style::{BUTTON_MUTED, BUTTON_TEXT, HEADER_SURFACE, PANEL_PADDING};
 
     let hero = crate::core::Rect {
         x: PANEL_PADDING,
-        y: PANEL_PADDING,
+        y: safe_area_top + PANEL_PADDING,
         width: (width as f32 - PANEL_PADDING * 2.0).max(0.0),
         height: 68.0,
     };

@@ -1,4 +1,5 @@
 use crate::core::app::Action;
+use android_activity::AndroidApp;
 use jni::{
     objects::{JObject, JValue},
     AttachGuard, JavaVM,
@@ -13,6 +14,53 @@ pub fn launch_action(action: Action) -> Result<(), String> {
         Action::OpenContacts => start_view_uri("content://contacts/people"),
         Action::OpenCamera => start_action("android.media.action.STILL_IMAGE_CAMERA"),
     }
+}
+
+pub fn get_safe_area(app: &AndroidApp) -> Option<(i32, i32)> {
+    let mut env = env().ok()?;
+    let activity = unsafe { JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject) };
+
+    if activity.is_null() {
+        return None;
+    }
+
+    let window = env
+        .call_method(&activity, "getWindow", "()Landroid/view/Window;", &[])
+        .ok()?
+        .l()
+        .ok()?;
+    let decor_view = env
+        .call_method(&window, "getDecorView", "()Landroid/view/View;", &[])
+        .ok()?
+        .l()
+        .ok()?;
+    let insets = env
+        .call_method(
+            &decor_view,
+            "getRootWindowInsets",
+            "()Landroid/view/WindowInsets;",
+            &[],
+        )
+        .ok()?
+        .l()
+        .ok()?;
+
+    if insets.is_null() {
+        return None;
+    }
+
+    let top = env
+        .call_method(&insets, "getSystemWindowInsetTop", "()I", &[])
+        .ok()?
+        .i()
+        .ok()?;
+    let bottom = env
+        .call_method(&insets, "getSystemWindowInsetBottom", "()I", &[])
+        .ok()?
+        .i()
+        .ok()?;
+
+    Some((top, bottom))
 }
 
 fn start_action(action: &str) -> Result<(), String> {
