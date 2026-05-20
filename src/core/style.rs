@@ -1,0 +1,22 @@
+pub const WINDOW_WIDTH: usize = 420;
+pub const WINDOW_HEIGHT: usize = 760;
+pub const PANEL_PADDING: f32 = 22.0;
+pub const BUTTON_HEIGHT: f32 = 86.0;
+pub const BUTTON_GAP: f32 = 16.0;
+pub const CARD_RADIUS: f32 = 18.0;
+pub const SHADOW_OFFSET_Y: f32 = 7.0;
+pub const SHADOW_SPREAD: f32 = 4.0;
+pub const ICON_BOX_SIZE: f32 = 56.0;
+
+pub const BACKGROUND: u32 = 0x101820;
+pub const BUTTON_TEXT: u32 = 0xF2F5F7;
+pub const BUTTON_MUTED: u32 = 0xAFC4CC;
+pub const SHADOW: u32 = 0x0B1116;
+pub const CARD_SETTINGS: u32 = 0x1B9AAA;
+pub const CARD_CONTACTS: u32 = 0x2C8FA3;
+pub const CARD_CAMERA: u32 = 0x246E7D;
+pub const CARD_SETTINGS_HOVER: u32 = 0x23AFC4;
+pub const CARD_CONTACTS_HOVER: u32 = 0x36A3B8;
+pub const CARD_CAMERA_HOVER: u32 = 0x2D8091;
+pub const ICON_SURFACE: u32 = 0x0F3940;
+pub const HEADER_SURFACE: u32 = 0x15232C;

@@ -1,0 +1,43 @@
+[package]
+name = "launcher"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[[bin]]
+name = "launcher"
+path = "src/main.rs"
+
+[lib]
+name = "launcher"
+path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+
+[dependencies]
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+minifb = { version = "0.28.0" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android-activity = { version = "0.6.1", features = ["native-activity"] }
+jni = { version = "0.21.1" }
+ndk-context = { version = "0.1.1" }
+ndk = "0.9.0"
+
+[package.metadata.android]
+package = "com.greenkod.launcher"
+build_targets = ["aarch64-linux-android"]
+
+[package.metadata.android.sdk]
+min_sdk_version = 29
+target_sdk_version = 36
+
+[profile.dev]
+opt-level = 3        # Kodları release modundaki gibi tam optimize et (Hız için)
+strip = true         # Binary boyutunu küçültmek için sembolleri temizle (sub-200KB hedefi için)
+lto = true           # Link-Time Optimization aç (Gereksiz kodları uçurur)
+panic = "abort"      # Panik anında stack'i çözme, direkt kapat (Boyutu aşırı düşürür)
