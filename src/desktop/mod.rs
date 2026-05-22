@@ -58,9 +58,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 fn handle_action(action: Action) {
     match action {
-        Action::OpenSettings => println!("desktop preview: open settings"),
-        Action::OpenContacts => println!("desktop preview: open contacts"),
-        Action::OpenCamera => println!("desktop preview: open camera"),
+        Action::OpenSettings => {
+            dbg!("desktop preview: open settings");
+        },
+        Action::OpenContacts => {
+            dbg!("desktop preview: open contacts");
+        },
+        Action::OpenCamera => {
+            dbg!("desktop preview: open camera");
+        },
     }
 }
 
