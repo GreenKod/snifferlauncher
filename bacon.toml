@@ -13,7 +13,7 @@ c = "job:android-check"
 command = [
     "sh",
     "-c",
-    "cargo apk build --target x86_64-linux-android --lib && adb -s emulator-5554 install target/debug/apk/launcher.apk && adb -s emulator-5554 shell am start -W -n com.greenkod.launcher/android.app.NativeActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER --user 0",
+    "cargo apk build --target x86_64-linux-android --lib && adb -s emulator-5554 install target/debug/apk/snifferlauncher.apk && adb -s emulator-5554 shell am start -W -n com.greenkod.snifferlauncher/android.app.NativeActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER --user 0",
 ]
 
 # Check android project files

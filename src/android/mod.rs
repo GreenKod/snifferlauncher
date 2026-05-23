@@ -5,6 +5,9 @@ pub mod intent;
 pub use intent::launch_action;
 
 #[cfg(target_os = "android")]
+use crate::core::Button;
+
+#[cfg(target_os = "android")]
 #[no_mangle]
 pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::{App, Point};
@@ -158,8 +161,9 @@ fn render(app: &android_activity::AndroidApp, launcher: &crate::core::App) {
 
     clear(bytes, stride, height, BACKGROUND);
     draw_header(bytes, stride, width, height, launcher.safe_area_top());
-
     for button in launcher.buttons() {
+        dbg!("button: ");
+        dbg!(&button);
         let (fill, shadow) = button_colors(button.id, launcher.hovered() == Some(button.id));
         let shadow_rect = crate::core::Rect {
             x: button.rect.x,
