@@ -5,9 +5,6 @@ pub mod intent;
 pub use intent::launch_action;
 
 #[cfg(target_os = "android")]
-use crate::core::Button;
-
-#[cfg(target_os = "android")]
 #[no_mangle]
 pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::{App, Point};
@@ -20,8 +17,8 @@ pub fn android_main(app: android_activity::AndroidApp) {
     let mut height = 760;
 
     if let Some(window) = app.native_window() {
-        width = window.width() as usize; // Ekranın piksel cinsinden genişliği
-        height = window.height() as usize; // Ekranın piksel cinsinden yüksekliği
+        width = window.width() as usize; // Screen width in pixels
+        height = window.height() as usize; // Screen height in pixels
     }
 
     let mut launcher = App::new(width, height);
