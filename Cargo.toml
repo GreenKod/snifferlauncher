@@ -18,6 +18,9 @@ crate-type = ["rlib", "cdylib"]
 default = []
 
 [dependencies]
+glow = "0.17.0"
+sdl2 = "0.38.0"
+
 [target.'cfg(not(target_os = "android"))'.dependencies]
 minifb = { version = "0.28.0" }
 
