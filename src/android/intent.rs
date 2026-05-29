@@ -1,4 +1,4 @@
-use crate::core::app::Action;
+use crate::core::component::Action;
 use android_activity::AndroidApp;
 use jni::{jni_sig, jni_str, Env};
 use jni::{
