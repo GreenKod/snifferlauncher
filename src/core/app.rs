@@ -1,132 +1,86 @@
-use crate::core::geometry::{Point, Rect, Size};
-use crate::core::style::{BUTTON_GAP, BUTTON_HEIGHT, PANEL_PADDING};
+use crate::core::component::{Application, Element, ButtonId, Action};
+use crate::core::style::Style;
+use crate::core::geometry::Point;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ButtonId {
-    Settings,
-    Contacts,
-    Camera,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Action {
-    OpenSettings,
-    OpenContacts,
-    OpenCamera,
+#[derive(Default, Debug)]
+pub struct LauncherState {
+    pub hovered: Option<ButtonId>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Button {
-    pub id: ButtonId,
-    pub title: &'static str,
-    pub rect: Rect,
+pub enum LauncherMessage {
+    PointerMoved(Point),
+    ButtonHovered(Option<ButtonId>),
+    ButtonClicked(ButtonId),
 }
 
-#[derive(Debug)]
-pub struct App {
-    window: Size,
-    buttons: Vec<Button>,
-    hovered: Option<ButtonId>,
-    safe_area_top: f32,
-    safe_area_bottom: f32,
-}
+pub struct LauncherApp;
 
-impl App {
-    pub fn new(width: usize, height: usize) -> Self {
-        let mut app = Self {
-            window: Size {
-                width: width as f32,
-                height: height as f32,
-            },
-            buttons: Vec::new(),
-            hovered: None,
-            safe_area_top: 0.0,
-            safe_area_bottom: 0.0,
-        };
-        app.relayout(width, height);
-        app
+impl Application for LauncherApp {
+    type Message = LauncherMessage;
+    type State = LauncherState;
+
+    fn update(state: &mut Self::State, msg: Self::Message) -> Option<Action> {
+        match msg {
+            LauncherMessage::PointerMoved(_point) => {
+                None
+            }
+            LauncherMessage::ButtonHovered(btn_id) => {
+                state.hovered = btn_id;
+                None
+            }
+            LauncherMessage::ButtonClicked(btn_id) => {
+                match btn_id {
+                    ButtonId::Settings => Some(Action::OpenSettings),
+                    ButtonId::Contacts => Some(Action::OpenContacts),
+                    ButtonId::Camera => Some(Action::OpenCamera),
+                }
+            }
+        }
     }
 
-    pub fn set_safe_area(&mut self, top: f32, bottom: f32) {
-        self.safe_area_top = top.max(0.0);
-        self.safe_area_bottom = bottom.max(0.0);
-    }
+    fn view(state: &Self::State) -> Element {
+        let settings_bg = if state.hovered == Some(ButtonId::Settings) { "bg-settings-hover" } else { "bg-settings" };
+        let contacts_bg = if state.hovered == Some(ButtonId::Contacts) { "bg-contacts-hover" } else { "bg-contacts" };
+        let camera_bg = if state.hovered == Some(ButtonId::Camera) { "bg-camera-hover" } else { "bg-camera" };
 
-    pub fn safe_area_top(&self) -> f32 {
-        self.safe_area_top
-    }
-
-    pub fn safe_area_bottom(&self) -> f32 {
-        self.safe_area_bottom
-    }
-
-    pub fn relayout(&mut self, width: usize, height: usize) {
-        self.window = Size {
-            width: width as f32,
-            height: height as f32,
-        };
-
-        let button_width = self.window.width - (PANEL_PADDING * 2.0);
-        let min_top = self.safe_area_top + PANEL_PADDING;
-        let content_top = min_top + 96.0;
-        let total_buttons_height = BUTTON_HEIGHT * 3.0 + BUTTON_GAP * 2.0;
-        let bottom_limit =
-            self.window.height - self.safe_area_bottom - PANEL_PADDING - total_buttons_height;
-        let top = content_top.min(bottom_limit).max(min_top);
-
-        self.buttons = vec![
-            self.make_button(ButtonId::Settings, "Settings", top, button_width.max(0.0)),
-            self.make_button(
-                ButtonId::Contacts,
-                "Contacts",
-                top + BUTTON_HEIGHT + BUTTON_GAP,
-                button_width.max(0.0),
-            ),
-            self.make_button(
-                ButtonId::Camera,
-                "Camera",
-                top + ((BUTTON_HEIGHT + BUTTON_GAP) * 2.0),
-                button_width.max(0.0),
-            ),
-        ];
-    }
-
-    pub fn buttons(&self) -> &[Button] {
-        &self.buttons
-    }
-
-    pub fn hovered(&self) -> Option<ButtonId> {
-        self.hovered
-    }
-
-    pub fn pointer_moved(&mut self, point: Point) {
-        self.hovered = self
-            .buttons
-            .iter()
-            .find(|button| button.rect.contains(point))
-            .map(|button| button.id);
-    }
-
-    pub fn click(&self, point: Point) -> Option<Action> {
-        let button = self.buttons.iter().find(|button| button.rect.contains(point))?;
-
-        Some(match button.id {
-            ButtonId::Settings => Action::OpenSettings,
-            ButtonId::Contacts => Action::OpenContacts,
-            ButtonId::Camera => Action::OpenCamera,
-        })
-    }
-
-    fn make_button(&self, id: ButtonId, title: &'static str, y: f32, width: f32) -> Button {
-        Button {
-            id,
-            title,
-            rect: Rect {
-                x: PANEL_PADDING,
-                y,
-                width,
-                height: BUTTON_HEIGHT,
-            },
+        Element::Container {
+            style: Style::from_tailwind("bg-background w-full h-full p-22 gap-16 col items-stretch"),
+            children: vec![
+                // Hero Header Card
+                Element::Container {
+                    style: Style::from_tailwind("bg-header rounded-2xl p-22 col items-start gap-8"),
+                    children: vec![
+                        Element::Label {
+                            text: "SNIFFER LAUNCHER".to_string(),
+                            style: Style::from_tailwind("text-main text-[20]"),
+                        },
+                        Element::Label {
+                            text: "Platform-Agnostic UI System (v1.0)".to_string(),
+                            style: Style::from_tailwind("text-muted text-[12]"),
+                        },
+                    ],
+                },
+                // Action Buttons
+                Element::Button {
+                    id: ButtonId::Settings,
+                    title: "Settings".to_string(),
+                    style: Style::from_tailwind(&format!("{} rounded-lg px-14 py-20 shadow-card h-[86]", settings_bg)),
+                    hovered: state.hovered == Some(ButtonId::Settings),
+                },
+                Element::Button {
+                    id: ButtonId::Contacts,
+                    title: "Contacts".to_string(),
+                    style: Style::from_tailwind(&format!("{} rounded-lg px-14 py-20 shadow-card h-[86]", contacts_bg)),
+                    hovered: state.hovered == Some(ButtonId::Contacts),
+                },
+                Element::Button {
+                    id: ButtonId::Camera,
+                    title: "Camera".to_string(),
+                    style: Style::from_tailwind(&format!("{} rounded-lg px-14 py-20 shadow-card h-[86]", camera_bg)),
+                    hovered: state.hovered == Some(ButtonId::Camera),
+                },
+            ],
         }
     }
 }
