@@ -18,14 +18,16 @@ crate-type = ["rlib", "cdylib"]
 default = []
 
 [dependencies]
-[target.'cfg(not(target_os = "android"))'.dependencies]
-minifb = { version = "0.28.0" }
+glow = "0.17.0"
+sdl2 = "0.38.0"
+fontdue = "0.9"
 
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6.1", features = ["native-activity"] }
 jni = { version = "0.22.4" }
 ndk-context = { version = "0.1.1" }
 ndk = "0.9.0"
+khronos-egl = { version = "6.0", features = ["dynamic"] }
 
 [package.metadata.android]
 package = "com.greenkod.snifferlauncher"
