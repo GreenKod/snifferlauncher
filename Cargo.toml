@@ -34,7 +34,7 @@ package = "com.greenkod.snifferlauncher"
 build_targets = ["aarch64-linux-android"]
 
 [package.metadata.android.sdk]
-min_sdk_version = 29
+min_sdk_version = 30
 target_sdk_version = 36
 
 [profile.dev]
@@ -42,3 +42,10 @@ opt-level = 3        # Fully optimize codes as in release mode
 strip = true         # Clean symbols to reduce binary size
 lto = true           # Enable Link-Time Optimization
 panic = "abort"      # Abort on panic, not unwind
+
+[profile.release]
+opt-level = 3
+strip = "symbols"    # 'true' yerine 'symbols' daha spesifik bir temizlik yapar
+lto = "fat"          # 'true' yerine 'fat' daha agresif bir LTO sağlar
+codegen-units = 1    # Derleme süresini uzatır ama kodu çok daha fazla optimize eder
+panic = "abort"
