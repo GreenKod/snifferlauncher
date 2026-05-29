@@ -336,8 +336,8 @@ impl Renderer for GlowRenderer {
             self.gl.uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
             self.gl.uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
 
-            let aw = self.atlas_width as f32;
-            let ah = self.atlas_height as f32;
+            let _aw = self.atlas_width as f32;
+            let _ah = self.atlas_height as f32;
 
             if let Some(ref atlas) = self.font_atlas {
                 let scale = size / atlas.rasterize_size;
