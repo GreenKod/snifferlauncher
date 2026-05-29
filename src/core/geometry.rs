@@ -4,10 +4,30 @@ pub struct Point {
     pub y: f32,
 }
 
+impl Point {
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+
+    pub const fn zero() -> Self {
+        Self { x: 0.0, y: 0.0 }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Size {
     pub width: f32,
     pub height: f32,
+}
+
+impl Size {
+    pub const fn new(width: f32, height: f32) -> Self {
+        Self { width, height }
+    }
+
+    pub const fn zero() -> Self {
+        Self { width: 0.0, height: 0.0 }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -19,6 +39,14 @@ pub struct Rect {
 }
 
 impl Rect {
+    pub const fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
+        Self { x, y, width, height }
+    }
+
+    pub const fn zero() -> Self {
+        Self { x: 0.0, y: 0.0, width: 0.0, height: 0.0 }
+    }
+
     pub fn contains(&self, point: Point) -> bool {
         point.x >= self.x
             && point.x <= self.x + self.width
