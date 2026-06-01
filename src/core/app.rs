@@ -1,6 +1,6 @@
-use crate::core::component::{Application, Element, ButtonId, Action};
-use crate::core::style::Style;
+use crate::core::component::{Action, Application, ButtonId, Element};
 use crate::core::geometry::Point;
+use crate::core::style::Style;
 
 #[derive(Default, Debug)]
 pub struct LauncherState {
@@ -22,30 +22,40 @@ impl Application for LauncherApp {
 
     fn update(state: &mut Self::State, msg: Self::Message) -> Option<Action> {
         match msg {
-            LauncherMessage::PointerMoved(_point) => {
-                None
-            }
+            LauncherMessage::PointerMoved(_point) => None,
             LauncherMessage::ButtonHovered(btn_id) => {
                 state.hovered = btn_id;
                 None
             }
-            LauncherMessage::ButtonClicked(btn_id) => {
-                match btn_id {
-                    ButtonId::Settings => Some(Action::OpenSettings),
-                    ButtonId::Contacts => Some(Action::OpenContacts),
-                    ButtonId::Camera => Some(Action::OpenCamera),
-                }
-            }
+            LauncherMessage::ButtonClicked(btn_id) => match btn_id {
+                ButtonId::Settings => Some(Action::OpenSettings),
+                ButtonId::Contacts => Some(Action::OpenContacts),
+                ButtonId::Camera => Some(Action::OpenCamera),
+            },
         }
     }
 
     fn view(state: &Self::State) -> Element {
-        let settings_bg = if state.hovered == Some(ButtonId::Settings) { "bg-settings-hover" } else { "bg-settings" };
-        let contacts_bg = if state.hovered == Some(ButtonId::Contacts) { "bg-contacts-hover" } else { "bg-contacts" };
-        let camera_bg = if state.hovered == Some(ButtonId::Camera) { "bg-camera-hover" } else { "bg-camera" };
+        let settings_bg = if state.hovered == Some(ButtonId::Settings) {
+            "bg-settings-hover"
+        } else {
+            "bg-settings"
+        };
+        let contacts_bg = if state.hovered == Some(ButtonId::Contacts) {
+            "bg-contacts-hover"
+        } else {
+            "bg-contacts"
+        };
+        let camera_bg = if state.hovered == Some(ButtonId::Camera) {
+            "bg-camera-hover"
+        } else {
+            "bg-camera"
+        };
 
         Element::Container {
-            style: Style::from_tailwind("bg-background w-full h-full p-22 gap-16 col items-stretch"),
+            style: Style::from_tailwind(
+                "bg-background w-full h-full p-22 gap-16 col items-stretch",
+            ),
             children: vec![
                 // Hero Header Card
                 Element::Container {
@@ -61,24 +71,37 @@ impl Application for LauncherApp {
                         },
                     ],
                 },
-                // Action Buttons
-                Element::Button {
-                    id: ButtonId::Settings,
-                    title: "Settings".to_string(),
-                    style: Style::from_tailwind(&format!("{} rounded-lg px-14 py-20 shadow-card h-[86]", settings_bg)),
-                    hovered: state.hovered == Some(ButtonId::Settings),
-                },
-                Element::Button {
-                    id: ButtonId::Contacts,
-                    title: "Contacts".to_string(),
-                    style: Style::from_tailwind(&format!("{} rounded-lg px-14 py-20 shadow-card h-[86]", contacts_bg)),
-                    hovered: state.hovered == Some(ButtonId::Contacts),
-                },
-                Element::Button {
-                    id: ButtonId::Camera,
-                    title: "Camera".to_string(),
-                    style: Style::from_tailwind(&format!("{} rounded-lg px-14 py-20 shadow-card h-[86]", camera_bg)),
-                    hovered: state.hovered == Some(ButtonId::Camera),
+                Element::Container {
+                    style: Style::from_tailwind("bg-header rounded-2xl p-10 col items-start gap-8"),
+                    children: vec![
+                        Element::Button {
+                            id: ButtonId::Settings,
+                            title: "Settings".to_string(),
+                            style: Style::from_tailwind(&format!(
+                                "{} rounded-lg px-14 py-20 shadow-card h-[86]",
+                                settings_bg
+                            )),
+                            hovered: state.hovered == Some(ButtonId::Settings),
+                        },
+                        Element::Button {
+                            id: ButtonId::Contacts,
+                            title: "Contacts".to_string(),
+                            style: Style::from_tailwind(&format!(
+                                "{} rounded-lg px-14 py-20 shadow-card h-[86]",
+                                contacts_bg
+                            )),
+                            hovered: state.hovered == Some(ButtonId::Contacts),
+                        },
+                        Element::Button {
+                            id: ButtonId::Camera,
+                            title: "Camera".to_string(),
+                            style: Style::from_tailwind(&format!(
+                                "{} rounded-lg px-14 py-20 shadow-card h-[86]",
+                                camera_bg
+                            )),
+                            hovered: state.hovered == Some(ButtonId::Camera),
+                        },
+                    ],
                 },
             ],
         }
