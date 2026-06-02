@@ -10,7 +10,7 @@ pub fn launch_action(_action: crate::core::Action) -> Result<(), String> {
 }
 
 #[cfg(target_os = "android")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::{
         Application, GlowRenderer, LauncherApp,
