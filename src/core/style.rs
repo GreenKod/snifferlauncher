@@ -240,7 +240,7 @@ impl Style {
 
 #[macro_export]
 macro_rules! tw {
-    ($classes:expr) => {
+    ($classes:expr_2021) => {
         $crate::core::style::Style::from_tailwind($classes)
     };
 }
