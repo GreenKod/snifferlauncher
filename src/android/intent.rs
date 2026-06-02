@@ -92,7 +92,75 @@ pub fn get_safe_area(app: &AndroidApp) -> Option<(i32, i32)> {
     .flatten() // Clears unnecessary Option
 }
 
+pub fn get_aplication_list() -> Result<Vec<String>, String> {
+    let jvm = vm().map_err(|e| e.to_string())?;
 
+    let app_list = jvm
+        .attach_current_thread_for_scope::<_, _, jni::errors::Error>(|env: &mut Env| {
+            let context = context(env);
+            let mut local_list = Vec::new();
+
+            let package_manager = env
+                .call_method(
+                    &context,
+                    jni_str!("getPackageManager"),
+                    jni_sig!("()Landroid/content/pm/PackageManager;"),
+                    &[],
+                )?
+                .l()?;
+
+            let packages = env
+                .call_method(
+                    &package_manager,
+                    jni_str!("getInstalledPackages"),
+                    jni_sig!("(I)Ljava/util/List;"),
+                    &[JValue::Int(0)],
+                )?
+                .l()?;
+
+            let size = env
+                .call_method(&packages, jni_str!("size"), jni_sig!("()I"), &[])?
+                .i()?;
+
+            for i in 0..size {
+                let package_info = env
+                    .call_method(
+                        &packages,
+                        jni_str!("get"),
+                        jni_sig!("(I)Ljava/lang/Object;"),
+                        &[JValue::Int(i)],
+                    )?
+                    .l()?;
+
+                let package_name_obj = env
+                    .get_field(
+                        &package_info,
+                        jni_str!("packageName"),
+                        jni_sig!("Ljava/lang/String;"),
+                    )?
+                    .l()?;
+
+                let java_str = env.get_string(unsafe {
+                    &*(&package_name_obj as *const jni::objects::JObject
+                        as *const jni::objects::JString)
+                })?;
+
+                let package_name_str: String = java_str.into();
+
+                local_list.push(package_name_str);
+            }
+
+            Ok(local_list)
+        })
+        .map_err(|e: jni::errors::Error| e.to_string())?;
+
+    dbg!(
+        "Fetched {} applications",
+        app_list.len(),
+        app_list.iter().take(5).collect::<Vec<_>>()
+    );
+    Ok(app_list)
+}
 
 fn start_action(action: &str) -> Result<(), String> {
     // 1. get GlobalJvm
@@ -101,7 +169,7 @@ fn start_action(action: &str) -> Result<(), String> {
     // 2. Explicitly declare the JNI error return type to the compiler
     jvm.attach_current_thread_for_scope::<_, _, jni::errors::Error>(|env: &mut Env| {
         let context = context(env);
-        
+
         // 3. Convert the Rust string to a Java String object and start a new Intent
         let action_string = env.new_string(action)?;
         let intent = env.new_object(
@@ -111,12 +179,10 @@ fn start_action(action: &str) -> Result<(), String> {
         )?;
 
         // 4. Wrap the String errors returned from our own functions with jni::errors::Error::JavaException
-        add_new_task_flag(env, &intent)
-            .map_err(|_| jni::errors::Error::JavaException)?;
+        add_new_task_flag(env, &intent).map_err(|_| jni::errors::Error::JavaException)?;
 
-        start_activity(env, &context, &intent)
-            .map_err(|_| jni::errors::Error::JavaException)?;
-        
+        start_activity(env, &context, &intent).map_err(|_| jni::errors::Error::JavaException)?;
+
         Ok(())
     })
     // 5. Convert the JNI error that goes out of closure to String, which is the actual return type of the function
@@ -131,7 +197,7 @@ pub fn start_view_uri(uri: &str) -> Result<(), String> {
     jvm.attach_current_thread_for_scope::<_, _, jni::errors::Error>(|env: &mut Env| {
         // 3. Get the Android context to be used in the startActivity call
         let context = context(env);
-        
+
         // 4. We prepare the parameters to be used in Java methods (Uri.parse and new Intent)
         let action_string = env.new_string("android.intent.action.VIEW")?;
         let uri_string = env.new_string(uri)?;
@@ -147,19 +213,16 @@ pub fn start_view_uri(uri: &str) -> Result<(), String> {
             .l()?;
 
         // 6. Create a new Intent with two arguments by passing the action and URI objects we have prepared by parameterizing
-        let intent = env
-            .new_object(
-                jni_str!("android/content/Intent"),
-                jni_sig!("(Ljava/lang/String;Landroid/net/Uri;)V"),
-                &[(&action_string).into(), (&parsed_uri).into()],
-            )?;
+        let intent = env.new_object(
+            jni_str!("android/content/Intent"),
+            jni_sig!("(Ljava/lang/String;Landroid/net/Uri;)V"),
+            &[(&action_string).into(), (&parsed_uri).into()],
+        )?;
 
         // 7. Wrap the String errors returned from our own functions with jni::errors::Error::JavaException
-        add_new_task_flag(env, &intent)
-            .map_err(|_| jni::errors::Error::JavaException)?;
-            
-        start_activity(env, &context, &intent)
-            .map_err(|_| jni::errors::Error::JavaException)?;
+        add_new_task_flag(env, &intent).map_err(|_| jni::errors::Error::JavaException)?;
+
+        start_activity(env, &context, &intent).map_err(|_| jni::errors::Error::JavaException)?;
 
         Ok(())
     })
@@ -167,15 +230,13 @@ pub fn start_view_uri(uri: &str) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
-
 pub fn add_new_task_flag(env: &mut Env, intent: &JObject<'_>) -> Result<(), String> {
-    
     // 1. Fetch Android's static "NEW_TASK" flag value to open a new screen from the background
     let flag = env
         .get_static_field(
-            jni_str!("android/content/Intent"), 
-            jni_str!("FLAG_ACTIVITY_NEW_TASK"), 
-            jni_sig!("I")
+            jni_str!("android/content/Intent"),
+            jni_str!("FLAG_ACTIVITY_NEW_TASK"),
+            jni_sig!("I"),
         )
         .and_then(|value| value.i())
         .map_err(|e| e.to_string())?;
@@ -185,7 +246,7 @@ pub fn add_new_task_flag(env: &mut Env, intent: &JObject<'_>) -> Result<(), Stri
         intent,
         jni_str!("addFlags"),
         jni_sig!("(I)Landroid/content/Intent;"),
-        &[JValue::Int(flag)], 
+        &[JValue::Int(flag)],
     )
     // 3. Wrap any JNI errors that may occur during this process into a String error
     .map_err(|e| e.to_string())?;
@@ -198,7 +259,6 @@ pub fn start_activity(
     context: &JObject<'_>,
     intent: &JObject<'_>,
 ) -> Result<(), String> {
-    
     // 1. Invoke the startActivity method on the context (which is the Activity) to launch the Intent
     env.call_method(
         context,
@@ -233,7 +293,7 @@ fn vm() -> Result<Arc<JavaVM>, String> {
 fn context<'local>(env: &Env<'local>) -> JObject<'local> {
     // 1. Get the Android context using the ndk_context crate, which provides a safe wrapper around the raw Android context pointer
     let android_context = ndk_context::android_context();
-    
+
     // 2. Convert the raw Android context pointer to a JObject that can be used in JNI calls. We use the from_raw method to create a JObject from the raw pointer, and we ensure that the lifetime of the JObject is tied to the Env reference to prevent dangling references.
     unsafe { JObject::from_raw(env, android_context.context() as jni::sys::jobject) }
 }
