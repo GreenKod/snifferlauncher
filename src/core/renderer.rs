@@ -1,11 +1,18 @@
+use crate::core::font::{FONT_DATA, FONT_HEIGHT, FONT_WIDTH};
 use crate::core::font_atlas::{self, FontAtlas};
 use crate::core::geometry::Rect;
-use crate::core::font::{FONT_DATA, FONT_WIDTH, FONT_HEIGHT};
 use glow::HasContext;
 
 pub trait Renderer {
     fn clear(&mut self, color: u32);
-    fn draw_rect(&mut self, rect: Rect, color: u32, radius: f32, border_width: f32, border_color: Option<u32>);
+    fn draw_rect(
+        &mut self,
+        rect: Rect,
+        color: u32,
+        radius: f32,
+        border_width: f32,
+        border_color: Option<u32>,
+    );
     fn draw_shadow(&mut self, rect: Rect, radius: f32, offset_y: f32, spread: f32, color: u32);
     fn draw_circle(&mut self, cx: f32, cy: f32, radius: f32, color: u32);
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: u32);
@@ -38,96 +45,92 @@ fn unpack_color(color: u32) -> [f32; 4] {
 
 impl GlowRenderer {
     pub unsafe fn new(gl: glow::Context) -> Result<Self, String> {
-        Self::with_font(gl, None)
+        unsafe { Self::with_font(gl, None) }
     }
 
     pub unsafe fn with_font(gl: glow::Context, font_data: Option<&[u8]>) -> Result<Self, String> {
-        // Vertex coordinates of a simple unit quad (2 triangles)
-        let quad_vertices: [f32; 8] = [
-            0.0, 0.0,
-            1.0, 0.0,
-            0.0, 1.0,
-            1.0, 1.0,
-        ];
+        unsafe {
+            // Vertex coordinates of a simple unit quad (2 triangles)
+            let quad_vertices: [f32; 8] = [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0];
 
-        // 1. Create Quad VAO & VBO
-        let quad_vao = gl.create_vertex_array()?;
-        gl.bind_vertex_array(Some(quad_vao));
-        let quad_vbo = gl.create_buffer()?;
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
-        let quad_bytes = unsafe {
-            std::slice::from_raw_parts(
+            // 1. Create Quad VAO & VBO
+            let quad_vao = gl.create_vertex_array()?;
+            gl.bind_vertex_array(Some(quad_vao));
+            let quad_vbo = gl.create_buffer()?;
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+            let quad_bytes = std::slice::from_raw_parts(
                 quad_vertices.as_ptr() as *const u8,
                 std::mem::size_of_val(&quad_vertices),
-            )
-        };
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            quad_bytes,
-            glow::STATIC_DRAW,
-        );
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+            );
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, quad_bytes, glow::STATIC_DRAW);
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
 
-        // 2. Compile shaders based on target OS
-        #[cfg(target_os = "android")]
-        let (shape_vs_src, shape_fs_src, text_vs_src, text_fs_src) = (
-            include_str!("shaders/shape_android.vs"),
-            include_str!("shaders/shape_android.fs"),
-            include_str!("shaders/text_android.vs"),
-            include_str!("shaders/text_android.fs"),
-        );
+            // 2. Compile shaders based on target OS
+            #[cfg(target_os = "android")]
+            let (shape_vs_src, shape_fs_src, text_vs_src, text_fs_src) = (
+                include_str!("shaders/shape_android.vs"),
+                include_str!("shaders/shape_android.fs"),
+                include_str!("shaders/text_android.vs"),
+                include_str!("shaders/text_android.fs"),
+            );
 
-        #[cfg(not(target_os = "android"))]
-        let (shape_vs_src, shape_fs_src, text_vs_src, text_fs_src) = (
-            include_str!("shaders/shape_desktop.vs"),
-            include_str!("shaders/shape_desktop.fs"),
-            include_str!("shaders/text_desktop.vs"),
-            include_str!("shaders/text_desktop.fs"),
-        );
+            #[cfg(not(target_os = "android"))]
+            let (shape_vs_src, shape_fs_src, text_vs_src, text_fs_src) = (
+                include_str!("shaders/shape_desktop.vs"),
+                include_str!("shaders/shape_desktop.fs"),
+                include_str!("shaders/text_desktop.vs"),
+                include_str!("shaders/text_desktop.fs"),
+            );
 
-        let shape_program = compile_program(&gl, shape_vs_src, shape_fs_src)?;
-        let text_program = compile_program(&gl, text_vs_src, text_fs_src)?;
+            let shape_program = compile_program(&gl, shape_vs_src, shape_fs_src)?;
+            let text_program = compile_program(&gl, text_vs_src, text_fs_src)?;
 
-        // 3. Create font atlas texture
-        let (font_texture, font_atlas, atlas_width, atlas_height) = if let Some(font_bytes) = font_data {
-            if let Ok(atlas) = font_atlas::build_font_atlas(&gl, font_bytes, 32.0) {
-                eprintln!("[DEBUG] Using TTF font atlas ({}x{})", atlas.atlas_width, atlas.atlas_height);
-                let tex = atlas.texture;
-                let w = atlas.atlas_width;
-                let h = atlas.atlas_height;
-                (tex, Some(atlas), w, h)
-            } else {
-                eprintln!("[DEBUG] TTF build failed, falling back to bitmap");
-                create_bitmap_font_atlas(&gl)?
-            }
-        } else {
-            eprintln!("[DEBUG] No font data, using bitmap fallback");
-            create_bitmap_font_atlas(&gl)?
-        };
+            // 3. Create font atlas texture
+            let (font_texture, font_atlas, atlas_width, atlas_height) =
+                if let Some(font_bytes) = font_data {
+                    if let Ok(atlas) = font_atlas::build_font_atlas(&gl, font_bytes, 32.0) {
+                        eprintln!(
+                            "[DEBUG] Using TTF font atlas ({}x{})",
+                            atlas.atlas_width, atlas.atlas_height
+                        );
+                        let tex = atlas.texture;
+                        let w = atlas.atlas_width;
+                        let h = atlas.atlas_height;
+                        (tex, Some(atlas), w, h)
+                    } else {
+                        eprintln!("[DEBUG] TTF build failed, falling back to bitmap");
+                        create_bitmap_font_atlas(&gl)?
+                    }
+                } else {
+                    eprintln!("[DEBUG] No font data, using bitmap fallback");
+                    create_bitmap_font_atlas(&gl)?
+                };
 
-        // Enable alpha blending
-        gl.enable(glow::BLEND);
-        gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+            // Enable alpha blending
+            gl.enable(glow::BLEND);
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
-        Ok(Self {
-            gl,
-            quad_vao,
-            _quad_vbo: quad_vbo,
-            shape_program,
-            text_program,
-            font_texture,
-            resolution: (800.0, 600.0),
-            font_atlas,
-            atlas_width,
-            atlas_height,
-        })
+            Ok(Self {
+                gl,
+                quad_vao,
+                _quad_vbo: quad_vbo,
+                shape_program,
+                text_program,
+                font_texture,
+                resolution: (800.0, 600.0),
+                font_atlas,
+                atlas_width,
+                atlas_height,
+            })
+        }
     }
 }
 
 unsafe fn create_bitmap_font_atlas(
     gl: &glow::Context,
 ) -> Result<(glow::Texture, Option<FontAtlas>, i32, i32), String> {
+    unsafe {
         let mut font_pixels = vec![0u8; 96 * FONT_WIDTH * FONT_HEIGHT];
         for c in 0..96 {
             for row in 0..FONT_HEIGHT {
@@ -153,50 +156,67 @@ unsafe fn create_bitmap_font_atlas(
             glow::UNSIGNED_BYTE,
             glow::PixelUnpackData::Slice(Some(&font_pixels)),
         );
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MIN_FILTER,
+            glow::NEAREST as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MAG_FILTER,
+            glow::NEAREST as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_WRAP_S,
+            glow::CLAMP_TO_EDGE as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_WRAP_T,
+            glow::CLAMP_TO_EDGE as i32,
+        );
 
-        Ok((
-            tex,
-            None,
-            (96 * FONT_WIDTH) as i32,
-            FONT_HEIGHT as i32,
-        ))
+        Ok((tex, None, (96 * FONT_WIDTH) as i32, FONT_HEIGHT as i32))
     }
+}
 
-    unsafe fn compile_program(
+unsafe fn compile_program(
     gl: &glow::Context,
     vs_src: &str,
     fs_src: &str,
 ) -> Result<glow::Program, String> {
-    let vs = gl.create_shader(glow::VERTEX_SHADER)?;
-    gl.shader_source(vs, vs_src);
-    gl.compile_shader(vs);
-    if !gl.get_shader_compile_status(vs) {
-        return Err(format!("VS Compile Error: {}", gl.get_shader_info_log(vs)));
+    unsafe {
+        let vs = gl.create_shader(glow::VERTEX_SHADER)?;
+        gl.shader_source(vs, vs_src);
+        gl.compile_shader(vs);
+        if !gl.get_shader_compile_status(vs) {
+            return Err(format!("VS Compile Error: {}", gl.get_shader_info_log(vs)));
+        }
+
+        let fs = gl.create_shader(glow::FRAGMENT_SHADER)?;
+        gl.shader_source(fs, fs_src);
+        gl.compile_shader(fs);
+        if !gl.get_shader_compile_status(fs) {
+            return Err(format!("FS Compile Error: {}", gl.get_shader_info_log(fs)));
+        }
+
+        let program = gl.create_program()?;
+        gl.attach_shader(program, vs);
+        gl.attach_shader(program, fs);
+        gl.link_program(program);
+        if !gl.get_program_link_status(program) {
+            return Err(format!(
+                "Shader Link Error: {}",
+                gl.get_program_info_log(program)
+            ));
+        }
+
+        gl.delete_shader(vs);
+        gl.delete_shader(fs);
+
+        Ok(program)
     }
-
-    let fs = gl.create_shader(glow::FRAGMENT_SHADER)?;
-    gl.shader_source(fs, fs_src);
-    gl.compile_shader(fs);
-    if !gl.get_shader_compile_status(fs) {
-        return Err(format!("FS Compile Error: {}", gl.get_shader_info_log(fs)));
-    }
-
-    let program = gl.create_program()?;
-    gl.attach_shader(program, vs);
-    gl.attach_shader(program, fs);
-    gl.link_program(program);
-    if !gl.get_program_link_status(program) {
-        return Err(format!("Shader Link Error: {}", gl.get_program_info_log(program)));
-    }
-
-    gl.delete_shader(vs);
-    gl.delete_shader(fs);
-
-    Ok(program)
 }
 
 impl Renderer for GlowRenderer {
@@ -218,30 +238,57 @@ impl Renderer for GlowRenderer {
     ) {
         let col = unpack_color(color);
         let b_col = unpack_color(border_color.unwrap_or(0));
-        let _has_border = if border_color.is_some() && border_width > 0.0 { 1.0f32 } else { 0.0f32 };
+        let _has_border = if border_color.is_some() && border_width > 0.0 {
+            1.0f32
+        } else {
+            0.0f32
+        };
 
         unsafe {
             self.gl.use_program(Some(self.shape_program));
             self.gl.bind_vertex_array(Some(self.quad_vao));
 
             // Set uniforms
-            let loc_res = self.gl.get_uniform_location(self.shape_program, "u_resolution");
-            let loc_rect_pos = self.gl.get_uniform_location(self.shape_program, "u_rect_pos");
-            let loc_rect_size = self.gl.get_uniform_location(self.shape_program, "u_rect_size");
+            let loc_res = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_resolution");
+            let loc_rect_pos = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_rect_pos");
+            let loc_rect_size = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_rect_size");
             let loc_color = self.gl.get_uniform_location(self.shape_program, "u_color");
             let loc_radius = self.gl.get_uniform_location(self.shape_program, "u_radius");
-            let loc_border_w = self.gl.get_uniform_location(self.shape_program, "u_border_width");
-            let loc_border_col = self.gl.get_uniform_location(self.shape_program, "u_border_color");
-            let loc_is_circle = self.gl.get_uniform_location(self.shape_program, "u_is_circle");
-            let loc_is_shadow = self.gl.get_uniform_location(self.shape_program, "u_is_shadow");
+            let loc_border_w = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_border_width");
+            let loc_border_col = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_border_color");
+            let loc_is_circle = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_is_circle");
+            let loc_is_shadow = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_is_shadow");
 
-            self.gl.uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
+            self.gl
+                .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
             self.gl.uniform_2_f32(loc_rect_pos.as_ref(), rect.x, rect.y);
-            self.gl.uniform_2_f32(loc_rect_size.as_ref(), rect.width, rect.height);
-            self.gl.uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
+            self.gl
+                .uniform_2_f32(loc_rect_size.as_ref(), rect.width, rect.height);
+            self.gl
+                .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
             self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
             self.gl.uniform_1_f32(loc_border_w.as_ref(), border_width);
-            self.gl.uniform_4_f32(loc_border_col.as_ref(), b_col[0], b_col[1], b_col[2], b_col[3]);
+            self.gl.uniform_4_f32(
+                loc_border_col.as_ref(),
+                b_col[0],
+                b_col[1],
+                b_col[2],
+                b_col[3],
+            );
             self.gl.uniform_1_f32(loc_is_circle.as_ref(), 0.0);
             self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 0.0);
 
@@ -255,14 +302,26 @@ impl Renderer for GlowRenderer {
             self.gl.use_program(Some(self.shape_program));
             self.gl.bind_vertex_array(Some(self.quad_vao));
 
-            let loc_res = self.gl.get_uniform_location(self.shape_program, "u_resolution");
-            let loc_rect_pos = self.gl.get_uniform_location(self.shape_program, "u_rect_pos");
-            let loc_rect_size = self.gl.get_uniform_location(self.shape_program, "u_rect_size");
+            let loc_res = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_resolution");
+            let loc_rect_pos = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_rect_pos");
+            let loc_rect_size = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_rect_size");
             let loc_color = self.gl.get_uniform_location(self.shape_program, "u_color");
             let loc_radius = self.gl.get_uniform_location(self.shape_program, "u_radius");
-            let loc_is_circle = self.gl.get_uniform_location(self.shape_program, "u_is_circle");
-            let loc_is_shadow = self.gl.get_uniform_location(self.shape_program, "u_is_shadow");
-            let loc_shadow_blur = self.gl.get_uniform_location(self.shape_program, "u_shadow_blur");
+            let loc_is_circle = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_is_circle");
+            let loc_is_shadow = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_is_shadow");
+            let loc_shadow_blur = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_shadow_blur");
 
             // Shadow is slightly larger and offset down
             let shadow_rect = Rect {
@@ -272,14 +331,22 @@ impl Renderer for GlowRenderer {
                 height: rect.height + (spread * 2.0),
             };
 
-            self.gl.uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
-            self.gl.uniform_2_f32(loc_rect_pos.as_ref(), shadow_rect.x, shadow_rect.y);
-            self.gl.uniform_2_f32(loc_rect_size.as_ref(), shadow_rect.width, shadow_rect.height);
-            self.gl.uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
+            self.gl
+                .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
+            self.gl
+                .uniform_2_f32(loc_rect_pos.as_ref(), shadow_rect.x, shadow_rect.y);
+            self.gl.uniform_2_f32(
+                loc_rect_size.as_ref(),
+                shadow_rect.width,
+                shadow_rect.height,
+            );
+            self.gl
+                .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
             self.gl.uniform_1_f32(loc_radius.as_ref(), radius + spread);
             self.gl.uniform_1_f32(loc_is_circle.as_ref(), 0.0);
             self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 1.0);
-            self.gl.uniform_1_f32(loc_shadow_blur.as_ref(), spread * 1.5);
+            self.gl
+                .uniform_1_f32(loc_shadow_blur.as_ref(), spread * 1.5);
 
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
@@ -291,13 +358,23 @@ impl Renderer for GlowRenderer {
             self.gl.use_program(Some(self.shape_program));
             self.gl.bind_vertex_array(Some(self.quad_vao));
 
-            let loc_res = self.gl.get_uniform_location(self.shape_program, "u_resolution");
-            let loc_rect_pos = self.gl.get_uniform_location(self.shape_program, "u_rect_pos");
-            let loc_rect_size = self.gl.get_uniform_location(self.shape_program, "u_rect_size");
+            let loc_res = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_resolution");
+            let loc_rect_pos = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_rect_pos");
+            let loc_rect_size = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_rect_size");
             let loc_color = self.gl.get_uniform_location(self.shape_program, "u_color");
             let loc_radius = self.gl.get_uniform_location(self.shape_program, "u_radius");
-            let loc_is_circle = self.gl.get_uniform_location(self.shape_program, "u_is_circle");
-            let loc_is_shadow = self.gl.get_uniform_location(self.shape_program, "u_is_shadow");
+            let loc_is_circle = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_is_circle");
+            let loc_is_shadow = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_is_shadow");
 
             let rect = Rect {
                 x: cx - radius,
@@ -306,10 +383,13 @@ impl Renderer for GlowRenderer {
                 height: radius * 2.0,
             };
 
-            self.gl.uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
+            self.gl
+                .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
             self.gl.uniform_2_f32(loc_rect_pos.as_ref(), rect.x, rect.y);
-            self.gl.uniform_2_f32(loc_rect_size.as_ref(), rect.width, rect.height);
-            self.gl.uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
+            self.gl
+                .uniform_2_f32(loc_rect_size.as_ref(), rect.width, rect.height);
+            self.gl
+                .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
             self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
             self.gl.uniform_1_f32(loc_is_circle.as_ref(), 1.0);
             self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 0.0);
@@ -324,17 +404,28 @@ impl Renderer for GlowRenderer {
             self.gl.use_program(Some(self.text_program));
             self.gl.bind_vertex_array(Some(self.quad_vao));
             self.gl.active_texture(glow::TEXTURE0);
-            self.gl.bind_texture(glow::TEXTURE_2D, Some(self.font_texture));
+            self.gl
+                .bind_texture(glow::TEXTURE_2D, Some(self.font_texture));
 
-            let loc_res = self.gl.get_uniform_location(self.text_program, "u_resolution");
-            let loc_rect_pos = self.gl.get_uniform_location(self.text_program, "u_rect_pos");
-            let loc_rect_size = self.gl.get_uniform_location(self.text_program, "u_rect_size");
+            let loc_res = self
+                .gl
+                .get_uniform_location(self.text_program, "u_resolution");
+            let loc_rect_pos = self
+                .gl
+                .get_uniform_location(self.text_program, "u_rect_pos");
+            let loc_rect_size = self
+                .gl
+                .get_uniform_location(self.text_program, "u_rect_size");
             let loc_color = self.gl.get_uniform_location(self.text_program, "u_color");
-            let loc_uv_start = self.gl.get_uniform_location(self.text_program, "u_uv_start");
+            let loc_uv_start = self
+                .gl
+                .get_uniform_location(self.text_program, "u_uv_start");
             let loc_uv_end = self.gl.get_uniform_location(self.text_program, "u_uv_end");
 
-            self.gl.uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
-            self.gl.uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
+            self.gl
+                .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
+            self.gl
+                .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
 
             let _aw = self.atlas_width as f32;
             let _ah = self.atlas_height as f32;
@@ -405,17 +496,12 @@ impl Renderer for GlowRenderer {
                     };
 
                     self.gl.uniform_2_f32(loc_rect_pos.as_ref(), curr_x, y);
-                    self.gl.uniform_2_f32(loc_rect_size.as_ref(), char_width, char_height);
-                    self.gl.uniform_2_f32(
-                        loc_uv_start.as_ref(),
-                        idx / 96.0,
-                        0.0,
-                    );
-                    self.gl.uniform_2_f32(
-                        loc_uv_end.as_ref(),
-                        (idx + 1.0) / 96.0,
-                        1.0,
-                    );
+                    self.gl
+                        .uniform_2_f32(loc_rect_size.as_ref(), char_width, char_height);
+                    self.gl
+                        .uniform_2_f32(loc_uv_start.as_ref(), idx / 96.0, 0.0);
+                    self.gl
+                        .uniform_2_f32(loc_uv_end.as_ref(), (idx + 1.0) / 96.0, 1.0);
 
                     self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
                     curr_x += char_width + gap;
