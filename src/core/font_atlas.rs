@@ -79,8 +79,18 @@ pub fn build_font_atlas(
 
     // Pack glyphs in a single row: atlas_height = max glyph height
     const PADDING: u32 = 2;
-    let atlas_height = glyphs_data.iter().map(|g| g.height).max().unwrap_or(1).max(1) + PADDING * 2;
-    let atlas_width = glyphs_data.iter().map(|g| g.width + PADDING * 2).sum::<u32>().max(1);
+    let atlas_height = glyphs_data
+        .iter()
+        .map(|g| g.height)
+        .max()
+        .unwrap_or(1)
+        .max(1)
+        + PADDING * 2;
+    let atlas_width = glyphs_data
+        .iter()
+        .map(|g| g.width + PADDING * 2)
+        .sum::<u32>()
+        .max(1);
 
     let mut atlas_pixels = vec![0u8; (atlas_width * atlas_height) as usize];
     let mut glyph_infos: Vec<GlyphInfo> = Vec::with_capacity(96);
@@ -136,16 +146,35 @@ pub fn build_font_atlas(
             glow::UNSIGNED_BYTE,
             glow::PixelUnpackData::Slice(Some(&atlas_pixels)),
         );
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MIN_FILTER,
+            glow::LINEAR as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_MAG_FILTER,
+            glow::LINEAR as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_WRAP_S,
+            glow::CLAMP_TO_EDGE as i32,
+        );
+        gl.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_WRAP_T,
+            glow::CLAMP_TO_EDGE as i32,
+        );
         tex
     };
 
     eprintln!(
         "[FontAtlas] Built {}x{} atlas, {} glyphs, ascent={:.1}",
-        atlas_width, atlas_height, glyph_infos.len(), ascent
+        atlas_width,
+        atlas_height,
+        glyph_infos.len(),
+        ascent
     );
 
     Ok(FontAtlas {
