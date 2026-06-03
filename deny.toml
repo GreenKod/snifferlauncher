@@ -19,8 +19,3 @@ license-files = [
 
 [licenses.private]
 ignore = false
-
-[licenses.exceptions]
-allow = [
-    "BSD-2-Clause",
-]
