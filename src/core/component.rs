@@ -1,7 +1,7 @@
-use crate::core::style::Style;
 use crate::core::geometry::{Point, Rect};
 use crate::core::layout::LayoutNode;
 use crate::core::renderer::Renderer;
+use crate::core::style::Style;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ButtonId {
@@ -140,7 +140,7 @@ pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNo
         }
         Element::Button { id, title, .. } => {
             use crate::core::style::ICON_SURFACE;
-            
+
             // Sub-elements of the Button:
             // Left Icon Box
             let icon_box = Rect::new(
@@ -155,7 +155,13 @@ pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNo
             // Left Title / Description text
             let text_left = icon_box.x + icon_box.width + 18.0;
             renderer.draw_text(title, text_left, rect.y + 21.0, 16.0, 0xF2F5F7);
-            renderer.draw_text("Tap to launch application", text_left, rect.y + 45.0, 10.0, 0xAFC4CC);
+            renderer.draw_text(
+                "Tap to launch application",
+                text_left,
+                rect.y + 45.0,
+                10.0,
+                0xAFC4CC,
+            );
 
             // Right Accent Pill
             let pill = Rect::new(
@@ -194,7 +200,7 @@ pub fn draw_button_icon(renderer: &mut dyn Renderer, id: ButtonId, rect: Rect) {
             let head_cx = rect.x + rect.width * 0.5;
             let head_cy = rect.y + 22.0;
             renderer.draw_circle(head_cx, head_cy, 10.0, 0xF2F5F7);
-            
+
             let body = Rect::new(rect.x + 14.0, rect.y + 36.0, 28.0, 12.0);
             renderer.draw_rect(body, 0xF2F5F7, 6.0, 0.0, None);
         }
