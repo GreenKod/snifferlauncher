@@ -78,8 +78,7 @@ impl Application for LauncherApp {
                             id: ButtonId::Settings,
                             title: "Settings".to_string(),
                             style: Style::from_tailwind(&format!(
-                                "{} rounded-lg px-14 py-20 shadow-card h-[86]",
-                                settings_bg
+                                "{settings_bg} rounded-lg px-14 py-20 shadow-card h-[86]"
                             )),
                             hovered: state.hovered == Some(ButtonId::Settings),
                         },
@@ -87,8 +86,7 @@ impl Application for LauncherApp {
                             id: ButtonId::Contacts,
                             title: "Contacts".to_string(),
                             style: Style::from_tailwind(&format!(
-                                "{} rounded-lg px-14 py-20 shadow-card h-[86]",
-                                contacts_bg
+                                "{contacts_bg} rounded-lg px-14 py-20 shadow-card h-[86]"
                             )),
                             hovered: state.hovered == Some(ButtonId::Contacts),
                         },
@@ -96,8 +94,7 @@ impl Application for LauncherApp {
                             id: ButtonId::Camera,
                             title: "Camera".to_string(),
                             style: Style::from_tailwind(&format!(
-                                "{} rounded-lg px-14 py-20 shadow-card h-[86]",
-                                camera_bg
+                                "{camera_bg} rounded-lg px-14 py-20 shadow-card h-[86]"
                             )),
                             hovered: state.hovered == Some(ButtonId::Camera),
                         },
