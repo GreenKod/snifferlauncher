@@ -72,11 +72,21 @@ pub struct RectOffset {
 
 impl RectOffset {
     pub const fn zero() -> Self {
-        Self { left: 0.0, right: 0.0, top: 0.0, bottom: 0.0 }
+        Self {
+            left: 0.0,
+            right: 0.0,
+            top: 0.0,
+            bottom: 0.0,
+        }
     }
 
     pub const fn all(val: f32) -> Self {
-        Self { left: val, right: val, top: val, bottom: val }
+        Self {
+            left: val,
+            right: val,
+            top: val,
+            bottom: val,
+        }
     }
 }
 
@@ -86,23 +96,23 @@ pub struct Style {
     pub flex_direction: FlexDirection,
     pub justify_content: JustifyContent,
     pub align_items: AlignItems,
-    
+
     pub width: Dimension,
     pub height: Dimension,
-    
+
     pub padding: RectOffset,
     pub margin: RectOffset,
     pub gap: f32,
-    
+
     pub background_color: Option<u32>,
     pub border_radius: f32,
     pub border_color: Option<u32>,
     pub border_width: f32,
-    
+
     pub shadow_color: Option<u32>,
     pub shadow_offset_y: f32,
     pub shadow_spread: f32,
-    
+
     pub text_color: Option<u32>,
     pub text_size: f32,
 }
@@ -139,25 +149,25 @@ impl Style {
             match class {
                 "flex" => style.display = Display::Flex,
                 "hidden" => style.display = Display::None,
-                
+
                 "flex-row" | "row" => style.flex_direction = FlexDirection::Row,
                 "flex-col" | "col" => style.flex_direction = FlexDirection::Column,
-                
+
                 "justify-start" => style.justify_content = JustifyContent::Start,
                 "justify-center" => style.justify_content = JustifyContent::Center,
                 "justify-end" => style.justify_content = JustifyContent::End,
                 "justify-between" => style.justify_content = JustifyContent::SpaceBetween,
-                
+
                 "items-start" => style.align_items = AlignItems::Start,
                 "items-center" => style.align_items = AlignItems::Center,
                 "items-end" => style.align_items = AlignItems::End,
                 "items-stretch" => style.align_items = AlignItems::Stretch,
-                
+
                 "w-full" => style.width = Dimension::Percent(100.0),
                 "h-full" => style.height = Dimension::Percent(100.0),
                 "w-auto" => style.width = Dimension::Auto,
                 "h-auto" => style.height = Dimension::Auto,
-                
+
                 // Color mapping
                 "bg-background" => style.background_color = Some(BACKGROUND),
                 "bg-header" => style.background_color = Some(HEADER_SURFACE),
@@ -170,24 +180,24 @@ impl Style {
                 "bg-icon-surface" => style.background_color = Some(ICON_SURFACE),
                 "bg-text" => style.background_color = Some(BUTTON_TEXT),
                 "bg-muted" => style.background_color = Some(BUTTON_MUTED),
-                
+
                 "text-main" => style.text_color = Some(BUTTON_TEXT),
                 "text-muted" => style.text_color = Some(BUTTON_MUTED),
-                
+
                 // Shadows
                 "shadow-card" => {
                     style.shadow_color = Some(SHADOW);
                     style.shadow_offset_y = SHADOW_OFFSET_Y;
                     style.shadow_spread = SHADOW_SPREAD;
                 }
-                
+
                 // Border radius
                 "rounded" => style.border_radius = 4.0,
                 "rounded-md" => style.border_radius = 8.0,
                 "rounded-lg" => style.border_radius = CARD_RADIUS, // Matches 18.0
                 "rounded-2xl" => style.border_radius = 24.0,
                 "rounded-full" => style.border_radius = 9999.0,
-                
+
                 other => {
                     // Custom parser for values like p-4, gap-2, w-[200], h-[100], etc.
                     if let Some(val) = other.strip_prefix("p-") {
