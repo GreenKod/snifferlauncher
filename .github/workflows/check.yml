@@ -49,10 +49,11 @@ jobs:
       - name: Scan for Typos
         uses: crate-ci/typos@master
 
-      - name: Dependency Security and License Check (cargo-deny)
-        uses: embarkstudios/cargo-deny-action@v2
-        with:
-          command: check
+      # Safely install and run cargo-deny from crates.io
+      - name: Install and Run cargo-deny
+        run: |
+          cargo install cargo-deny --locked
+          cargo deny check
 
       # Safely install and run cargo-audit from crates.io
       - name: Install and Run cargo-audit
