@@ -1,6 +1,6 @@
 use crate::core::{
-    Action, Application, GlowRenderer, LauncherApp,
-    LauncherMessage, LauncherState, Point, Renderer, Size, calculate_layout,
+    Action, Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point,
+    Renderer, Size, calculate_layout,
     component::{draw_ui, find_clicked_button, find_hovered_button},
     style::{BACKGROUND, WINDOW_HEIGHT, WINDOW_WIDTH},
 };
@@ -20,8 +20,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     gl_attr.set_context_version(3, 3);
 
     // 2. Create Window — dynamic size: 85% of display or fallback
-    let display = video_subsystem.display_bounds(0)
-        .unwrap_or(sdl2::rect::Rect::new(0, 0, WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32));
+    let display = video_subsystem
+        .display_bounds(0)
+        .unwrap_or(sdl2::rect::Rect::new(
+            0,
+            0,
+            WINDOW_WIDTH as u32,
+            WINDOW_HEIGHT as u32,
+        ));
     let init_width = (display.width() as f32 * 0.85) as u32;
     let init_height = (display.height() as f32 * 0.85) as u32;
     let init_width = if init_width < 400 { 400 } else { init_width };
@@ -36,9 +42,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // 3. Create GL context and wrap in Glow
     let _gl_context = window.gl_create_context()?;
     let gl = unsafe {
-        glow::Context::from_loader_function(|s| {
-            video_subsystem.gl_get_proc_address(s) as *const _
-        })
+        glow::Context::from_loader_function(|s| video_subsystem.gl_get_proc_address(s) as *const _)
     };
 
     // Audiowide font gömülü olarak binary'ye dahil edildi
@@ -88,22 +92,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         // 6. View & Layout Pass
         let root_element = LauncherApp::view(&state);
-        let layout_tree = calculate_layout(
-            &root_element,
-            Size::new(width, height),
-            0.0,
-            0.0,
-        );
+        let layout_tree = calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
 
         // 7. Event Dispatch / Processing
         if mouse_moved {
             let hovered_btn = find_hovered_button(&root_element, &layout_tree, last_mouse_pos);
-            let _action = LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
+            let _action =
+                LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
         }
 
         if let Some(clicked_pt) = clicked_pos {
-            if let Some(clicked_btn) = find_clicked_button(&root_element, &layout_tree, clicked_pt) {
-                if let Some(action) = LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn)) {
+            if let Some(clicked_btn) = find_clicked_button(&root_element, &layout_tree, clicked_pt)
+            {
+                if let Some(action) =
+                    LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn))
+                {
                     handle_action(action);
                 }
             }
