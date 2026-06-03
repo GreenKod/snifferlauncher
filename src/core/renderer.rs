@@ -44,6 +44,7 @@ fn unpack_color(color: u32) -> [f32; 4] {
 }
 
 impl GlowRenderer {
+    #![allow(clippy::missing_safety_doc)]
     pub unsafe fn new(gl: glow::Context) -> Result<Self, String> {
         unsafe { Self::with_font(gl, None) }
     }
@@ -446,7 +447,7 @@ impl Renderer for GlowRenderer {
                     }
 
                     let code = c as u32;
-                    let idx = if code >= 32 && code <= 127 {
+                    let idx = if (32..=127).contains(&code) {
                         (code - 32) as usize
                     } else {
                         // fallback: '?' character
@@ -489,7 +490,7 @@ impl Renderer for GlowRenderer {
                 let mut curr_x = x;
                 for c in text.chars() {
                     let ascii_code = c as u32;
-                    let idx = if ascii_code >= 32 && ascii_code <= 127 {
+                    let idx = if (32..=127).contains(&ascii_code) {
                         (ascii_code - 32) as f32
                     } else {
                         95.0
