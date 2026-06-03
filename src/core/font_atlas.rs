@@ -224,13 +224,13 @@ pub fn estimate_text_width(atlas: &FontAtlas, text: &str, text_size: f32) -> f32
     let mut width = 0.0f32;
     for c in text.chars() {
         if c == ' ' {
-            width += atlas.space_advance * scale;
+            width = atlas.space_advance.mul_add(scale, width);
         } else {
             let code = c as u32;
             if (32..=127).contains(&code) {
                 let idx = (code - 32) as usize;
                 if idx < atlas.glyphs.len() {
-                    width += atlas.glyphs[idx].advance_width * scale;
+                    width = atlas.glyphs[idx].advance_width.mul_add(scale, width);
                 }
             }
         }
