@@ -103,11 +103,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         if let Some(clicked_pt) = clicked_pos
             && let Some(clicked_btn) = find_clicked_button(&root_element, &layout_tree, clicked_pt)
-                && let Some(action) =
-                    LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn))
-                {
-                    handle_action(action);
-                }
+            && let Some(action) =
+                LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn))
+        {
+            handle_action(action);
+        }
 
         renderer.begin_frame(width, height);
         renderer.clear(BACKGROUND);
