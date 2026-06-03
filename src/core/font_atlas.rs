@@ -197,7 +197,7 @@ pub fn estimate_text_width(atlas: &FontAtlas, text: &str, text_size: f32) -> f32
             width += atlas.space_advance * scale;
         } else {
             let code = c as u32;
-            if code >= 32 && code <= 127 {
+            if (32..=127).contains(&code) {
                 let idx = (code - 32) as usize;
                 if idx < atlas.glyphs.len() {
                     width += atlas.glyphs[idx].advance_width * scale;
