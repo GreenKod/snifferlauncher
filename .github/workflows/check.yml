@@ -93,6 +93,7 @@ jobs:
             libx11-dev \
             libxkbcommon-dev \
             libwayland-dev \
+            libsdl2-dev \
             cmake
 
       - name: Setup Rust Toolchain
@@ -127,10 +128,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install MinGW & CMake
+      - name: Install MinGW, SDL2 and CMake
         run: |
           sudo apt-get update
-          sudo apt-get install -y mingw-w64 cmake
+          sudo apt-get install -y mingw-w64 mingw-w64-x86-64-sdl2-dev pkg-config cmake
 
       - name: Setup Rust Toolchain and Windows Target
         uses: dtolnay/rust-toolchain@stable
