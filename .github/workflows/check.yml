@@ -53,14 +53,17 @@ jobs:
         with:
           command: check
 
-      # Queries the RustSec Advisory Database
-      - name: RustSec Security Audit (cargo-audit)
-        uses: rustsec/audit-action@v0.4.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      # Safely install and run cargo-audit from crates.io to avoid broken marketplace actions
+      - name: Install and Run cargo-audit
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit
 
+      # Safely install and run cargo-machete to detect unused dependencies
       - name: Detect Unused Dependencies (cargo-machete)
-        uses: bnjbgr/cargo-machete@main
+        run: |
+          cargo install cargo-machete --locked
+          cargo machete
 
   # ==========================================
   # STAGE 2: Heavy Compilations & Platform Verifications
