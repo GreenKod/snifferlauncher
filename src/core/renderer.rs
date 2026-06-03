@@ -466,7 +466,7 @@ impl Renderer for GlowRenderer {
 
                 for c in text.chars() {
                     if c == ' ' {
-                        curr_x += atlas.space_advance * scale;
+                        curr_x = atlas.space_advance.mul_add(scale, curr_x);
                         continue;
                     }
 
@@ -484,7 +484,7 @@ impl Renderer for GlowRenderer {
 
                     let glyph = &atlas.glyphs[idx];
                     if glyph.width == 0 || glyph.height == 0 {
-                        curr_x += glyph.advance_width * scale;
+                        curr_x = glyph.advance_width.mul_add(scale, curr_x);
                         continue;
                     }
 
@@ -519,7 +519,7 @@ impl Renderer for GlowRenderer {
                     self.gl.uniform_2_f32(loc_uv_end.as_ref(), u_max_x, u_max_y);
 
                     self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
-                    curr_x += glyph.advance_width * scale;
+                    curr_x = glyph.advance_width.mul_add(scale, curr_x);
                 }
             } else {
                 let char_width = size;
