@@ -223,24 +223,20 @@ impl Style {
                             style.gap = pixels * 4.0;
                         }
                     } else if let Some(val) = other.strip_prefix("w-[") {
-                        if let Some(end) = val.strip_suffix(']') {
-                            if let Ok(pixels) = end.parse::<f32>() {
+                        if let Some(end) = val.strip_suffix(']')
+                            && let Ok(pixels) = end.parse::<f32>() {
                                 style.width = Dimension::Pixels(pixels);
                             }
-                        }
                     } else if let Some(val) = other.strip_prefix("h-[") {
-                        if let Some(end) = val.strip_suffix(']') {
-                            if let Ok(pixels) = end.parse::<f32>() {
+                        if let Some(end) = val.strip_suffix(']')
+                            && let Ok(pixels) = end.parse::<f32>() {
                                 style.height = Dimension::Pixels(pixels);
                             }
-                        }
-                    } else if let Some(val) = other.strip_prefix("text-[") {
-                        if let Some(end) = val.strip_suffix(']') {
-                            if let Ok(sz) = end.parse::<f32>() {
+                    } else if let Some(val) = other.strip_prefix("text-[")
+                        && let Some(end) = val.strip_suffix(']')
+                            && let Ok(sz) = end.parse::<f32>() {
                                 style.text_size = sz;
                             }
-                        }
-                    }
                 }
             }
         }
