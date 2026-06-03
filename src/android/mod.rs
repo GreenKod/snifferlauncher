@@ -5,6 +5,11 @@ pub mod intent;
 pub use intent::launch_action;
 
 #[cfg(not(target_os = "android"))]
+/// Launch the requested action on non-Android targets.
+///
+/// # Errors
+///
+/// Always returns an error because action launching is only implemented on Android.
 pub fn launch_action(_action: crate::core::Action) -> Result<(), String> {
     Err("android launcher is only available on Android".to_string())
 }
@@ -91,7 +96,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
         fn bind_window(&mut self, window: &ndk::native_window::NativeWindow) -> Result<(), String> {
             self.unbind();
 
-            let native_window_ptr = window.ptr().as_ptr() as *mut std::ffi::c_void;
+            let native_window_ptr = window.ptr().as_ptr().cast::<std::ffi::c_void>();
             let surface = unsafe {
                 self.egl
                     .create_window_surface(self.display, self.config, native_window_ptr, None)
@@ -159,12 +164,27 @@ pub fn android_main(app: android_activity::AndroidApp) {
                 if let Some(ref mut egl) = egl_state {
                     if let Some(ref mut renderer) = egl.renderer {
                         if let Some(window) = app.native_window() {
-                            let width = window.width() as f32;
-                            let height = window.height() as f32;
+                            let width = f32::from(
+                                u16::try_from(window.width()).expect("window width fits in u16"),
+                            );
+                            let height = f32::from(
+                                u16::try_from(window.height()).expect("window height fits in u16"),
+                            );
 
                             let (safe_area_top, safe_area_bottom) =
                                 crate::android::intent::get_safe_area(&app)
-                                    .map(|(top, bottom)| (top as f32, bottom as f32))
+                                    .map(|(top, bottom)| {
+                                        (
+                                            f32::from(
+                                                i16::try_from(top)
+                                                    .expect("safe-area top fits in i16"),
+                                            ),
+                                            f32::from(
+                                                i16::try_from(bottom)
+                                                    .expect("safe-area bottom fits in i16"),
+                                            ),
+                                        )
+                                    })
                                     .unwrap_or((0.0, 0.0));
 
                             let root_element = LauncherApp::view(&state);
@@ -218,11 +238,28 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                     last_touch_pos = point;
 
                                     if let Some(window) = app.native_window() {
-                                        let width = window.width() as f32;
-                                        let height = window.height() as f32;
+                                        let width = f32::from(
+                                            u16::try_from(window.width())
+                                                .expect("window width fits in u16"),
+                                        );
+                                        let height = f32::from(
+                                            u16::try_from(window.height())
+                                                .expect("window height fits in u16"),
+                                        );
                                         let (safe_area_top, safe_area_bottom) =
                                             crate::android::intent::get_safe_area(&app)
-                                                .map(|(top, bottom)| (top as f32, bottom as f32))
+                                                .map(|(top, bottom)| {
+                                                    (
+                                                        f32::from(
+                                                            i16::try_from(top).expect(
+                                                                "safe-area top fits in i16",
+                                                            ),
+                                                        ),
+                                                        f32::from(i16::try_from(bottom).expect(
+                                                            "safe-area bottom fits in i16",
+                                                        )),
+                                                    )
+                                                })
                                                 .unwrap_or((0.0, 0.0));
 
                                         let root_element = LauncherApp::view(&state);
