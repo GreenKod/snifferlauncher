@@ -2,32 +2,39 @@ use crate::core::component::Element;
 use crate::core::geometry::{Point, Rect, Size};
 use crate::core::style::{AlignItems, Dimension, FlexDirection, JustifyContent};
 
+pub type LayoutChildren = Vec<LayoutNode>;
+
 #[derive(Clone, Debug)]
 pub struct LayoutNode {
     pub rect: Rect,
-    pub children: Vec<LayoutNode>,
+    pub children: LayoutChildren,
 }
 
 // Estimates text size for auto-sizing labels
+#[must_use]
 fn estimate_text_size(text: &str, text_size: f32) -> Size {
     let char_width = text_size;
     let gap = text_size * 0.1;
-    let width = if text.is_empty() {
-        0.0
-    } else {
-        text.len() as f32 * char_width + (text.len() - 1) as f32 * gap
-    };
+    let mut width = 0.0;
+    for (index, _) in text.chars().enumerate() {
+        width += char_width;
+        if index + 1 < text.chars().count() {
+            width += gap;
+        }
+    }
     Size::new(width, text_size)
 }
 
 impl LayoutNode {
-    pub fn new(rect: Rect) -> Self {
+    #[must_use]
+    pub const fn new(rect: Rect) -> Self {
         Self {
             rect,
             children: Vec::new(),
         }
     }
 
+    #[must_use]
     pub fn hit_test(&self, point: Point) -> Option<usize> {
         // Simple hit-testing of child indices relative to this node
         for (i, child) in self.children.iter().enumerate() {
@@ -39,6 +46,8 @@ impl LayoutNode {
     }
 }
 
+#[must_use]
+#[allow(clippy::missing_panics_doc, clippy::too_many_lines)]
 pub fn calculate_layout(
     element: &Element,
     parent_size: Size,
@@ -129,17 +138,20 @@ pub fn calculate_layout(
                     (final_height - style.padding.top - style.padding.bottom).max(0.0);
                 let remaining_space = (inner_height - total_content_height).max(0.0);
 
-                let mut current_y = match style.justify_content {
-                    JustifyContent::Start => style.padding.top,
-                    JustifyContent::Center => style.padding.top + remaining_space * 0.5,
-                    JustifyContent::End => style.padding.top + remaining_space,
-                    JustifyContent::SpaceBetween => style.padding.top,
-                };
+                let mut current_y = style.padding.top;
+                match style.justify_content {
+                    JustifyContent::Center => current_y += remaining_space * 0.5,
+                    JustifyContent::End => current_y += remaining_space,
+                    JustifyContent::Start | JustifyContent::SpaceBetween => {}
+                }
 
                 let spacing_factor = if style.justify_content == JustifyContent::SpaceBetween
                     && children.len() > 1
                 {
-                    remaining_space / (children.len() - 1) as f32
+                    remaining_space
+                        / f32::from(
+                            u16::try_from(children.len() - 1).expect("child count fits in u16"),
+                        )
                 } else {
                     0.0
                 };
@@ -149,7 +161,9 @@ pub fn calculate_layout(
 
                     let current_x = match style.align_items {
                         AlignItems::Start => style.padding.left,
-                        AlignItems::Center => style.padding.left + (inner_width - child_w) * 0.5,
+                        AlignItems::Center => {
+                            0.5_f32.mul_add(inner_width - child_w, style.padding.left)
+                        }
                         AlignItems::End => style.padding.left + inner_width - child_w,
                         AlignItems::Stretch => {
                             layout.rect.width = inner_width;
@@ -173,17 +187,20 @@ pub fn calculate_layout(
                 let inner_width = (final_width - style.padding.left - style.padding.right).max(0.0);
                 let remaining_space = (inner_width - total_content_width).max(0.0);
 
-                let mut current_x = match style.justify_content {
-                    JustifyContent::Start => style.padding.left,
-                    JustifyContent::Center => style.padding.left + remaining_space * 0.5,
-                    JustifyContent::End => style.padding.left + remaining_space,
-                    JustifyContent::SpaceBetween => style.padding.left,
-                };
+                let mut current_x = style.padding.left;
+                match style.justify_content {
+                    JustifyContent::Center => current_x += remaining_space * 0.5,
+                    JustifyContent::End => current_x += remaining_space,
+                    JustifyContent::Start | JustifyContent::SpaceBetween => {}
+                }
 
                 let spacing_factor = if style.justify_content == JustifyContent::SpaceBetween
                     && children.len() > 1
                 {
-                    remaining_space / (children.len() - 1) as f32
+                    remaining_space
+                        / f32::from(
+                            u16::try_from(children.len() - 1).expect("child count fits in u16"),
+                        )
                 } else {
                     0.0
                 };
@@ -193,7 +210,9 @@ pub fn calculate_layout(
 
                     let current_y = match style.align_items {
                         AlignItems::Start => style.padding.top,
-                        AlignItems::Center => style.padding.top + (inner_height - child_h) * 0.5,
+                        AlignItems::Center => {
+                            0.5_f32.mul_add(inner_height - child_h, style.padding.top)
+                        }
                         AlignItems::End => style.padding.top + inner_height - child_h,
                         AlignItems::Stretch => {
                             layout.rect.height = inner_height;
