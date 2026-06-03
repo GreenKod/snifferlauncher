@@ -85,7 +85,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-3-dev \
-            webkit2gtk-4.0 \
             libwebkit2gtk-4.1-dev \
             libasound2-dev \
             libssl-dev \
@@ -93,7 +92,8 @@ jobs:
             build-essential \
             libx11-dev \
             libxkbcommon-dev \
-            libwayland-dev
+            libwayland-dev \
+            cmake
 
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -127,10 +127,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install MinGW Compiler
+      - name: Install MinGW & CMake
         run: |
           sudo apt-get update
-          sudo apt-get install -y mingw-w64
+          sudo apt-get install -y mingw-w64 cmake
 
       - name: Setup Rust Toolchain and Windows Target
         uses: dtolnay/rust-toolchain@stable
@@ -143,6 +143,7 @@ jobs:
         with:
           key: windows-mingw
 
+      # The "bundled" feature in Cargo.toml will automatically build the SDL2 library.
       - name: Windows (GNU/64-bit) Check & Clippy
         run: |
           cargo check --locked --target x86_64-pc-windows-gnu
@@ -163,10 +164,11 @@ jobs:
       - name: Install Compiler Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang llvm-dev libxml2-dev uuid-dev libssl-dev bash patch make tar xz-utils
+          sudo apt-get install -y clang llvm-dev libxml2-dev uuid-dev libssl-dev bash patch make tar xz-utils cmake git fts-dev
 
+      # Configures macOS SDK on Linux using osxcross
       - name: Setup osxcross Toolchain
-        uses: jasonplaystennis/setup-osxcross@v1
+        uses: namse/setup-osxcross@v1.0.8
         with:
           osx-version: "12.3"
 
@@ -179,26 +181,34 @@ jobs:
       - name: Cache Dependencies
         uses: swatinem/rust-cache@v2
         with:
-          key: osxcross
+          key: osxcross-linux
 
+      # The "bundled" feature will build SDL2 for macOS using the osxcross compiler.
+      # Explicitly specify target-specific linkers to avoid toolchain conflicts.
       - name: macOS (Intel) Check & Clippy
+        env:
+          CC: o64-clang
+          CXX: o64-clang++
+          CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER: o64-clang
         run: |
-          export CC=o64-clang
-          export CXX=o64-clang++
           cargo check --locked --target x86_64-apple-darwin
           cargo clippy --locked --target x86_64-apple-darwin -- -D warnings
 
       - name: macOS (Apple Silicon M1/M2/M3) Check & Clippy
+        env:
+          CC: oaarch64-clang
+          CXX: oaarch64-clang++
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER: oaarch64-clang
         run: |
-          export CC=oaarch64-clang
-          export CXX=oaarch64-clang++
           cargo check --locked --target aarch64-apple-darwin
           cargo clippy --locked --target aarch64-apple-darwin -- -D warnings
 
       - name: macOS Release Build Check
+        env:
+          CC: oaarch64-clang
+          CXX: oaarch64-clang++
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER: oaarch64-clang
         run: |
-          export CC=oaarch64-clang
-          export CXX=oaarch64-clang++
           cargo build --locked --release --target aarch64-apple-darwin
 
   # Android Compilation Verification
@@ -216,10 +226,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android NDK
-        uses: nndubs/setup-ndk@v1
-        with:
-          ndk-version: r26b
+      # Sets up the Android SDK on Linux
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      # Installs the NDK and dynamically writes ANDROID_NDK_HOME to GITHUB_ENV
+      - name: Install NDK tool
+        run: |
+          sdkmanager "ndk;26.1.10909125"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
 
       - name: Setup Rust Toolchain and Android Targets
         uses: dtolnay/rust-toolchain@stable
@@ -229,13 +244,21 @@ jobs:
       - name: Cache Dependencies
         uses: swatinem/rust-cache@v2
         with:
-          key: android
+          key: android-linux
 
+      # Installs cargo-ndk to allow "bundled" C/C++ cross-compilation (like SDL2) for Android
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      # Performs checks using cargo-ndk.
+      # ANDROID_NDK_HOME is automatically sourced from GITHUB_ENV.
       - name: Android (ARM64) Check
-        run: cargo check --locked --target aarch64-linux-android
+        run: cargo ndk --target aarch64-linux-android check
 
       - name: Android (ARMv7) Check
-        run: cargo check --locked --target armv7-linux-androideabi
+        run: cargo ndk --target armv7-linux-androideabi check
 
-      - name: Android (Emulator x86_64) Check
-        run: cargo check --locked --target x86_64-linux-android
+      - name: Android (Emulator x86_64) Check and Build
+        run: |
+          cargo ndk --target x86_64-linux-android check
+          cargo ndk --target x86_64-linux-android build --release
