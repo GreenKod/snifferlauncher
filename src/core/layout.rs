@@ -84,15 +84,7 @@ pub fn calculate_layout(
                 let target_width = match child_style.width {
                     Dimension::Pixels(w) => w,
                     Dimension::Percent(p) => inner_width * (p / 100.0),
-                    Dimension::Auto => {
-                        if style.flex_direction == FlexDirection::Column
-                            && style.align_items == AlignItems::Stretch
-                        {
-                            inner_width
-                        } else {
-                            inner_width
-                        }
-                    }
+                    Dimension::Auto => inner_width,
                 };
 
                 let target_height = match child_style.height {
