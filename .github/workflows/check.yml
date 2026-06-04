@@ -164,6 +164,7 @@ jobs:
           $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
           $env:SDL2_LIB_DIR = "$mingwRoot\lib"
           $env:SDL2_INCLUDE_DIR = "$mingwRoot\include\SDL2"
+          $env:RUSTFLAGS = "$env:RUSTFLAGS -L native=$mingwRoot\lib -L native=$mingwRoot\x86_64-w64-mingw32\lib"
           cargo --version
           cargo check --locked --target x86_64-pc-windows-gnu
           cargo clippy --locked --workspace --all-targets --all-features --target x86_64-pc-windows-gnu -- -D warnings -D clippy::pedantic -D clippy::nursery -D clippy::cargo -A clippy::multiple-crate-versions
@@ -179,6 +180,7 @@ jobs:
           $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
           $env:SDL2_LIB_DIR = "$mingwRoot\lib"
           $env:SDL2_INCLUDE_DIR = "$mingwRoot\include\SDL2"
+          $env:RUSTFLAGS = "$env:RUSTFLAGS -L native=$mingwRoot\lib -L native=$mingwRoot\x86_64-w64-mingw32\lib"
           cargo build --locked --release --target x86_64-pc-windows-gnu
 
   # macOS verification on native runners (Apple Silicon)
