@@ -1,10 +1,9 @@
 name: Rust Advanced Quality, Security, and Cross-Platform Check
 
 on:
-  push:
-    branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
+  workflow_dispatch:
 
 # Principle of Least Privilege
 permissions:
