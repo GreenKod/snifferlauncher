@@ -4,4 +4,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[cfg(target_os = "android")]
+#[allow(clippy::missing_const_for_fn)]
 fn main() {}
