@@ -157,7 +157,7 @@ jobs:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
         run: |
           # Add cargo binary path to MSYS2 environment
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="/c/Users/runner/.cargo/bin:$HOME/.cargo/bin:$PATH"
           cargo check --locked --target x86_64-pc-windows-gnu
           cargo clippy --locked --target x86_64-pc-windows-gnu -- -D warnings
 
@@ -166,7 +166,7 @@ jobs:
         env:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="/c/Users/runner/.cargo/bin:$HOME/.cargo/bin:$PATH"
           cargo build --locked --release --target x86_64-pc-windows-gnu
 
   # macOS verification on native runners (Intel)
@@ -194,11 +194,16 @@ jobs:
 
       - name: macOS (Intel) Check & Clippy
         run: |
+          export PKG_CONFIG_PATH="$(brew --prefix sdl2)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export LIBRARY_PATH="$(brew --prefix sdl2)/lib:$LIBRARY_PATH"
           cargo check --locked --target x86_64-apple-darwin
           cargo clippy --locked --target x86_64-apple-darwin -- -D warnings
 
       - name: macOS Release Build Check
-        run: cargo build --locked --release --target x86_64-apple-darwin
+        run: |
+          export PKG_CONFIG_PATH="$(brew --prefix sdl2)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export LIBRARY_PATH="$(brew --prefix sdl2)/lib:$LIBRARY_PATH"
+          cargo build --locked --release --target x86_64-apple-darwin
 
   # macOS verification on native runners (Apple Silicon)
   validate-macos-aarch64:
@@ -225,11 +230,16 @@ jobs:
 
       - name: macOS (Apple Silicon) Check & Clippy
         run: |
+          export PKG_CONFIG_PATH="$(brew --prefix sdl2)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export LIBRARY_PATH="$(brew --prefix sdl2)/lib:$LIBRARY_PATH"
           cargo check --locked --target aarch64-apple-darwin
           cargo clippy --locked --target aarch64-apple-darwin -- -D warnings
 
       - name: macOS Release Build Check
-        run: cargo build --locked --release --target aarch64-apple-darwin
+        run: |
+          export PKG_CONFIG_PATH="$(brew --prefix sdl2)/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export LIBRARY_PATH="$(brew --prefix sdl2)/lib:$LIBRARY_PATH"
+          cargo build --locked --release --target aarch64-apple-darwin
 
   # Android Compilation Verification
   validate-android:
@@ -267,11 +277,10 @@ jobs:
         with:
           key: android-linux
 
-      # Optimizes cargo-ndk installation using cargo-binstall instead of compiling from scratch
+      # Install cargo-ndk directly from crates.io
       - name: Install cargo-ndk
         run: |
-          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install.sh | sh
-          cargo binstall --no-confirm cargo-ndk
+          cargo install --locked cargo-ndk
 
       # Performs checks using cargo-ndk.
       # ANDROID_NDK_HOME is automatically sourced from GITHUB_ENV.
