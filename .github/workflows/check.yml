@@ -115,7 +115,8 @@ jobs:
           cargo clippy --locked --workspace --all-targets --all-features -- \
             -D warnings \
             -D clippy::pedantic \
-            -D clippy::nursery
+            -D clippy::nursery \
+            -D clippy::cargo
 
       - name: Linux Release Build Check
         run: cargo build --locked --release --workspace --all-features
@@ -163,7 +164,11 @@ jobs:
           export PATH="/c/Users/runner/.cargo/bin:$HOME/.cargo/bin:$PATH"
           /c/Users/runner/.cargo/bin/cargo.exe --version
           /c/Users/runner/.cargo/bin/cargo.exe check --locked --target x86_64-pc-windows-gnu
-          /c/Users/runner/.cargo/bin/cargo.exe clippy --locked --target x86_64-pc-windows-gnu -- -D warnings
+          /c/Users/runner/.cargo/bin/cargo.exe clippy --locked --workspace --all-targets --all-features --target x86_64-pc-windows-gnu -- \
+            -D warnings \
+            -D clippy::pedantic \
+            -D clippy::nursery \
+            -D clippy::cargo
 
       - name: Windows Release Build Check
         shell: msys2 {0}
@@ -204,7 +209,11 @@ jobs:
           export PKG_CONFIG_PATH="$(brew --prefix sdl2)/lib/pkgconfig:$PKG_CONFIG_PATH"
           export LIBRARY_PATH="$(brew --prefix sdl2)/lib:$LIBRARY_PATH"
           cargo check --locked --target aarch64-apple-darwin
-          cargo clippy --locked --target aarch64-apple-darwin -- -D warnings
+          cargo clippy --locked --workspace --all-targets --all-features --target aarch64-apple-darwin -- \
+            -D warnings \
+            -D clippy::pedantic \
+            -D clippy::nursery \
+            -D clippy::cargo
 
       - name: macOS Release Build Check
         run: |
@@ -260,6 +269,29 @@ jobs:
 
       - name: Android (ARMv7) Check
         run: cargo ndk --target armv7-linux-androideabi check
+
+      - name: Android Clippy Checks
+        run: |
+          cargo ndk --target aarch64-linux-android clippy --workspace --all-targets --all-features -- \
+            -D warnings \
+            -D clippy::pedantic \
+            -D clippy::nursery \
+            -D clippy::cargo
+          cargo ndk --target armv7-linux-androideabi clippy --workspace --all-targets --all-features -- \
+            -D warnings \
+            -D clippy::pedantic \
+            -D clippy::nursery \
+            -D clippy::cargo
+          cargo ndk --target x86_64-linux-android clippy --workspace --all-targets --all-features -- \
+            -D warnings \
+            -D clippy::pedantic \
+            -D clippy::nursery \
+            -D clippy::cargo
+          cargo ndk --target i686-linux-android clippy --workspace --all-targets --all-features -- \
+            -D warnings \
+            -D clippy::pedantic \
+            -D clippy::nursery \
+            -D clippy::cargo
 
       - name: Android (Emulator x86_64) Check and Build
         run: |
