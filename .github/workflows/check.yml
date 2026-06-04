@@ -49,22 +49,23 @@ jobs:
       - name: Scan for Typos
         uses: crate-ci/typos@master
 
-      # Safely install and run cargo-deny from crates.io
-      - name: Install and Run cargo-deny
-        run: |
-          cargo install cargo-deny --locked
-          cargo deny check
+      # Optimize cargo-deny using the official action (Fast & No compilation)
+      - name: Run cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
 
-      # Safely install and run cargo-audit from crates.io
-      - name: Install and Run cargo-audit
-        run: |
-          cargo install cargo-audit --locked
-          cargo audit
+      # Optimize cargo-audit using the official action (Fast & No compilation)
+      - name: Run cargo-audit
+        uses: rustsec/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Safely install and run cargo-machete to detect unused dependencies
-      - name: Detect Unused Dependencies (cargo-machete)
+      # Install cargo-binstall to install binary-based cargo-machete quickly without compilation
+      - name: Install cargo-binstall and Run cargo-machete
         run: |
-          cargo install cargo-machete --locked
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install.sh | sh
+          cargo binstall --no-confirm cargo-machete
           cargo machete
 
   # ==========================================
@@ -119,19 +120,25 @@ jobs:
       - name: Linux Release Build Check
         run: cargo build --locked --release --workspace --all-features
 
-  # Windows Cross-Compilation Verification (via MinGW on Linux)
-  validate-windows-via-mingw:
-    name: Windows Verification (via MinGW on Linux)
-    runs-on: ubuntu-latest
+  # Windows verification on a native runner with MSYS2
+  validate-windows:
+    name: Windows Verification
+    runs-on: windows-latest
     needs: pre-flight
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install MinGW, SDL2 and CMake
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mingw-w64 mingw-w64-x86-64-sdl2-dev pkg-config cmake
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-cmake
 
       - name: Setup Rust Toolchain and Windows Target
         uses: dtolnay/rust-toolchain@stable
@@ -142,75 +149,87 @@ jobs:
       - name: Cache Dependencies
         uses: swatinem/rust-cache@v2
         with:
-          key: windows-mingw
+          key: windows-msys2
 
-      # The "bundled" feature in Cargo.toml will automatically build the SDL2 library.
       - name: Windows (GNU/64-bit) Check & Clippy
+        shell: msys2 {0}
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
         run: |
+          # Add cargo binary path to MSYS2 environment
+          export PATH="$HOME/.cargo/bin:$PATH"
           cargo check --locked --target x86_64-pc-windows-gnu
           cargo clippy --locked --target x86_64-pc-windows-gnu -- -D warnings
 
       - name: Windows Release Build Check
-        run: cargo build --locked --release --target x86_64-pc-windows-gnu
+        shell: msys2 {0}
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo build --locked --release --target x86_64-pc-windows-gnu
 
-  # macOS Cross-Compilation Verification (via osxcross on Linux)
-  validate-macos-via-osxcross:
-    name: macOS Verification (via osxcross on Linux)
-    runs-on: ubuntu-latest
+  # macOS verification on native runners (Intel)
+  validate-macos-x86_64:
+    name: macOS Verification (Intel)
+    runs-on: macos-13
     needs: pre-flight
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Compiler Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang llvm-dev libxml2-dev uuid-dev libssl-dev bash patch make tar xz-utils cmake git fts-dev
-
-      # Configures macOS SDK on Linux using osxcross
-      - name: Setup osxcross Toolchain
-        uses: namse/setup-osxcross@v1.0.8
-        with:
-          osx-version: "12.3"
+      - name: Install SDL2
+        run: brew install pkg-config sdl2
 
       - name: Setup Rust Toolchain and macOS Targets
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-apple-darwin, aarch64-apple-darwin
+          targets: x86_64-apple-darwin
           components: clippy
 
       - name: Cache Dependencies
         uses: swatinem/rust-cache@v2
         with:
-          key: osxcross-linux
+          key: macos-intel
 
-      # The "bundled" feature will build SDL2 for macOS using the osxcross compiler.
-      # Explicitly specify target-specific linkers to avoid toolchain conflicts.
       - name: macOS (Intel) Check & Clippy
-        env:
-          CC: o64-clang
-          CXX: o64-clang++
-          CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER: o64-clang
         run: |
           cargo check --locked --target x86_64-apple-darwin
           cargo clippy --locked --target x86_64-apple-darwin -- -D warnings
 
-      - name: macOS (Apple Silicon M1/M2/M3) Check & Clippy
-        env:
-          CC: oaarch64-clang
-          CXX: oaarch64-clang++
-          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER: oaarch64-clang
+      - name: macOS Release Build Check
+        run: cargo build --locked --release --target x86_64-apple-darwin
+
+  # macOS verification on native runners (Apple Silicon)
+  validate-macos-aarch64:
+    name: macOS Verification (Apple Silicon)
+    runs-on: macos-14
+    needs: pre-flight
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install SDL2
+        run: brew install pkg-config sdl2
+
+      - name: Setup Rust Toolchain and macOS Targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+          components: clippy
+
+      - name: Cache Dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          key: macos-arm64
+
+      - name: macOS (Apple Silicon) Check & Clippy
         run: |
           cargo check --locked --target aarch64-apple-darwin
           cargo clippy --locked --target aarch64-apple-darwin -- -D warnings
 
       - name: macOS Release Build Check
-        env:
-          CC: oaarch64-clang
-          CXX: oaarch64-clang++
-          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER: oaarch64-clang
-        run: |
-          cargo build --locked --release --target aarch64-apple-darwin
+        run: cargo build --locked --release --target aarch64-apple-darwin
 
   # Android Compilation Verification
   validate-android:
@@ -236,6 +255,7 @@ jobs:
         run: |
           sdkmanager "ndk;26.1.10909125"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
 
       - name: Setup Rust Toolchain and Android Targets
         uses: dtolnay/rust-toolchain@stable
@@ -247,9 +267,11 @@ jobs:
         with:
           key: android-linux
 
-      # Installs cargo-ndk to allow "bundled" C/C++ cross-compilation (like SDL2) for Android
+      # Optimizes cargo-ndk installation using cargo-binstall instead of compiling from scratch
       - name: Install cargo-ndk
-        run: cargo install cargo-ndk --locked
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install.sh | sh
+          cargo binstall --no-confirm cargo-ndk
 
       # Performs checks using cargo-ndk.
       # ANDROID_NDK_HOME is automatically sourced from GITHUB_ENV.
