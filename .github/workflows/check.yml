@@ -156,8 +156,12 @@ jobs:
         env:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
         run: |
-          # Add cargo binary path to MSYS2 environment
+          # Load Rust environment and add cargo to the MSYS2 path
+          if [ -f /c/Users/runner/.cargo/env ]; then
+            source /c/Users/runner/.cargo/env
+          fi
           export PATH="/c/Users/runner/.cargo/bin:$HOME/.cargo/bin:$PATH"
+          cargo --version
           cargo check --locked --target x86_64-pc-windows-gnu
           cargo clippy --locked --target x86_64-pc-windows-gnu -- -D warnings
 
@@ -166,6 +170,9 @@ jobs:
         env:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
         run: |
+          if [ -f /c/Users/runner/.cargo/env ]; then
+            source /c/Users/runner/.cargo/env
+          fi
           export PATH="/c/Users/runner/.cargo/bin:$HOME/.cargo/bin:$PATH"
           cargo build --locked --release --target x86_64-pc-windows-gnu
 
