@@ -5,4 +5,4 @@ filters:
     - "Cargo.lock"
     - "deny.toml"
     - ".github/workflows/check.yml"
-    - ".github/workflows/paths.yml"
+    - ".github/paths.yaml"
