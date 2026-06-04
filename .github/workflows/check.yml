@@ -61,10 +61,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Install cargo-binstall to install binary-based cargo-machete quickly without compilation
+      # Install cargo-binstall from crates.io and run cargo-machete
       - name: Install cargo-binstall and Run cargo-machete
         run: |
-          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install.sh | sh
+          cargo install --locked cargo-binstall
           cargo binstall --no-confirm cargo-machete
           cargo machete
 
