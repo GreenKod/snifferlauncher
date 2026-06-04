@@ -16,6 +16,7 @@ pub fn launch_action(_action: crate::core::Action) -> Result<(), String> {
 
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
+#[allow(clippy::pedantic)]
 pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::{
         Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point, Renderer,
@@ -161,50 +162,47 @@ pub fn android_main(app: android_activity::AndroidApp) {
     while running {
         app.poll_events(Some(Duration::from_millis(16)), |event| match event {
             PollEvent::Wake | PollEvent::Timeout => {
-                if let Some(ref mut egl) = egl_state {
-                    if let Some(ref mut renderer) = egl.renderer {
-                        if let Some(window) = app.native_window() {
-                            let width = f32::from(
-                                u16::try_from(window.width()).expect("window width fits in u16"),
-                            );
-                            let height = f32::from(
-                                u16::try_from(window.height()).expect("window height fits in u16"),
-                            );
+                if let Some(ref mut egl) = egl_state
+                    && let Some(ref mut renderer) = egl.renderer
+                    && let Some(window) = app.native_window()
+                {
+                    let width = f32::from(
+                        u16::try_from(window.width()).expect("window width fits in u16"),
+                    );
+                    let height = f32::from(
+                        u16::try_from(window.height()).expect("window height fits in u16"),
+                    );
 
-                            let (safe_area_top, safe_area_bottom) =
-                                crate::android::intent::get_safe_area(&app)
-                                    .map(|(top, bottom)| {
-                                        (
-                                            f32::from(
-                                                i16::try_from(top)
-                                                    .expect("safe-area top fits in i16"),
-                                            ),
-                                            f32::from(
-                                                i16::try_from(bottom)
-                                                    .expect("safe-area bottom fits in i16"),
-                                            ),
-                                        )
-                                    })
-                                    .unwrap_or((0.0, 0.0));
+                    let (safe_area_top, safe_area_bottom) =
+                        crate::android::intent::get_safe_area(&app)
+                            .map(|(top, bottom)| {
+                                (
+                                    f32::from(
+                                        i16::try_from(top).expect("safe-area top fits in i16"),
+                                    ),
+                                    f32::from(
+                                        i16::try_from(bottom).expect("safe-area bottom fits in i16"),
+                                    ),
+                                )
+                            })
+                            .unwrap_or((0.0, 0.0));
 
-                            let root_element = LauncherApp::view(&state);
-                            let layout_tree = calculate_layout(
-                                &root_element,
-                                Size::new(width, height - safe_area_top - safe_area_bottom),
-                                0.0,
-                                safe_area_top,
-                            );
+                    let root_element = LauncherApp::view(&state);
+                    let layout_tree = calculate_layout(
+                        &root_element,
+                        Size::new(width, height - safe_area_top - safe_area_bottom),
+                        0.0,
+                        safe_area_top,
+                    );
 
-                            renderer.begin_frame(width, height);
-                            renderer.clear(BACKGROUND);
+                    renderer.begin_frame(width, height);
+                    renderer.clear(BACKGROUND);
 
-                            draw_ui(renderer, &root_element, &layout_tree);
+                    draw_ui(renderer, &root_element, &layout_tree);
 
-                            renderer.end_frame();
+                    renderer.end_frame();
 
-                            egl.swap_buffers();
-                        }
-                    }
+                    egl.swap_buffers();
                 }
             }
             PollEvent::Main(main_event) => match main_event {
@@ -212,19 +210,19 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     if egl_state.is_none() {
                         egl_state = EglContextState::new().ok();
                     }
-                    if let Some(ref mut egl) = egl_state {
-                        if let Some(window) = app.native_window() {
-                            let _ = egl.bind_window(&window);
-                        }
+                    if let Some(ref mut egl) = egl_state
+                        && let Some(window) = app.native_window()
+                    {
+                        let _ = egl.bind_window(&window);
                     }
                 }
                 MainEvent::WindowResized { .. }
                 | MainEvent::ContentRectChanged { .. }
                 | MainEvent::RedrawNeeded { .. } => {
-                    if let Some(ref mut egl) = egl_state {
-                        if let Some(window) = app.native_window() {
-                            let _ = egl.bind_window(&window);
-                        }
+                    if let Some(ref mut egl) = egl_state
+                        && let Some(window) = app.native_window()
+                    {
+                        let _ = egl.bind_window(&window);
                     }
                 }
                 MainEvent::InputAvailable => {
@@ -237,7 +235,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                     let point = Point::new(pointer.raw_x(), pointer.raw_y());
                                     last_touch_pos = point;
 
-                                    if let Some(window) = app.native_window() {
+                                    app.native_window().map_or(InputStatus::Unhandled, |window| {
                                         let width = f32::from(
                                             u16::try_from(window.width())
                                                 .expect("window width fits in u16"),
@@ -303,13 +301,11 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     &root_element,
                                                     &layout_tree,
                                                     point,
+                                                ) && let Some(action) = LauncherApp::update(
+                                                    &mut state,
+                                                    LauncherMessage::ButtonClicked(clicked_btn),
                                                 ) {
-                                                    if let Some(action) = LauncherApp::update(
-                                                        &mut state,
-                                                        LauncherMessage::ButtonClicked(clicked_btn),
-                                                    ) {
-                                                        let _ = launch_action(action);
-                                                    }
+                                                    let _ = launch_action(action);
                                                 }
                                                 InputStatus::Handled
                                             }
@@ -322,9 +318,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                             }
                                             _ => InputStatus::Unhandled,
                                         }
-                                    } else {
-                                        InputStatus::Unhandled
-                                    }
+                                    })
                                 }
                                 _ => InputStatus::Unhandled,
                             });
