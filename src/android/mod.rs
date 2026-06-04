@@ -166,9 +166,8 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     && let Some(ref mut renderer) = egl.renderer
                     && let Some(window) = app.native_window()
                 {
-                    let width = f32::from(
-                        u16::try_from(window.width()).expect("window width fits in u16"),
-                    );
+                    let width =
+                        f32::from(u16::try_from(window.width()).expect("window width fits in u16"));
                     let height = f32::from(
                         u16::try_from(window.height()).expect("window height fits in u16"),
                     );
@@ -181,7 +180,8 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                         i16::try_from(top).expect("safe-area top fits in i16"),
                                     ),
                                     f32::from(
-                                        i16::try_from(bottom).expect("safe-area bottom fits in i16"),
+                                        i16::try_from(bottom)
+                                            .expect("safe-area bottom fits in i16"),
                                     ),
                                 )
                             })
@@ -235,90 +235,91 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                     let point = Point::new(pointer.raw_x(), pointer.raw_y());
                                     last_touch_pos = point;
 
-                                    app.native_window().map_or(InputStatus::Unhandled, |window| {
-                                        let width = f32::from(
-                                            u16::try_from(window.width())
-                                                .expect("window width fits in u16"),
-                                        );
-                                        let height = f32::from(
-                                            u16::try_from(window.height())
-                                                .expect("window height fits in u16"),
-                                        );
-                                        let (safe_area_top, safe_area_bottom) =
-                                            crate::android::intent::get_safe_area(&app)
-                                                .map(|(top, bottom)| {
-                                                    (
-                                                        f32::from(
-                                                            i16::try_from(top).expect(
+                                    app.native_window()
+                                        .map_or(InputStatus::Unhandled, |window| {
+                                            let width = f32::from(
+                                                u16::try_from(window.width())
+                                                    .expect("window width fits in u16"),
+                                            );
+                                            let height = f32::from(
+                                                u16::try_from(window.height())
+                                                    .expect("window height fits in u16"),
+                                            );
+                                            let (safe_area_top, safe_area_bottom) =
+                                                crate::android::intent::get_safe_area(&app)
+                                                    .map(|(top, bottom)| {
+                                                        (
+                                                            f32::from(i16::try_from(top).expect(
                                                                 "safe-area top fits in i16",
+                                                            )),
+                                                            f32::from(
+                                                                i16::try_from(bottom).expect(
+                                                                    "safe-area bottom fits in i16",
+                                                                ),
                                                             ),
-                                                        ),
-                                                        f32::from(i16::try_from(bottom).expect(
-                                                            "safe-area bottom fits in i16",
-                                                        )),
-                                                    )
-                                                })
-                                                .unwrap_or((0.0, 0.0));
+                                                        )
+                                                    })
+                                                    .unwrap_or((0.0, 0.0));
 
-                                        let root_element = LauncherApp::view(&state);
-                                        let layout_tree = calculate_layout(
-                                            &root_element,
-                                            Size::new(
-                                                width,
-                                                height - safe_area_top - safe_area_bottom,
-                                            ),
-                                            0.0,
-                                            safe_area_top,
-                                        );
+                                            let root_element = LauncherApp::view(&state);
+                                            let layout_tree = calculate_layout(
+                                                &root_element,
+                                                Size::new(
+                                                    width,
+                                                    height - safe_area_top - safe_area_bottom,
+                                                ),
+                                                0.0,
+                                                safe_area_top,
+                                            );
 
-                                        match motion_event.action() {
-                                            MotionAction::Down
-                                            | MotionAction::Move
-                                            | MotionAction::PointerDown => {
-                                                let hovered_btn = find_hovered_button(
-                                                    &root_element,
-                                                    &layout_tree,
-                                                    point,
-                                                );
-                                                let _ = LauncherApp::update(
-                                                    &mut state,
-                                                    LauncherMessage::ButtonHovered(hovered_btn),
-                                                );
-                                                InputStatus::Handled
-                                            }
-                                            MotionAction::Up | MotionAction::PointerUp => {
-                                                let hovered_btn = find_hovered_button(
-                                                    &root_element,
-                                                    &layout_tree,
-                                                    point,
-                                                );
-                                                let _ = LauncherApp::update(
-                                                    &mut state,
-                                                    LauncherMessage::ButtonHovered(hovered_btn),
-                                                );
-
-                                                if let Some(clicked_btn) = find_clicked_button(
-                                                    &root_element,
-                                                    &layout_tree,
-                                                    point,
-                                                ) && let Some(action) = LauncherApp::update(
-                                                    &mut state,
-                                                    LauncherMessage::ButtonClicked(clicked_btn),
-                                                ) {
-                                                    let _ = launch_action(action);
+                                            match motion_event.action() {
+                                                MotionAction::Down
+                                                | MotionAction::Move
+                                                | MotionAction::PointerDown => {
+                                                    let hovered_btn = find_hovered_button(
+                                                        &root_element,
+                                                        &layout_tree,
+                                                        point,
+                                                    );
+                                                    let _ = LauncherApp::update(
+                                                        &mut state,
+                                                        LauncherMessage::ButtonHovered(hovered_btn),
+                                                    );
+                                                    InputStatus::Handled
                                                 }
-                                                InputStatus::Handled
+                                                MotionAction::Up | MotionAction::PointerUp => {
+                                                    let hovered_btn = find_hovered_button(
+                                                        &root_element,
+                                                        &layout_tree,
+                                                        point,
+                                                    );
+                                                    let _ = LauncherApp::update(
+                                                        &mut state,
+                                                        LauncherMessage::ButtonHovered(hovered_btn),
+                                                    );
+
+                                                    if let Some(clicked_btn) = find_clicked_button(
+                                                        &root_element,
+                                                        &layout_tree,
+                                                        point,
+                                                    ) && let Some(action) = LauncherApp::update(
+                                                        &mut state,
+                                                        LauncherMessage::ButtonClicked(clicked_btn),
+                                                    ) {
+                                                        let _ = launch_action(action);
+                                                    }
+                                                    InputStatus::Handled
+                                                }
+                                                MotionAction::Cancel => {
+                                                    let _ = LauncherApp::update(
+                                                        &mut state,
+                                                        LauncherMessage::ButtonHovered(None),
+                                                    );
+                                                    InputStatus::Handled
+                                                }
+                                                _ => InputStatus::Unhandled,
                                             }
-                                            MotionAction::Cancel => {
-                                                let _ = LauncherApp::update(
-                                                    &mut state,
-                                                    LauncherMessage::ButtonHovered(None),
-                                                );
-                                                InputStatus::Handled
-                                            }
-                                            _ => InputStatus::Unhandled,
-                                        }
-                                    })
+                                        })
                                 }
                                 _ => InputStatus::Unhandled,
                             });
