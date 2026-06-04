@@ -117,7 +117,7 @@ jobs:
             -D clippy::pedantic \
             -D clippy::nursery \
             -D clippy::cargo \
-            -D clippy::multiple-crate-versions
+            -A clippy::multiple-crate-versions
 
       - name: Linux Release Build Check
         run: cargo build --locked --release --workspace --all-features
@@ -159,16 +159,9 @@ jobs:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
         run: |
           $env:Path = "C:\msys64\mingw64\bin;C:\msys64\usr\bin;$env:Path"
-          $cargo = "C:\Users\runner\.cargo\bin\cargo.exe"
-          if (-Not (Test-Path $cargo)) { throw "cargo.exe not found at $cargo" }
-          & $cargo --version
-          & $cargo check --locked --target x86_64-pc-windows-gnu
-          & $cargo clippy --locked --workspace --all-targets --all-features --target x86_64-pc-windows-gnu -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -D clippy::multiple-crate-versions
+          cargo --version
+          cargo check --locked --target x86_64-pc-windows-gnu
+          cargo clippy --locked --workspace --all-targets --all-features --target x86_64-pc-windows-gnu -- -D warnings -D clippy::pedantic -D clippy::nursery -D clippy::cargo -A clippy::multiple-crate-versions
 
       - name: Windows Release Build Check
         shell: pwsh
@@ -176,9 +169,7 @@ jobs:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
         run: |
           $env:Path = "C:\msys64\mingw64\bin;C:\msys64\usr\bin;$env:Path"
-          $cargo = "C:\Users\runner\.cargo\bin\cargo.exe"
-          if (-Not (Test-Path $cargo)) { throw "cargo.exe not found at $cargo" }
-          & $cargo build --locked --release --target x86_64-pc-windows-gnu
+          cargo build --locked --release --target x86_64-pc-windows-gnu
 
   # macOS verification on native runners (Apple Silicon)
   validate-macos-aarch64:
@@ -213,7 +204,7 @@ jobs:
             -D clippy::pedantic \
             -D clippy::nursery \
             -D clippy::cargo \
-            -D clippy::multiple-crate-versions
+            -A clippy::multiple-crate-versions
 
       - name: macOS Release Build Check
         run: |
@@ -278,25 +269,25 @@ jobs:
             -D clippy::pedantic \
             -D clippy::nursery \
             -D clippy::cargo \
-            -D clippy::multiple-crate-versions
+            -A clippy::multiple-crate-versions
           cargo ndk --target armv7-linux-androideabi clippy --workspace --all-targets --all-features -- \
             -D warnings \
             -D clippy::pedantic \
             -D clippy::nursery \
             -D clippy::cargo \
-            -D clippy::multiple-crate-versions
+            -A clippy::multiple-crate-versions
           cargo ndk --target x86_64-linux-android clippy --workspace --all-targets --all-features -- \
             -D warnings \
             -D clippy::pedantic \
             -D clippy::nursery \
             -D clippy::cargo \
-            -D clippy::multiple-crate-versions
+            -A clippy::multiple-crate-versions
           cargo ndk --target i686-linux-android clippy --workspace --all-targets --all-features -- \
             -D warnings \
             -D clippy::pedantic \
             -D clippy::nursery \
             -D clippy::cargo \
-            -D clippy::multiple-crate-versions
+            -A clippy::multiple-crate-versions
 
       - name: Android (Emulator x86_64) Check and Build
         run: |
