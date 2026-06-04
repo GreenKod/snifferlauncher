@@ -8,6 +8,12 @@ use jni::{
 use std::sync::{Arc, OnceLock};
 static JVM: OnceLock<Arc<JavaVM>> = OnceLock::new();
 
+/// Launches a specific Android system or application action.
+///
+/// # Errors
+///
+/// Returns an error if the Android JNI calls fail or if the requested action
+/// cannot be started by the system.
 pub fn launch_action(action: Action) -> Result<(), String> {
     match action {
         Action::OpenSettings => start_action("android.settings.SETTINGS"),
@@ -16,9 +22,10 @@ pub fn launch_action(action: Action) -> Result<(), String> {
     }
 }
 
+#[must_use]
 pub fn get_safe_area(app: &AndroidApp) -> Option<(i32, i32)> {
     // 1. get GlobalJvm
-    let jvm = vm().ok()?;
+    let jvm = vm();
 
     // 2. Explicitly declare the JNI error return type to the compiler
     jvm.attach_current_thread_for_scope::<_, _, jni::errors::Error>(|env: &mut Env| {
@@ -94,7 +101,7 @@ pub fn get_safe_area(app: &AndroidApp) -> Option<(i32, i32)> {
 
 fn start_action(action: &str) -> Result<(), String> {
     // 1. get GlobalJvm
-    let jvm = vm()?;
+    let jvm = vm();
 
     // 2. Explicitly declare the JNI error return type to the compiler
     jvm.attach_current_thread_for_scope::<_, _, jni::errors::Error>(|env: &mut Env| {
@@ -119,9 +126,15 @@ fn start_action(action: &str) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
+/// Opens the provided URI with the Android VIEW intent.
+///
+/// # Errors
+///
+/// Returns an error if URI parsing, intent construction, or activity launch
+/// fails.
 pub fn start_view_uri(uri: &str) -> Result<(), String> {
     // 1. get GlobalJvm
-    let jvm = vm()?;
+    let jvm = vm();
 
     // 2. Explicitly declare the JNI error return type to the compiler
     jvm.attach_current_thread_for_scope::<_, _, jni::errors::Error>(|env: &mut Env| {
@@ -160,6 +173,11 @@ pub fn start_view_uri(uri: &str) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
+/// Adds `FLAG_ACTIVITY_NEW_TASK` to the provided intent.
+///
+/// # Errors
+///
+/// Returns an error if the flag cannot be read or applied through JNI.
 pub fn add_new_task_flag(env: &mut Env, intent: &JObject<'_>) -> Result<(), String> {
     // 1. Fetch Android's static "NEW_TASK" flag value to open a new screen from the background
     let flag = env
@@ -168,7 +186,7 @@ pub fn add_new_task_flag(env: &mut Env, intent: &JObject<'_>) -> Result<(), Stri
             jni_str!("FLAG_ACTIVITY_NEW_TASK"),
             jni_sig!("I"),
         )
-        .and_then(|value| value.i())
+        .and_then(jni::JValueOwned::i)
         .map_err(|e| e.to_string())?;
 
     // 2. Invoke the addFlags method on the Intent object to apply the flag
@@ -184,6 +202,11 @@ pub fn add_new_task_flag(env: &mut Env, intent: &JObject<'_>) -> Result<(), Stri
     Ok(())
 }
 
+/// Starts an Android activity using the provided context and intent.
+///
+/// # Errors
+///
+/// Returns an error if `startActivity` fails through JNI.
 pub fn start_activity(
     env: &mut Env,
     context: &JObject<'_>,
@@ -202,22 +225,22 @@ pub fn start_activity(
     Ok(())
 }
 
-fn vm() -> Result<Arc<JavaVM>, String> {
+fn vm() -> Arc<JavaVM> {
     // 1. Check if the JVM is already stored in the global variable, if it is, we return it directly
     if let Some(vm) = JVM.get() {
-        return Ok(Arc::clone(vm));
+        return Arc::clone(vm);
     }
 
     // 2. If the JVM is not stored, we create it from the Android context and store it in the global variable
     let context = ndk_context::android_context();
 
     // 3. Create a JavaVM instance from the raw pointer obtained from the Android context and wrap it in an Arc for thread safety
-    let vm = unsafe { JavaVM::from_raw(context.vm() as *mut jni::sys::JavaVM) };
+    let vm = unsafe { JavaVM::from_raw(context.vm().cast::<jni::sys::JavaVM>()) };
 
     let arc_vm = Arc::new(vm);
     let stored_vm = JVM.get_or_init(|| arc_vm);
 
-    Ok(Arc::clone(stored_vm))
+    Arc::clone(stored_vm)
 }
 
 fn context<'local>(env: &Env<'local>) -> JObject<'local> {
