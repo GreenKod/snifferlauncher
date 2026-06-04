@@ -158,7 +158,12 @@ jobs:
         env:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
         run: |
-          $env:Path = "C:\msys64\mingw64\bin;C:\msys64\usr\bin;$env:Path"
+          $mingwRoot = if (Test-Path "C:\msys64\mingw64") { "C:\msys64\mingw64" } elseif (Test-Path "C:\mingw64") { "C:\mingw64" } else { throw "MINGW64 root not found" }
+          $env:Path = "$mingwRoot\bin;C:\msys64\usr\bin;$env:Path"
+          $env:LIBRARY_PATH = "$mingwRoot\lib;$env:LIBRARY_PATH"
+          $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
+          $env:SDL2_LIB_DIR = "$mingwRoot\lib"
+          $env:SDL2_INCLUDE_DIR = "$mingwRoot\include\SDL2"
           cargo --version
           cargo check --locked --target x86_64-pc-windows-gnu
           cargo clippy --locked --workspace --all-targets --all-features --target x86_64-pc-windows-gnu -- -D warnings -D clippy::pedantic -D clippy::nursery -D clippy::cargo -A clippy::multiple-crate-versions
@@ -168,7 +173,12 @@ jobs:
         env:
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
         run: |
-          $env:Path = "C:\msys64\mingw64\bin;C:\msys64\usr\bin;$env:Path"
+          $mingwRoot = if (Test-Path "C:\msys64\mingw64") { "C:\msys64\mingw64" } elseif (Test-Path "C:\mingw64") { "C:\mingw64" } else { throw "MINGW64 root not found" }
+          $env:Path = "$mingwRoot\bin;C:\msys64\usr\bin;$env:Path"
+          $env:LIBRARY_PATH = "$mingwRoot\lib;$env:LIBRARY_PATH"
+          $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
+          $env:SDL2_LIB_DIR = "$mingwRoot\lib"
+          $env:SDL2_INCLUDE_DIR = "$mingwRoot\include\SDL2"
           cargo build --locked --release --target x86_64-pc-windows-gnu
 
   # macOS verification on native runners (Apple Silicon)
