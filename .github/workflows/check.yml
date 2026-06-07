@@ -67,10 +67,10 @@ jobs:
       - name: Check Formatting (cargo fmt)
         run: cargo fmt --all --check
 
-      - name: Scan for Typos
-        uses: crate-ci/typos@v1
-        with:
-          files: .
+      - name: Install and Run Typos
+        run: |
+          cargo install --locked typos-cli
+          typos .
 
       # Optimize cargo-deny using the official action (Fast & No compilation)
       - name: Run cargo-deny
