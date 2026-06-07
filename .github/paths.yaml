@@ -1,0 +1,8 @@
+filters:
+  rust:
+    - "src/**"
+    - "Cargo.toml"
+    - "Cargo.lock"
+    - "deny.toml"
+    - ".github/workflows/check.yml"
+    - ".github/paths.yaml"

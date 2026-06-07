@@ -1,6 +1,6 @@
 use crate::core::{
-    Action, Application, GlowRenderer, LauncherApp,
-    LauncherMessage, LauncherState, Point, Renderer, Size, calculate_layout,
+    Action, Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point,
+    Renderer, Size, calculate_layout,
     component::{draw_ui, find_clicked_button, find_hovered_button},
     style::{BACKGROUND, WINDOW_HEIGHT, WINDOW_WIDTH},
 };
@@ -8,6 +8,17 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use std::time::Duration;
 
+/// Run the desktop preview.
+///
+/// # Errors
+///
+/// Returns an error if SDL2 or GL initialization fails.
+///
+/// # Panics
+///
+/// Panics if mouse or drawable dimensions do not fit the narrow integer
+/// conversions used for clippy-clean float handling.
+#[allow(clippy::missing_panics_doc)]
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Initialize SDL2
     let sdl_context = sdl2::init()?;
@@ -20,10 +31,16 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     gl_attr.set_context_version(3, 3);
 
     // 2. Create Window — dynamic size: 85% of display or fallback
-    let display = video_subsystem.display_bounds(0)
-        .unwrap_or(sdl2::rect::Rect::new(0, 0, WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32));
-    let init_width = (display.width() as f32 * 0.85) as u32;
-    let init_height = (display.height() as f32 * 0.85) as u32;
+    let display = video_subsystem.display_bounds(0).unwrap_or_else(|_| {
+        sdl2::rect::Rect::new(
+            0,
+            0,
+            u32::try_from(WINDOW_WIDTH).expect("window width fits in u32"),
+            u32::try_from(WINDOW_HEIGHT).expect("window height fits in u32"),
+        )
+    });
+    let init_width = display.width().saturating_mul(85) / 100;
+    let init_height = display.height().saturating_mul(85) / 100;
     let init_width = if init_width < 400 { 400 } else { init_width };
     let init_height = if init_height < 600 { 600 } else { init_height };
     let window = video_subsystem
@@ -36,14 +53,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // 3. Create GL context and wrap in Glow
     let _gl_context = window.gl_create_context()?;
     let gl = unsafe {
-        glow::Context::from_loader_function(|s| {
-            video_subsystem.gl_get_proc_address(s) as *const _
-        })
+        glow::Context::from_loader_function(|s| video_subsystem.gl_get_proc_address(s).cast())
     };
 
     // Audiowide font gömülü olarak binary'ye dahil edildi
-    static FONT_BYTES: &[u8] = include_bytes!("../fonts/audiowide.ttf");
-    let mut renderer = unsafe { GlowRenderer::with_font(gl, Some(FONT_BYTES))? };
+    let font_bytes: &[u8] = include_bytes!("../fonts/audiowide.ttf");
+    let mut renderer = unsafe { GlowRenderer::with_font(gl, Some(font_bytes))? };
     let mut event_pump = sdl_context.event_pump()?;
 
     // 4. Initialize UI State
@@ -66,7 +81,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     running = false;
                 }
                 Event::MouseMotion { x, y, .. } => {
-                    last_mouse_pos = Point::new(x as f32, y as f32);
+                    last_mouse_pos = Point::new(
+                        f32::from(i16::try_from(x).expect("mouse x fits in i16")),
+                        f32::from(i16::try_from(y).expect("mouse y fits in i16")),
+                    );
                     mouse_moved = true;
                 }
                 Event::MouseButtonDown {
@@ -75,7 +93,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     y,
                     ..
                 } => {
-                    clicked_pos = Some(Point::new(x as f32, y as f32));
+                    clicked_pos = Some(Point::new(
+                        f32::from(i16::try_from(x).expect("mouse x fits in i16")),
+                        f32::from(i16::try_from(y).expect("mouse y fits in i16")),
+                    ));
                 }
                 _ => {}
             }
@@ -83,30 +104,26 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         // 6. Query current window size each frame (handles resize, DPI changes)
         let (w, h) = window.drawable_size();
-        let width = w as f32;
-        let height = h as f32;
+        let width = f32::from(u16::try_from(w).expect("drawable width fits in u16"));
+        let height = f32::from(u16::try_from(h).expect("drawable height fits in u16"));
 
         // 6. View & Layout Pass
         let root_element = LauncherApp::view(&state);
-        let layout_tree = calculate_layout(
-            &root_element,
-            Size::new(width, height),
-            0.0,
-            0.0,
-        );
+        let layout_tree = calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
 
         // 7. Event Dispatch / Processing
         if mouse_moved {
             let hovered_btn = find_hovered_button(&root_element, &layout_tree, last_mouse_pos);
-            let _action = LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
+            let _action =
+                LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
         }
 
-        if let Some(clicked_pt) = clicked_pos {
-            if let Some(clicked_btn) = find_clicked_button(&root_element, &layout_tree, clicked_pt) {
-                if let Some(action) = LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn)) {
-                    handle_action(action);
-                }
-            }
+        if let Some(clicked_pt) = clicked_pos
+            && let Some(clicked_btn) = find_clicked_button(&root_element, &layout_tree, clicked_pt)
+            && let Some(action) =
+                LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn))
+        {
+            handle_action(action);
         }
 
         renderer.begin_frame(width, height);
