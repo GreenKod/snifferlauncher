@@ -5,21 +5,27 @@ pub mod intent;
 pub use intent::launch_action;
 
 #[cfg(not(target_os = "android"))]
+/// Launch the requested action on non-Android targets.
+///
+/// # Errors
+///
+/// Always returns an error because action launching is only implemented on Android.
 pub fn launch_action(_action: crate::core::Action) -> Result<(), String> {
     Err("android launcher is only available on Android".to_string())
 }
 
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
+#[allow(clippy::pedantic)]
 pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::{
-        Application, GlowRenderer, LauncherApp,
-        LauncherMessage, LauncherState, Point, Renderer, Size, calculate_layout,
+        Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point, Renderer,
+        Size, calculate_layout,
         component::{draw_ui, find_clicked_button, find_hovered_button},
         style::BACKGROUND,
     };
     use android_activity::{
-        input::InputEvent, input::MotionAction, InputStatus, MainEvent, PollEvent,
+        InputStatus, MainEvent, PollEvent, input::InputEvent, input::MotionAction,
     };
     use std::time::Duration;
 
@@ -35,12 +41,12 @@ pub fn android_main(app: android_activity::AndroidApp) {
 
     impl EglContextState {
         fn new() -> Result<Self, String> {
-            let egl = unsafe { khronos_egl::DynamicInstance::<khronos_egl::EGL1_5>::load_required() }
-                .map_err(|e| format!("Failed to load EGL library: {}", e))?;
+            let egl =
+                unsafe { khronos_egl::DynamicInstance::<khronos_egl::EGL1_5>::load_required() }
+                    .map_err(|e| format!("Failed to load EGL library: {}", e))?;
 
             let display = unsafe {
-                egl
-                    .get_display(khronos_egl::DEFAULT_DISPLAY)
+                egl.get_display(khronos_egl::DEFAULT_DISPLAY)
                     .ok_or_else(|| "Failed to get EGL display".to_string())?
             };
 
@@ -48,12 +54,18 @@ pub fn android_main(app: android_activity::AndroidApp) {
                 .map_err(|e| format!("Failed to initialize EGL: {:?}", e))?;
 
             let attribs = [
-                khronos_egl::SURFACE_TYPE, khronos_egl::WINDOW_BIT,
-                khronos_egl::RENDERABLE_TYPE, khronos_egl::OPENGL_ES3_BIT,
-                khronos_egl::BLUE_SIZE, 8,
-                khronos_egl::GREEN_SIZE, 8,
-                khronos_egl::RED_SIZE, 8,
-                khronos_egl::ALPHA_SIZE, 8,
+                khronos_egl::SURFACE_TYPE,
+                khronos_egl::WINDOW_BIT,
+                khronos_egl::RENDERABLE_TYPE,
+                khronos_egl::OPENGL_ES3_BIT,
+                khronos_egl::BLUE_SIZE,
+                8,
+                khronos_egl::GREEN_SIZE,
+                8,
+                khronos_egl::RED_SIZE,
+                8,
+                khronos_egl::ALPHA_SIZE,
+                8,
                 khronos_egl::NONE,
             ];
 
@@ -63,7 +75,8 @@ pub fn android_main(app: android_activity::AndroidApp) {
                 .ok_or_else(|| "No EGL config found".to_string())?;
 
             let context_attribs = [
-                khronos_egl::CONTEXT_CLIENT_VERSION, 3, // Request ES 3.0 context
+                khronos_egl::CONTEXT_CLIENT_VERSION,
+                3, // Request ES 3.0 context
                 khronos_egl::NONE,
             ];
 
@@ -84,7 +97,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
         fn bind_window(&mut self, window: &ndk::native_window::NativeWindow) -> Result<(), String> {
             self.unbind();
 
-            let native_window_ptr = window.ptr().as_ptr() as *mut std::ffi::c_void;
+            let native_window_ptr = window.ptr().as_ptr().cast::<std::ffi::c_void>();
             let surface = unsafe {
                 self.egl
                     .create_window_surface(self.display, self.config, native_window_ptr, None)
@@ -92,7 +105,12 @@ pub fn android_main(app: android_activity::AndroidApp) {
             };
 
             self.egl
-                .make_current(self.display, Some(surface), Some(surface), Some(self.context))
+                .make_current(
+                    self.display,
+                    Some(surface),
+                    Some(surface),
+                    Some(self.context),
+                )
                 .map_err(|e| format!("Failed to make EGL context current: {:?}", e))?;
 
             self.surface = Some(surface);
@@ -100,7 +118,9 @@ pub fn android_main(app: android_activity::AndroidApp) {
             if self.renderer.is_none() {
                 let gl = unsafe {
                     glow::Context::from_loader_function(|name| {
-                        self.egl.get_proc_address(name).map_or(std::ptr::null(), |f| f as *const _)
+                        self.egl
+                            .get_proc_address(name)
+                            .map_or(std::ptr::null(), |f| f as *const _)
                     })
                 };
                 // Audiowide font gömülü olarak binary'ye dahil edildi
@@ -114,12 +134,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
 
         fn unbind(&mut self) {
             if let Some(surface) = self.surface.take() {
-                let _ = self.egl.make_current(
-                    self.display,
-                    None,
-                    None,
-                    None,
-                );
+                let _ = self.egl.make_current(self.display, None, None, None);
                 let _ = self.egl.destroy_surface(self.display, surface);
             }
         }
@@ -147,34 +162,47 @@ pub fn android_main(app: android_activity::AndroidApp) {
     while running {
         app.poll_events(Some(Duration::from_millis(16)), |event| match event {
             PollEvent::Wake | PollEvent::Timeout => {
-                if let Some(ref mut egl) = egl_state {
-                    if let Some(ref mut renderer) = egl.renderer {
-                        if let Some(window) = app.native_window() {
-                            let width = window.width() as f32;
-                            let height = window.height() as f32;
+                if let Some(ref mut egl) = egl_state
+                    && let Some(ref mut renderer) = egl.renderer
+                    && let Some(window) = app.native_window()
+                {
+                    let width =
+                        f32::from(u16::try_from(window.width()).expect("window width fits in u16"));
+                    let height = f32::from(
+                        u16::try_from(window.height()).expect("window height fits in u16"),
+                    );
 
-                            let (safe_area_top, safe_area_bottom) = crate::android::intent::get_safe_area(&app)
-                                .map(|(top, bottom)| (top as f32, bottom as f32))
-                                .unwrap_or((0.0, 0.0));
+                    let (safe_area_top, safe_area_bottom) =
+                        crate::android::intent::get_safe_area(&app)
+                            .map(|(top, bottom)| {
+                                (
+                                    f32::from(
+                                        i16::try_from(top).expect("safe-area top fits in i16"),
+                                    ),
+                                    f32::from(
+                                        i16::try_from(bottom)
+                                            .expect("safe-area bottom fits in i16"),
+                                    ),
+                                )
+                            })
+                            .unwrap_or((0.0, 0.0));
 
-                            let root_element = LauncherApp::view(&state);
-                            let layout_tree = calculate_layout(
-                                &root_element,
-                                Size::new(width, height - safe_area_top - safe_area_bottom),
-                                0.0,
-                                safe_area_top,
-                            );
+                    let root_element = LauncherApp::view(&state);
+                    let layout_tree = calculate_layout(
+                        &root_element,
+                        Size::new(width, height - safe_area_top - safe_area_bottom),
+                        0.0,
+                        safe_area_top,
+                    );
 
-                            renderer.begin_frame(width, height);
-                            renderer.clear(BACKGROUND);
+                    renderer.begin_frame(width, height);
+                    renderer.clear(BACKGROUND);
 
-                            draw_ui(renderer, &root_element, &layout_tree);
+                    draw_ui(renderer, &root_element, &layout_tree);
 
-                            renderer.end_frame();
+                    renderer.end_frame();
 
-                            egl.swap_buffers();
-                        }
-                    }
+                    egl.swap_buffers();
                 }
             }
             PollEvent::Main(main_event) => match main_event {
@@ -182,17 +210,19 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     if egl_state.is_none() {
                         egl_state = EglContextState::new().ok();
                     }
-                    if let Some(ref mut egl) = egl_state {
-                        if let Some(window) = app.native_window() {
-                            let _ = egl.bind_window(&window);
-                        }
+                    if let Some(ref mut egl) = egl_state
+                        && let Some(window) = app.native_window()
+                    {
+                        let _ = egl.bind_window(&window);
                     }
                 }
-                MainEvent::WindowResized { .. } | MainEvent::ContentRectChanged { .. } | MainEvent::RedrawNeeded { .. } => {
-                    if let Some(ref mut egl) = egl_state {
-                        if let Some(window) = app.native_window() {
-                            let _ = egl.bind_window(&window);
-                        }
+                MainEvent::WindowResized { .. }
+                | MainEvent::ContentRectChanged { .. }
+                | MainEvent::RedrawNeeded { .. } => {
+                    if let Some(ref mut egl) = egl_state
+                        && let Some(window) = app.native_window()
+                    {
+                        let _ = egl.bind_window(&window);
                     }
                 }
                 MainEvent::InputAvailable => {
@@ -200,51 +230,96 @@ pub fn android_main(app: android_activity::AndroidApp) {
                         loop {
                             let had_event = iter.next(|input_event| match input_event {
                                 InputEvent::MotionEvent(motion_event) => {
-                                    let pointer = motion_event.pointer_at_index(motion_event.pointer_index());
+                                    let pointer =
+                                        motion_event.pointer_at_index(motion_event.pointer_index());
                                     let point = Point::new(pointer.raw_x(), pointer.raw_y());
                                     last_touch_pos = point;
 
-                                    if let Some(window) = app.native_window() {
-                                        let width = window.width() as f32;
-                                        let height = window.height() as f32;
-                                        let (safe_area_top, safe_area_bottom) = crate::android::intent::get_safe_area(&app)
-                                            .map(|(top, bottom)| (top as f32, bottom as f32))
-                                            .unwrap_or((0.0, 0.0));
+                                    app.native_window()
+                                        .map_or(InputStatus::Unhandled, |window| {
+                                            let width = f32::from(
+                                                u16::try_from(window.width())
+                                                    .expect("window width fits in u16"),
+                                            );
+                                            let height = f32::from(
+                                                u16::try_from(window.height())
+                                                    .expect("window height fits in u16"),
+                                            );
+                                            let (safe_area_top, safe_area_bottom) =
+                                                crate::android::intent::get_safe_area(&app)
+                                                    .map(|(top, bottom)| {
+                                                        (
+                                                            f32::from(i16::try_from(top).expect(
+                                                                "safe-area top fits in i16",
+                                                            )),
+                                                            f32::from(
+                                                                i16::try_from(bottom).expect(
+                                                                    "safe-area bottom fits in i16",
+                                                                ),
+                                                            ),
+                                                        )
+                                                    })
+                                                    .unwrap_or((0.0, 0.0));
 
-                                        let root_element = LauncherApp::view(&state);
-                                        let layout_tree = calculate_layout(
-                                            &root_element,
-                                            Size::new(width, height - safe_area_top - safe_area_bottom),
-                                            0.0,
-                                            safe_area_top,
-                                        );
+                                            let root_element = LauncherApp::view(&state);
+                                            let layout_tree = calculate_layout(
+                                                &root_element,
+                                                Size::new(
+                                                    width,
+                                                    height - safe_area_top - safe_area_bottom,
+                                                ),
+                                                0.0,
+                                                safe_area_top,
+                                            );
 
-                                        match motion_event.action() {
-                                            MotionAction::Down | MotionAction::Move | MotionAction::PointerDown => {
-                                                let hovered_btn = find_hovered_button(&root_element, &layout_tree, point);
-                                                let _ = LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
-                                                InputStatus::Handled
-                                            }
-                                            MotionAction::Up | MotionAction::PointerUp => {
-                                                let hovered_btn = find_hovered_button(&root_element, &layout_tree, point);
-                                                let _ = LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
-                                                
-                                                if let Some(clicked_btn) = find_clicked_button(&root_element, &layout_tree, point) {
-                                                    if let Some(action) = LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn)) {
+                                            match motion_event.action() {
+                                                MotionAction::Down
+                                                | MotionAction::Move
+                                                | MotionAction::PointerDown => {
+                                                    let hovered_btn = find_hovered_button(
+                                                        &root_element,
+                                                        &layout_tree,
+                                                        point,
+                                                    );
+                                                    let _ = LauncherApp::update(
+                                                        &mut state,
+                                                        LauncherMessage::ButtonHovered(hovered_btn),
+                                                    );
+                                                    InputStatus::Handled
+                                                }
+                                                MotionAction::Up | MotionAction::PointerUp => {
+                                                    let hovered_btn = find_hovered_button(
+                                                        &root_element,
+                                                        &layout_tree,
+                                                        point,
+                                                    );
+                                                    let _ = LauncherApp::update(
+                                                        &mut state,
+                                                        LauncherMessage::ButtonHovered(hovered_btn),
+                                                    );
+
+                                                    if let Some(clicked_btn) = find_clicked_button(
+                                                        &root_element,
+                                                        &layout_tree,
+                                                        point,
+                                                    ) && let Some(action) = LauncherApp::update(
+                                                        &mut state,
+                                                        LauncherMessage::ButtonClicked(clicked_btn),
+                                                    ) {
                                                         let _ = launch_action(action);
                                                     }
+                                                    InputStatus::Handled
                                                 }
-                                                InputStatus::Handled
+                                                MotionAction::Cancel => {
+                                                    let _ = LauncherApp::update(
+                                                        &mut state,
+                                                        LauncherMessage::ButtonHovered(None),
+                                                    );
+                                                    InputStatus::Handled
+                                                }
+                                                _ => InputStatus::Unhandled,
                                             }
-                                            MotionAction::Cancel => {
-                                                let _ = LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(None));
-                                                InputStatus::Handled
-                                            }
-                                            _ => InputStatus::Unhandled,
-                                        }
-                                    } else {
-                                        InputStatus::Unhandled
-                                    }
+                                        })
                                 }
                                 _ => InputStatus::Unhandled,
                             });

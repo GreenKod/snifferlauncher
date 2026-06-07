@@ -22,8 +22,8 @@ pub trait Renderer {
 
 pub struct GlowRenderer {
     gl: glow::Context,
-    quad_vao: glow::VertexArray,
-    _quad_vbo: glow::Buffer,
+    quad_vertex_array: glow::VertexArray,
+    _quad_vertex_buffer: glow::Buffer,
     shape_program: glow::Program,
     text_program: glow::Program,
     font_texture: glow::Texture,
@@ -34,32 +34,52 @@ pub struct GlowRenderer {
 }
 
 fn unpack_color(color: u32) -> [f32; 4] {
-    let a = ((color >> 24) & 0xff) as f32 / 255.0;
-    let r = ((color >> 16) & 0xff) as f32 / 255.0;
-    let g = ((color >> 8) & 0xff) as f32 / 255.0;
-    let b = (color & 0xff) as f32 / 255.0;
+    let a =
+        f32::from(u8::try_from((color >> 24) & 0xff).expect("alpha channel fits in u8")) / 255.0;
+    let r = f32::from(u8::try_from((color >> 16) & 0xff).expect("red channel fits in u8")) / 255.0;
+    let g = f32::from(u8::try_from((color >> 8) & 0xff).expect("green channel fits in u8")) / 255.0;
+    let b = f32::from(u8::try_from(color & 0xff).expect("blue channel fits in u8")) / 255.0;
     // Default alpha to 1.0 if not specified (i.e. color is 0xRRGGBB)
     let a = if a == 0.0 && color != 0 { 1.0 } else { a };
     [r, g, b, a]
 }
 
+fn f32_to_i32(value: f32) -> i32 {
+    value
+        .round()
+        .to_string()
+        .parse::<i32>()
+        .expect("frame dimension fits in i32")
+}
+
 impl GlowRenderer {
+    #![allow(clippy::missing_safety_doc)]
+    /// Create a renderer using the built-in bitmap font.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if GL object creation, shader compilation, or program linking fails.
     pub unsafe fn new(gl: glow::Context) -> Result<Self, String> {
         unsafe { Self::with_font(gl, None) }
     }
 
+    /// Create a renderer using optional TTF font bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if GL object creation, shader compilation, or program linking fails.
     pub unsafe fn with_font(gl: glow::Context, font_data: Option<&[u8]>) -> Result<Self, String> {
         unsafe {
             // Vertex coordinates of a simple unit quad (2 triangles)
             let quad_vertices: [f32; 8] = [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0];
 
             // 1. Create Quad VAO & VBO
-            let quad_vao = gl.create_vertex_array()?;
-            gl.bind_vertex_array(Some(quad_vao));
-            let quad_vbo = gl.create_buffer()?;
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+            let quad_vertex_array = gl.create_vertex_array()?;
+            gl.bind_vertex_array(Some(quad_vertex_array));
+            let quad_vertex_buffer = gl.create_buffer()?;
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vertex_buffer));
             let quad_bytes = std::slice::from_raw_parts(
-                quad_vertices.as_ptr() as *const u8,
+                quad_vertices.as_ptr().cast::<u8>(),
                 std::mem::size_of_val(&quad_vertices),
             );
             gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, quad_bytes, glow::STATIC_DRAW);
@@ -68,7 +88,7 @@ impl GlowRenderer {
 
             // 2. Compile shaders based on target OS
             #[cfg(target_os = "android")]
-            let (shape_vs_src, shape_fs_src, text_vs_src, text_fs_src) = (
+            let (shape_vertex_src, shape_fragment_src, text_vertex_src, text_fragment_src) = (
                 include_str!("shaders/shape_android.vs"),
                 include_str!("shaders/shape_android.fs"),
                 include_str!("shaders/text_android.vs"),
@@ -76,15 +96,15 @@ impl GlowRenderer {
             );
 
             #[cfg(not(target_os = "android"))]
-            let (shape_vs_src, shape_fs_src, text_vs_src, text_fs_src) = (
+            let (shape_vertex_src, shape_fragment_src, text_vertex_src, text_fragment_src) = (
                 include_str!("shaders/shape_desktop.vs"),
                 include_str!("shaders/shape_desktop.fs"),
                 include_str!("shaders/text_desktop.vs"),
                 include_str!("shaders/text_desktop.fs"),
             );
 
-            let shape_program = compile_program(&gl, shape_vs_src, shape_fs_src)?;
-            let text_program = compile_program(&gl, text_vs_src, text_fs_src)?;
+            let shape_program = compile_program(&gl, shape_vertex_src, shape_fragment_src)?;
+            let text_program = compile_program(&gl, text_vertex_src, text_fragment_src)?;
 
             // 3. Create font atlas texture
             let (font_texture, font_atlas, atlas_width, atlas_height) =
@@ -113,8 +133,8 @@ impl GlowRenderer {
 
             Ok(Self {
                 gl,
-                quad_vao,
-                _quad_vbo: quad_vbo,
+                quad_vertex_array,
+                _quad_vertex_buffer: quad_vertex_buffer,
                 shape_program,
                 text_program,
                 font_texture,
@@ -148,9 +168,9 @@ unsafe fn create_bitmap_font_atlas(
         gl.tex_image_2d(
             glow::TEXTURE_2D,
             0,
-            glow::R8 as i32,
-            (96 * FONT_WIDTH) as i32,
-            FONT_HEIGHT as i32,
+            i32::try_from(glow::R8).expect("R8 fits in i32"),
+            i32::try_from(96 * FONT_WIDTH).expect("bitmap atlas width fits in i32"),
+            i32::try_from(FONT_HEIGHT).expect("font height fits in i32"),
             0,
             glow::RED,
             glow::UNSIGNED_BYTE,
@@ -159,25 +179,30 @@ unsafe fn create_bitmap_font_atlas(
         gl.tex_parameter_i32(
             glow::TEXTURE_2D,
             glow::TEXTURE_MIN_FILTER,
-            glow::NEAREST as i32,
+            i32::try_from(glow::NEAREST).expect("NEAREST fits in i32"),
         );
         gl.tex_parameter_i32(
             glow::TEXTURE_2D,
             glow::TEXTURE_MAG_FILTER,
-            glow::NEAREST as i32,
+            i32::try_from(glow::NEAREST).expect("NEAREST fits in i32"),
         );
         gl.tex_parameter_i32(
             glow::TEXTURE_2D,
             glow::TEXTURE_WRAP_S,
-            glow::CLAMP_TO_EDGE as i32,
+            i32::try_from(glow::CLAMP_TO_EDGE).expect("CLAMP_TO_EDGE fits in i32"),
         );
         gl.tex_parameter_i32(
             glow::TEXTURE_2D,
             glow::TEXTURE_WRAP_T,
-            glow::CLAMP_TO_EDGE as i32,
+            i32::try_from(glow::CLAMP_TO_EDGE).expect("CLAMP_TO_EDGE fits in i32"),
         );
 
-        Ok((tex, None, (96 * FONT_WIDTH) as i32, FONT_HEIGHT as i32))
+        Ok((
+            tex,
+            None,
+            i32::try_from(96 * FONT_WIDTH).expect("bitmap atlas width fits in i32"),
+            i32::try_from(FONT_HEIGHT).expect("font height fits in i32"),
+        ))
     }
 }
 
@@ -246,7 +271,7 @@ impl Renderer for GlowRenderer {
 
         unsafe {
             self.gl.use_program(Some(self.shape_program));
-            self.gl.bind_vertex_array(Some(self.quad_vao));
+            self.gl.bind_vertex_array(Some(self.quad_vertex_array));
 
             // Set uniforms
             let loc_res = self
@@ -300,7 +325,7 @@ impl Renderer for GlowRenderer {
         let col = unpack_color(color);
         unsafe {
             self.gl.use_program(Some(self.shape_program));
-            self.gl.bind_vertex_array(Some(self.quad_vao));
+            self.gl.bind_vertex_array(Some(self.quad_vertex_array));
 
             let loc_res = self
                 .gl
@@ -327,8 +352,8 @@ impl Renderer for GlowRenderer {
             let shadow_rect = Rect {
                 x: rect.x - spread,
                 y: rect.y + offset_y - spread,
-                width: rect.width + (spread * 2.0),
-                height: rect.height + (spread * 2.0),
+                width: spread.mul_add(2.0, rect.width),
+                height: spread.mul_add(2.0, rect.height),
             };
 
             self.gl
@@ -356,7 +381,7 @@ impl Renderer for GlowRenderer {
         let col = unpack_color(color);
         unsafe {
             self.gl.use_program(Some(self.shape_program));
-            self.gl.bind_vertex_array(Some(self.quad_vao));
+            self.gl.bind_vertex_array(Some(self.quad_vertex_array));
 
             let loc_res = self
                 .gl
@@ -398,11 +423,12 @@ impl Renderer for GlowRenderer {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: u32) {
         let col = unpack_color(color);
         unsafe {
             self.gl.use_program(Some(self.text_program));
-            self.gl.bind_vertex_array(Some(self.quad_vao));
+            self.gl.bind_vertex_array(Some(self.quad_vertex_array));
             self.gl.active_texture(glow::TEXTURE0);
             self.gl
                 .bind_texture(glow::TEXTURE_2D, Some(self.font_texture));
@@ -427,59 +453,73 @@ impl Renderer for GlowRenderer {
             self.gl
                 .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
 
-            let _aw = self.atlas_width as f32;
-            let _ah = self.atlas_height as f32;
-
             if let Some(ref atlas) = self.font_atlas {
                 let scale = size / atlas.rasterize_size;
                 let mut curr_x = x;
                 // baseline_y: top of text box + ascent (pixels from top to baseline)
-                let baseline_y = y + atlas.ascent * scale;
+                let baseline_y = atlas.ascent.mul_add(scale, y);
 
-                let aw = self.atlas_width as f32;
-                let ah = self.atlas_height as f32;
+                let aw =
+                    f32::from(u16::try_from(self.atlas_width).expect("atlas width fits in u16"));
+                let ah =
+                    f32::from(u16::try_from(self.atlas_height).expect("atlas height fits in u16"));
 
                 for c in text.chars() {
                     if c == ' ' {
-                        curr_x += atlas.space_advance * scale;
+                        curr_x = atlas.space_advance.mul_add(scale, curr_x);
                         continue;
                     }
 
                     let code = c as u32;
-                    let idx = if code >= 32 && code <= 127 {
-                        (code - 32) as usize
+                    let idx = if (32..=127).contains(&code) {
+                        usize::from(
+                            u16::try_from(code - 32).expect("ASCII glyph index fits in u16"),
+                        )
                     } else {
                         // fallback: '?' character
-                        ('?' as u32 - 32) as usize
+                        usize::from(
+                            u16::try_from('?' as u32 - 32).expect("fallback glyph index fits"),
+                        )
                     };
 
                     let glyph = &atlas.glyphs[idx];
                     if glyph.width == 0 || glyph.height == 0 {
-                        curr_x += glyph.advance_width * scale;
+                        curr_x = glyph.advance_width.mul_add(scale, curr_x);
                         continue;
                     }
 
-                    let gw = glyph.width as f32 * scale;
-                    let gh = glyph.height as f32 * scale;
+                    let gw =
+                        f32::from(u16::try_from(glyph.width).expect("glyph width fits in u16"))
+                            * scale;
+                    let gh =
+                        f32::from(u16::try_from(glyph.height).expect("glyph height fits in u16"))
+                            * scale;
 
                     // bearing_y = distance from baseline to TOP of glyph (positive = above)
                     // So the top-left corner of the quad is at baseline_y - bearing_y*scale
-                    let draw_x = curr_x + glyph.bearing_x * scale;
-                    let draw_y = baseline_y - glyph.bearing_y * scale;
+                    let draw_x = glyph.bearing_x.mul_add(scale, curr_x);
+                    let draw_y = glyph.bearing_y.mul_add(-scale, baseline_y);
 
                     // UV coordinates in [0,1] space within atlas texture
-                    let uv_x0 = glyph.atlas_x as f32 / aw;
-                    let uv_y0 = glyph.atlas_y as f32 / ah;
-                    let uv_x1 = (glyph.atlas_x + glyph.width) as f32 / aw;
-                    let uv_y1 = (glyph.atlas_y + glyph.height) as f32 / ah;
+                    let u_min_x =
+                        f32::from(u16::try_from(glyph.atlas_x).expect("atlas x fits in u16")) / aw;
+                    let u_min_y =
+                        f32::from(u16::try_from(glyph.atlas_y).expect("atlas y fits in u16")) / ah;
+                    let u_max_x = f32::from(
+                        u16::try_from(glyph.atlas_x + glyph.width).expect("atlas x fits in u16"),
+                    ) / aw;
+                    let u_max_y = f32::from(
+                        u16::try_from(glyph.atlas_y + glyph.height).expect("atlas y fits in u16"),
+                    ) / ah;
 
                     self.gl.uniform_2_f32(loc_rect_pos.as_ref(), draw_x, draw_y);
                     self.gl.uniform_2_f32(loc_rect_size.as_ref(), gw, gh);
-                    self.gl.uniform_2_f32(loc_uv_start.as_ref(), uv_x0, uv_y0);
-                    self.gl.uniform_2_f32(loc_uv_end.as_ref(), uv_x1, uv_y1);
+                    self.gl
+                        .uniform_2_f32(loc_uv_start.as_ref(), u_min_x, u_min_y);
+                    self.gl.uniform_2_f32(loc_uv_end.as_ref(), u_max_x, u_max_y);
 
                     self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
-                    curr_x += glyph.advance_width * scale;
+                    curr_x = glyph.advance_width.mul_add(scale, curr_x);
                 }
             } else {
                 let char_width = size;
@@ -489,8 +529,8 @@ impl Renderer for GlowRenderer {
                 let mut curr_x = x;
                 for c in text.chars() {
                     let ascii_code = c as u32;
-                    let idx = if ascii_code >= 32 && ascii_code <= 127 {
-                        (ascii_code - 32) as f32
+                    let idx = if (32..=127).contains(&ascii_code) {
+                        f32::from(u16::try_from(ascii_code - 32).expect("ASCII index fits in u16"))
                     } else {
                         95.0
                     };
@@ -513,7 +553,8 @@ impl Renderer for GlowRenderer {
     fn begin_frame(&mut self, width: f32, height: f32) {
         self.resolution = (width, height);
         unsafe {
-            self.gl.viewport(0, 0, width as i32, height as i32);
+            self.gl
+                .viewport(0, 0, f32_to_i32(width), f32_to_i32(height));
         }
     }
 
