@@ -2,9 +2,9 @@ name: Rust Advanced Quality, Security, and Cross-Platform Check
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ '**' ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ '**' ]
   workflow_dispatch:
 
 # Principle of Least Privilege
@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Filter Changed Files
         id: filter
@@ -45,7 +47,6 @@ jobs:
     name: Quick Pre-flight Checks
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -66,8 +67,10 @@ jobs:
       - name: Check Formatting (cargo fmt)
         run: cargo fmt --all --check
 
-      - name: Scan for Typos
-        uses: crate-ci/typos@master
+      - name: Install and Run Typos
+        run: |
+          cargo install --locked typos-cli
+          typos .
 
       # Optimize cargo-deny using the official action (Fast & No compilation)
       - name: Run cargo-deny

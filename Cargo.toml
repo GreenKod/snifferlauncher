@@ -49,3 +49,6 @@ strip = "symbols"    # 'true' yerine 'symbols' daha spesifik bir temizlik yapar
 lto = "fat"          # 'true' yerine 'fat' daha agresif bir LTO sağlar
 codegen-units = 1    # Derleme süresini uzatır ama kodu çok daha fazla optimize eder
 panic = "abort"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.QUERY_ALL_PACKAGES"
