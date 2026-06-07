@@ -68,7 +68,9 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Scan for Typos
-        uses: crate-ci/typos@master
+        uses: crate-ci/typos@v1
+        with:
+          files: .
 
       # Optimize cargo-deny using the official action (Fast & No compilation)
       - name: Run cargo-deny
