@@ -155,7 +155,7 @@ pub fn get_safe_area(app: &AndroidApp) -> Option<(i32, i32)> {
 ///
 /// Returns an error if JNI calls fail while querying the package manager or
 /// converting Java strings to Rust strings.
-pub fn get_aplication_list() -> Result<Vec<AppInfo>, String> {
+pub fn get_application_list() -> Result<Vec<AppInfo>, String> {
     let jvm = vm();
 
     let app_list = jvm
