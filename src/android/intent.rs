@@ -1,12 +1,62 @@
 use crate::core::component::Action;
 use android_activity::AndroidApp;
+use jni::errors::Error as JniError;
 use jni::{Env, jni_sig, jni_str};
 use jni::{
     JavaVM,
-    objects::{JObject, JValue},
+    objects::{JObject, JString, JValue},
 };
 use std::sync::{Arc, OnceLock};
 static JVM: OnceLock<Arc<JavaVM>> = OnceLock::new();
+
+#[derive(Debug)]
+pub struct AppInfo {
+    pub name: String,
+    pub package_name: String,
+    pub icon_bytes: Vec<u8>,
+}
+
+impl AppInfo {
+    #[must_use]
+    pub const fn new(name: String, package_name: String, icon_bytes: Vec<u8>) -> Self {
+        Self {
+            name,
+            package_name,
+            icon_bytes,
+        }
+    }
+
+    /// Creates an `AppInfo` instance with only basic information and no icon.
+    /// Icon data can be added later using `with_icon`.
+    #[must_use]
+    pub const fn from_package_info(name: String, package_name: String) -> Self {
+        Self {
+            name,
+            package_name,
+            icon_bytes: Vec::new(),
+        }
+    }
+
+    /// Adds or updates the app icon bytes using a builder-style pattern.
+    #[must_use]
+    pub fn with_icon(mut self, icon_bytes: Vec<u8>) -> Self {
+        self.icon_bytes = icon_bytes;
+        self
+    }
+
+    /// Filters apps by name for the launcher search bar.
+    /// `Q: AsRef<str>` allows both `&str` and `String` to be passed directly.
+    pub fn search_by_name<Q: AsRef<str>>(apps: &[Self], query: Q) -> Vec<&Self> {
+        let query_str = query.as_ref().to_lowercase();
+        if query_str.is_empty() {
+            return apps.iter().collect(); // Return all apps when the query is empty
+        }
+
+        apps.iter()
+            .filter(|app| app.name.to_lowercase().contains(&query_str))
+            .collect()
+    }
+}
 
 /// Launches a specific Android system or application action.
 ///
@@ -97,6 +147,135 @@ pub fn get_safe_area(app: &AndroidApp) -> Option<(i32, i32)> {
     })
     .ok() // Converts Result to Option
     .flatten() // Clears unnecessary Option
+}
+
+/// Returns the list of installed application package names.
+///
+/// # Errors
+///
+/// Returns an error if JNI calls fail while querying the package manager or
+/// converting Java strings to Rust strings.
+pub fn get_application_list() -> Result<Vec<AppInfo>, String> {
+    let jvm = vm();
+
+    let app_list = jvm
+        .attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
+            let context = context(env);
+            let mut local_list = Vec::new();
+
+            let package_manager = env
+                .call_method(
+                    &context,
+                    jni_str!("getPackageManager"),
+                    jni_sig!("()Landroid/content/pm/PackageManager;"),
+                    &[],
+                )?
+                .l()?;
+
+            // Use the GET_ACTIVITIES (512) flag to include clickable activities
+            let packages = env
+                .call_method(
+                    &package_manager,
+                    jni_str!("getInstalledPackages"),
+                    jni_sig!("(I)Ljava/util/List;"),
+                    &[JValue::Int(512)],
+                )?
+                .l()?;
+
+            let size = env
+                .call_method(&packages, jni_str!("size"), jni_sig!("()I"), &[])?
+                .i()?;
+
+            for i in 0..size {
+                let package_info = env
+                    .call_method(
+                        &packages,
+                        jni_str!("get"),
+                        jni_sig!("(I)Ljava/lang/Object;"),
+                        &[JValue::Int(i)],
+                    )?
+                    .l()?;
+
+                let package_name_obj = env
+                    .get_field(
+                        &package_info,
+                        jni_str!("packageName"),
+                        jni_sig!("Ljava/lang/String;"),
+                    )?
+                    .l()?;
+
+                // Launcher check: filter out hidden services without a home screen icon
+                let launch_intent = env
+                    .call_method(
+                        &package_manager,
+                        jni_str!("getLaunchIntentForPackage"),
+                        jni_sig!("(Ljava/lang/String;)Landroid/content/Intent;"),
+                        &[JValue::Object(&package_name_obj)],
+                    )?
+                    .l()?;
+
+                if launch_intent.is_null() {
+                    continue;
+                }
+
+                let app_info_obj = env
+                    .get_field(
+                        &package_info,
+                        jni_str!("applicationInfo"),
+                        jni_sig!("Landroid/content/pm/ApplicationInfo;"),
+                    )?
+                    .l()?;
+
+                let label_char_seq = env
+                    .call_method(
+                        &package_manager,
+                        jni_str!("getApplicationLabel"),
+                        jni_sig!("(Landroid/content/pm/ApplicationInfo;)Ljava/lang/CharSequence;"),
+                        &[JValue::Object(&app_info_obj)],
+                    )?
+                    .l()?;
+
+                let label_jstring = env
+                    .call_method(
+                        &label_char_seq,
+                        jni_str!("toString"),
+                        jni_sig!("()Ljava/lang/String;"),
+                        &[],
+                    )?
+                    .l()?;
+
+                let label_jstring = env.as_cast::<JString>(&label_jstring)?;
+                let app_name = label_jstring.try_to_string(env)?;
+
+                let package_name_jstring = env.as_cast::<JString>(&package_name_obj)?;
+                let package_name_str = package_name_jstring.try_to_string(env)?;
+
+                let app_info = AppInfo::new(app_name, package_name_str, Vec::new());
+
+                local_list.push(app_info);
+            }
+
+            Ok(local_list)
+        })
+        .map_err(|e: JniError| e.to_string())?;
+
+    if cfg!(debug_assertions) {
+        println!(
+            "[DEBUG] Number of apps to display in the launcher: {}",
+            app_list.len()
+        );
+        for app in &app_list {
+            println!("[DEBUG] - {} ({})", app.name, app.package_name);
+        }
+        for app in AppInfo::search_by_name(&app_list, "sett") {
+            println!(
+                "[DEBUG] Search result: \n - {} ({})",
+                app.name, app.package_name
+            );
+        }
+    }
+
+    Ok(app_list)
 }
 
 fn start_action(action: &str) -> Result<(), String> {
