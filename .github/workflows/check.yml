@@ -2,9 +2,9 @@ name: Rust Advanced Quality, Security, and Cross-Platform Check
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ '**' ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ '**' ]
   workflow_dispatch:
 
 # Principle of Least Privilege
@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Filter Changed Files
         id: filter
