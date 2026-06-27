@@ -77,7 +77,6 @@ CARGO_CONFIG
   _gh_step "Export ANDROID_HOME, NDK_ROOT, JAVA_HOME"
 
   export ANDROID_HOME="${androidSdk}/libexec/android-sdk"
-  export ANDROID_SDK_ROOT="$ANDROID_HOME"
   export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/${ndkVersion}"
   export ANDROID_NDK_HOME="$ANDROID_NDK_ROOT"
   export JAVA_HOME="${pkgs.jdk17}"
@@ -215,10 +214,10 @@ EXTENSIONS
   export CLIPPY_FLAGS="-D warnings -D clippy::pedantic -D clippy::nursery -D clippy::cargo -A clippy::multiple-crate-versions"
   
   alias lint-linux="cargo clippy --locked --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
-  alias lint-android-aarch64="cargo ndk --target aarch64-linux-android clippy --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
-  alias lint-android-armv7="cargo ndk --target armv7-linux-androideabi clippy --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
-  alias lint-android-x86_64="cargo ndk --target x86_64-linux-android clippy --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
-  alias lint-android-i686="cargo ndk --target i686-linux-android clippy --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
+  alias lint-android-aarch64="cargo clippy --target aarch64-linux-android --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
+  alias lint-android-armv7="cargo clippy --target armv7-linux-androideabi --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
+  alias lint-android-x86_64="cargo clippy --target x86_64-linux-android --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
+  alias lint-android-i686="cargo clippy --target i686-linux-android --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
   alias lint-android="lint-android-aarch64 && lint-android-armv7 && lint-android-x86_64 && lint-android-i686"
   alias lint-macos="export PKG_CONFIG_PATH=\"\$(brew --prefix sdl2)/lib/pkgconfig:\$PKG_CONFIG_PATH\" LIBRARY_PATH=\"\$(brew --prefix sdl2)/lib:\$LIBRARY_PATH\"; cargo clippy --locked --workspace --all-targets --all-features --target aarch64-apple-darwin -- \$CLIPPY_FLAGS"
 
