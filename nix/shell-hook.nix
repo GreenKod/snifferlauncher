@@ -146,8 +146,9 @@ CARGO_CONFIG
   export VSCODE_EXTENSIONS_DIR="$PWD/.extensions"
   mkdir -p "$VSCODE_EXTENSIONS_DIR"
 
+  # Wrapper to fix LD_LIBRARY_PATH issues when calling the host's VS Code
   function code() {
-    command code --extensions-dir "$VSCODE_EXTENSIONS_DIR" "$@"
+    env -u LD_LIBRARY_PATH code --extensions-dir "$VSCODE_EXTENSIONS_DIR" "$@"
   }
   export -f code
 
@@ -167,14 +168,14 @@ CARGO_CONFIG
     while IFS= read -r ext; do
       [[ -z "$ext" ]] && continue
 
-      if command code --extensions-dir "$VSCODE_EXTENSIONS_DIR" --list-extensions 2>/dev/null | grep -qiF "$ext"; then
+      if env -u LD_LIBRARY_PATH code --extensions-dir "$VSCODE_EXTENSIONS_DIR" --list-extensions 2>/dev/null | grep -qiF "$ext"; then
         _gh_skip "$ext"
         (( _skipped++ )) || true
         continue
       fi
 
       local _out
-      _out=$(command code --extensions-dir "$VSCODE_EXTENSIONS_DIR" --install-extension "$ext" 2>&1)
+      _out=$(env -u LD_LIBRARY_PATH code --extensions-dir "$VSCODE_EXTENSIONS_DIR" --install-extension "$ext" --force 2>&1)
       if [ $? -eq 0 ]; then
         _gh_ok "$ext"
         (( _installed++ )) || true
