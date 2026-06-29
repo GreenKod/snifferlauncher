@@ -108,14 +108,14 @@ pub fn draw_ui(
             draw_button_icon(renderer, *id, icon_box, metrics);
 
             // Left Title / Description text
-            let text_left = icon_box.x + icon_box.width + (rect.height * 0.2);
+            let text_left = rect.height.mul_add(0.2, icon_box.x + icon_box.width);
             let title_size = rect.height * 0.18; // ~16sp at 86dp
             let subtitle_size = rect.height * 0.11; // ~10sp at 86dp
 
             // Center texts vertically
             let text_gap = rect.height * 0.09;
             let total_text_height = title_size + text_gap + subtitle_size;
-            let text_start_y = rect.y + (rect.height - total_text_height) * 0.5;
+            let text_start_y = (rect.height - total_text_height).mul_add(0.5, rect.y);
 
             renderer.draw_text(title, text_left, text_start_y, title_size, BUTTON_TEXT);
             renderer.draw_text(
@@ -166,8 +166,8 @@ pub fn draw_button_icon(
             for (index, y_ratio) in [0.25f32, 0.50, 0.75].into_iter().enumerate() {
                 let track_w = w * 0.65;
                 let track_h = h * 0.07;
-                let track_x = rect.x + (w - track_w) * 0.5; // Centered
-                let track_y = rect.y + (h * y_ratio) - (track_h * 0.5);
+                let track_x = (w - track_w).mul_add(0.5, rect.x); // Centered
+                let track_y = h.mul_add(y_ratio, rect.y) - (track_h * 0.5);
 
                 renderer.draw_rect(
                     Rect::new(track_x, track_y, track_w, track_h),
@@ -178,26 +178,26 @@ pub fn draw_button_icon(
                 );
 
                 let knob_r = h * 0.11;
-                let knob_cx = if index % 2 == 0 {
-                    track_x + track_w * 0.25
+                let knob_center_x = if index % 2 == 0 {
+                    track_w.mul_add(0.25, track_x)
                 } else {
-                    track_x + track_w * 0.75
+                    track_w.mul_add(0.75, track_x)
                 };
-                let knob_cy = track_y + (track_h * 0.5);
-                renderer.draw_circle(knob_cx, knob_cy, knob_r, BUTTON_TEXT);
+                let knob_center_y = track_h.mul_add(0.5, track_y);
+                renderer.draw_circle(knob_center_x, knob_center_y, knob_r, BUTTON_TEXT);
             }
         }
         ButtonId::Contacts => {
             // Draw person avatar
             let head_r = h * 0.18;
-            let head_cx = rect.x + w * 0.5;
-            let head_cy = rect.y + h * 0.35;
-            renderer.draw_circle(head_cx, head_cy, head_r, BUTTON_TEXT);
+            let head_center_x = w.mul_add(0.5, rect.x);
+            let head_center_y = h.mul_add(0.35, rect.y);
+            renderer.draw_circle(head_center_x, head_center_y, head_r, BUTTON_TEXT);
 
             let body_w = w * 0.5;
             let body_h = h * 0.22;
-            let body_x = rect.x + (w - body_w) * 0.5;
-            let body_y = rect.y + h * 0.65;
+            let body_x = (w - body_w).mul_add(0.5, rect.x);
+            let body_y = h.mul_add(0.65, rect.y);
             renderer.draw_rect(
                 Rect::new(body_x, body_y, body_w, body_h),
                 BUTTON_TEXT,
@@ -210,8 +210,9 @@ pub fn draw_button_icon(
             // Draw camera body, lens, flash
             let body_w = w * 0.6;
             let body_h = h * 0.45;
-            let body_x = rect.x + (w - body_w) * 0.5;
-            let body_y = rect.y + (h - body_h) * 0.5 + (h * 0.05); // slightly shifted down
+            let body_x = (w - body_w).mul_add(0.5, rect.x);
+            // slightly shifted down from center
+            let body_y = h.mul_add(0.05, (h - body_h).mul_add(0.5, rect.y));
             renderer.draw_rect(
                 Rect::new(body_x, body_y, body_w, body_h),
                 BUTTON_TEXT,
@@ -221,13 +222,13 @@ pub fn draw_button_icon(
             );
 
             let lens_r = h * 0.125;
-            let lens_cx = rect.x + w * 0.5;
-            let lens_cy = body_y + body_h * 0.5;
-            renderer.draw_circle(lens_cx, lens_cy, lens_r, ICON_SURFACE);
+            let lens_center_x = w.mul_add(0.5, rect.x);
+            let lens_center_y = body_h.mul_add(0.5, body_y);
+            renderer.draw_circle(lens_center_x, lens_center_y, lens_r, ICON_SURFACE);
 
             let flash_w = w * 0.18;
             let flash_h = h * 0.11;
-            let flash_x = body_x + body_w * 0.15;
+            let flash_x = body_w.mul_add(0.15, body_x);
             let flash_y = body_y - flash_h * 0.5;
             renderer.draw_rect(
                 Rect::new(flash_x, flash_y, flash_w, flash_h),
