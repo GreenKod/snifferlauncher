@@ -29,7 +29,7 @@
       # update the sha256 via: nix-prefetch-url --unpack <url>
       (import (builtins.fetchTarball {
         url    = "https://github.com/oxalica/rust-overlay/archive/master.tar.gz";
-        sha256 = "0f206n0f6gggyhnb6ibrr99rz2i39p4cmkllzphc4smgwqgmbq31";
+        sha256 = "0j0xcafzm4956rmlqssdyj1jaii98wlzx6yc9hp54n80s6pxz4sq";
       }))
     ];
   }
