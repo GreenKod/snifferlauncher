@@ -1,8 +1,8 @@
+use crate::core::render::draw::{draw_ui, find_clicked_button, find_hovered_button};
+use crate::core::style::{BACKGROUND, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::core::{
     Action, Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point,
     Renderer, Size, calculate_layout,
-    component::{draw_ui, find_clicked_button, find_hovered_button},
-    style::{BACKGROUND, WINDOW_HEIGHT, WINDOW_WIDTH},
 };
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -57,7 +57,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Audiowide font gömülü olarak binary'ye dahil edildi
-    let font_bytes: &[u8] = include_bytes!("../fonts/audiowide.ttf");
+    let font_bytes: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
     let mut renderer = unsafe { GlowRenderer::with_font(gl, Some(font_bytes))? };
     let mut event_pump = sdl_context.event_pump()?;
 

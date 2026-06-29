@@ -1,24 +1,8 @@
-use crate::core::font::{FONT_DATA, FONT_HEIGHT, FONT_WIDTH};
-use crate::core::font_atlas::{self, FontAtlas};
-use crate::core::geometry::Rect;
+use crate::core::render::api::Renderer;
+use crate::core::render::math::geometry::Rect;
+use crate::core::render::text::font::{FONT_DATA, FONT_HEIGHT, FONT_WIDTH};
+use crate::core::render::text::font_atlas::{self, FontAtlas};
 use glow::HasContext;
-
-pub trait Renderer {
-    fn clear(&mut self, color: u32);
-    fn draw_rect(
-        &mut self,
-        rect: Rect,
-        color: u32,
-        radius: f32,
-        border_width: f32,
-        border_color: Option<u32>,
-    );
-    fn draw_shadow(&mut self, rect: Rect, radius: f32, offset_y: f32, spread: f32, color: u32);
-    fn draw_circle(&mut self, cx: f32, cy: f32, radius: f32, color: u32);
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: u32);
-    fn begin_frame(&mut self, width: f32, height: f32);
-    fn end_frame(&mut self);
-}
 
 pub struct GlowRenderer {
     gl: glow::Context,
