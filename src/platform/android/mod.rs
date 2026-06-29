@@ -209,7 +209,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     renderer.begin_frame(width, height);
                     renderer.clear(BACKGROUND);
 
-                    draw_ui(renderer, &root_element, &layout_tree);
+                    draw_ui(renderer, &root_element, &layout_tree, &metrics);
 
                     renderer.end_frame();
 

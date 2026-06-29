@@ -138,7 +138,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         renderer.begin_frame(width, height);
         renderer.clear(BACKGROUND);
-        draw_ui(&mut renderer, &root_element, &layout_tree);
+        draw_ui(&mut renderer, &root_element, &layout_tree, &metrics);
         renderer.end_frame();
 
         window.gl_swap_window();
