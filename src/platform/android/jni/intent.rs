@@ -121,7 +121,6 @@ fn start_action(action: &str) -> Result<(), String> {
 /// Returns an error if URI parsing, intent construction, or activity launch fails.
 pub fn start_view_uri(uri: &str) -> Result<(), String> {
     use jni::{jni_sig, jni_str};
-    use jni::objects::JValue;
 
     let jvm = vm();
 

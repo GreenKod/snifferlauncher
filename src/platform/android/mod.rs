@@ -20,12 +20,12 @@ pub fn launch_action(_action: crate::core::Action) -> Result<(), String> {
 #[unsafe(no_mangle)]
 #[allow(clippy::pedantic)]
 pub fn android_main(app: android_activity::AndroidApp) {
+    use crate::core::render::draw::{draw_ui, find_clicked_button, find_hovered_button};
+    use crate::core::style::BACKGROUND;
     use crate::core::{
         Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point, Renderer,
         Size, calculate_layout,
     };
-    use crate::core::render::draw::{draw_ui, find_clicked_button, find_hovered_button};
-    use crate::core::style::BACKGROUND;
     use android_activity::{
         InputStatus, MainEvent, PollEvent, input::InputEvent, input::MotionAction,
     };
