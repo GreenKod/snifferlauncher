@@ -1,6 +1,6 @@
-use crate::core::component::{Action, Application, ButtonId, Element};
-use crate::core::geometry::Point;
+use crate::core::Point;
 use crate::core::style::Style;
+use crate::core::types::{Action, Application, ButtonId, Element};
 
 #[derive(Default, Debug)]
 pub struct LauncherState {
