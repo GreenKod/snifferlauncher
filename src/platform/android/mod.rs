@@ -1,8 +1,10 @@
 #[cfg(target_os = "android")]
-pub mod intent;
+pub mod jni;
+#[cfg(target_os = "android")]
+pub mod types;
 
 #[cfg(target_os = "android")]
-pub use intent::launch_action;
+pub use jni::intent::launch_action;
 
 #[cfg(not(target_os = "android"))]
 /// Launch the requested action on non-Android targets.
@@ -21,9 +23,9 @@ pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::{
         Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point, Renderer,
         Size, calculate_layout,
-        component::{draw_ui, find_clicked_button, find_hovered_button},
-        style::BACKGROUND,
     };
+    use crate::core::render::draw::{draw_ui, find_clicked_button, find_hovered_button};
+    use crate::core::style::BACKGROUND;
     use android_activity::{
         InputStatus, MainEvent, PollEvent, input::InputEvent, input::MotionAction,
     };
@@ -124,7 +126,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     })
                 };
                 // Audiowide font gömülü olarak binary'ye dahil edildi
-                static FONT_BYTES: &[u8] = include_bytes!("../fonts/audiowide.ttf");
+                static FONT_BYTES: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
                 let glow_renderer = unsafe { GlowRenderer::with_font(gl, Some(FONT_BYTES))? };
                 self.renderer = Some(glow_renderer);
             }
@@ -173,7 +175,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     );
 
                     let (safe_area_top, safe_area_bottom) =
-                        crate::android::intent::get_safe_area(&app)
+                        crate::platform::android::jni::get_safe_area(&app)
                             .map(|(top, bottom)| {
                                 (
                                     f32::from(
@@ -246,7 +248,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     .expect("window height fits in u16"),
                                             );
                                             let (safe_area_top, safe_area_bottom) =
-                                                crate::android::intent::get_safe_area(&app)
+                                                crate::platform::android::jni::get_safe_area(&app)
                                                     .map(|(top, bottom)| {
                                                         (
                                                             f32::from(i16::try_from(top).expect(

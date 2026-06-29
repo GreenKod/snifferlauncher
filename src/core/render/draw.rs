@@ -1,68 +1,10 @@
-use crate::core::{Point, Rect};
 use crate::core::layout::LayoutNode;
-use crate::core::renderer::Renderer;
-use crate::core::style::Style;
+use crate::core::render::api::Renderer;
 use crate::core::style::{BUTTON_MUTED, BUTTON_TEXT, ICON_SURFACE};
+use crate::core::types::{ButtonId, Element};
+use crate::core::{Point, Rect};
 
-pub type ElementChildren = Vec<Element>;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ButtonId {
-    Settings,
-    Contacts,
-    Camera,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Action {
-    OpenSettings,
-    OpenContacts,
-    OpenCamera,
-}
-
-#[derive(Clone, Debug)]
-pub enum Element {
-    Container {
-        style: Style,
-        children: ElementChildren,
-    },
-    Button {
-        id: ButtonId,
-        title: String,
-        style: Style,
-        hovered: bool,
-    },
-    Label {
-        text: String,
-        style: Style,
-    },
-    Icon {
-        id: ButtonId,
-        style: Style,
-    },
-}
-
-impl Element {
-    #[must_use]
-    pub const fn style(&self) -> &Style {
-        match self {
-            Self::Container { style, .. }
-            | Self::Button { style, .. }
-            | Self::Label { style, .. }
-            | Self::Icon { style, .. } => style,
-        }
-    }
-}
-
-pub trait Application {
-    type Message: Clone + std::fmt::Debug;
-    type State: Default;
-
-    fn update(state: &mut Self::State, msg: Self::Message) -> Option<Action>;
-    fn view(state: &Self::State) -> Element;
-}
-
-/// Recursively traverses the layout and element trees to find which button was clicked
+/// Recursively traverses the layout and element trees to find which button was clicked.
 #[must_use]
 pub fn find_clicked_button(
     element: &Element,
@@ -86,7 +28,7 @@ pub fn find_clicked_button(
     }
 }
 
-/// Recursively traverses the layout and element trees to find which button is currently hovered
+/// Recursively traverses the layout and element trees to find which button is currently hovered.
 #[must_use]
 pub fn find_hovered_button(
     element: &Element,
@@ -110,7 +52,7 @@ pub fn find_hovered_button(
     }
 }
 
-/// Platform-agnostic traversal to draw the UI elements using the Renderer interface
+/// Platform-agnostic traversal to draw the UI elements using the Renderer interface.
 pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNode) {
     let rect = layout.rect;
     let style = element.style();
@@ -186,7 +128,7 @@ pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNo
     }
 }
 
-/// Helper to draw vector shapes representing icons for Settings, Contacts, Camera
+/// Helper to draw vector shapes representing icons for Settings, Contacts, Camera.
 pub fn draw_button_icon(renderer: &mut dyn Renderer, id: ButtonId, rect: Rect) {
     match id {
         ButtonId::Settings => {

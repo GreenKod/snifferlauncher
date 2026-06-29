@@ -1,14 +1,12 @@
 pub mod app;
-pub mod component;
 pub mod layout;
 pub mod render;
-pub mod renderer;
 pub mod style;
+pub mod types;
 
+// Convenience re-exports — keeps all call sites working without path changes.
 pub use app::{LauncherApp, LauncherMessage, LauncherState};
-pub use component::{
-    Action, Application, ButtonId, Element, find_clicked_button, find_hovered_button,
-};
 pub use layout::{LayoutNode, calculate_layout};
 pub use render::math::geometry::{Point, Rect, Size};
-pub use renderer::{GlowRenderer, Renderer};
+pub use render::{GlowRenderer, Renderer};
+pub use types::{Action, Application, ButtonId, Element};
