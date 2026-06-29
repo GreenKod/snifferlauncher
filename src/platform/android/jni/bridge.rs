@@ -204,3 +204,47 @@ pub fn get_application_list() -> Result<Vec<crate::platform::android::types::App
 
     Ok(app_list)
 }
+
+/// Returns Android `DisplayMetrics` (density, scaledDensity).
+///
+/// - `density`: logical display density (1.0 = mdpi, 1.5 = hdpi, etc.)
+/// - `scaledDensity`: font scaling factor (density * user font preference)
+///
+/// Returns `(1.0, 1.0)` as a safe fallback if the JNI call fails.
+#[must_use]
+pub fn get_density() -> (f32, f32) {
+    let jvm = vm();
+
+    jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
+        let ctx = context(env);
+
+        let resources = env
+            .call_method(
+                &ctx,
+                jni_str!("getResources"),
+                jni_sig!("()Landroid/content/res/Resources;"),
+                &[],
+            )?
+            .l()?;
+
+        let display_metrics = env
+            .call_method(
+                &resources,
+                jni_str!("getDisplayMetrics"),
+                jni_sig!("()Landroid/util/DisplayMetrics;"),
+                &[],
+            )?
+            .l()?;
+
+        let density = env
+            .get_field(&display_metrics, jni_str!("density"), jni_sig!("F"))?
+            .f()?;
+
+        let scaled_density = env
+            .get_field(&display_metrics, jni_str!("scaledDensity"), jni_sig!("F"))?
+            .f()?;
+
+        Ok((density, scaled_density))
+    })
+    .unwrap_or((1.0_f32, 1.0_f32))
+}
