@@ -82,8 +82,8 @@ pub fn start_activity(
 ///
 /// Returns an error if JNI calls fail while querying the package manager or
 /// converting Java strings to Rust strings.
-pub fn get_application_list() -> Result<Vec<super::types::AppInfo>, String> {
-    use super::types::AppInfo;
+pub fn get_application_list() -> Result<Vec<crate::platform::android::types::AppInfo>, String> {
+    use crate::platform::android::types::AppInfo;
 
     let jvm = vm();
 
@@ -194,7 +194,7 @@ pub fn get_application_list() -> Result<Vec<super::types::AppInfo>, String> {
         for app in &app_list {
             println!("[DEBUG] - {} ({})", app.name, app.package_name);
         }
-        for app in super::types::AppInfo::search_by_name(&app_list, "sett") {
+        for app in AppInfo::search_by_name(&app_list, "sett") {
             println!(
                 "[DEBUG] Search result: \n - {} ({})",
                 app.name, app.package_name

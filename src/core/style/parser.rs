@@ -4,7 +4,7 @@ use super::color::{
     ICON_SURFACE, SHADOW, SHADOW_OFFSET_Y, SHADOW_SPREAD,
 };
 use super::layout::{AlignItems, Dimension, Display, FlexDirection, JustifyContent, RectOffset};
-use super::style::Style;
+use super::props::Style;
 
 impl Style {
     /// Constructs a `Style` by parsing a whitespace-separated list of Tailwind-like class names.
