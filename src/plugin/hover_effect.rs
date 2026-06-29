@@ -2,7 +2,7 @@ use crate::core::style::Style;
 use crate::core::ui::data_map::{DataMap, DataValue};
 use crate::core::ui::event::UiEvent;
 use crate::core::ui::style_map::StyleMap;
-use crate::core::ui::widget::{ids, WidgetId};
+use crate::core::ui::widget::{WidgetId, ids};
 use crate::plugin::r#trait::UiPlugin;
 
 /// Hover feedback plugin.
@@ -24,10 +24,7 @@ impl UiPlugin for HoverEffectPlugin {
     fn on_event(&self, event: &UiEvent, styles: &StyleMap, data: &DataMap) {
         match event {
             UiEvent::Hover(id) => {
-                styles.set(
-                    *id,
-                    Style::builder().background_color(HOVER_BG).build(),
-                );
+                styles.set(*id, Style::builder().background_color(HOVER_BG).build());
                 data.set(*id, "label", DataValue::Text("Opening...".into()));
             }
             UiEvent::HoverEnd(id) => {
