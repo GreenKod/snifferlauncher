@@ -60,5 +60,10 @@ pub trait Application {
     type State: Default;
 
     fn update(state: &mut Self::State, msg: Self::Message) -> Option<Action>;
-    fn view(state: &Self::State) -> Element;
+
+    /// Build the UI element tree for the current state and screen metrics.
+    ///
+    /// `metrics` carries the DPI scale factor and logical screen dimensions so
+    /// the view can adapt padding, font sizes, and element heights to the device.
+    fn view(state: &Self::State, metrics: &crate::core::ScreenMetrics) -> Element;
 }
