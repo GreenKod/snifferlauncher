@@ -140,23 +140,6 @@ impl Application for LauncherApp {
     fn view(state: &Self::State, metrics: &ScreenMetrics) -> Element {
         let t = Tokens::from_metrics(metrics);
 
-        let settings_bg = if state.hovered == Some(ButtonId::Settings) {
-            "bg-settings-hover"
-        } else {
-            "bg-settings"
-        };
-        let contacts_bg = if state.hovered == Some(ButtonId::Contacts) {
-            "bg-contacts-hover"
-        } else {
-            "bg-contacts"
-        };
-        let camera_bg = if state.hovered == Some(ButtonId::Camera) {
-            "bg-camera-hover"
-        } else {
-            "bg-camera"
-        };
-
-        // ── Outer container ──────────────────────────────────────────────
         let outer_style = Style::builder()
             .background_color(crate::core::style::BACKGROUND)
             .width_percent(100.0)
@@ -167,96 +150,87 @@ impl Application for LauncherApp {
             .align_stretch()
             .build();
 
-        // ── Header card ──────────────────────────────────────────────────
-        let header_style = Style::builder()
-            .background_color(crate::core::style::HEADER_SURFACE)
-            .border_radius(t.card_radius)
-            .padding_all(t.header_padding)
-            .column()
-            .align_start()
-            .gap(t.dp(8.0))
-            .build();
-
-        // ── Button list card ─────────────────────────────────────────────
-        let card_style = Style::builder()
-            .background_color(crate::core::style::HEADER_SURFACE)
-            .border_radius(t.card_radius)
-            .padding_all(t.card_padding)
-            .column()
-            .align_start()
-            .gap(t.button_gap)
-            .build();
-
-        // ── Button factory closure ───────────────────────────────────────
-        let make_button = |id: ButtonId, bg: &str, title: &str, hovered: bool| {
-            let btn_style = Style::builder()
-                .background_color_from_tailwind(bg)
-                .border_radius(t.button_radius)
-                .padding_horizontal(t.button_px)
-                .padding_vertical(t.button_py)
-                .shadow_card()
-                .height_pixels(t.button_height)
-                .build();
-            Element::Button {
-                id,
-                title: title.to_string(),
-                style: btn_style,
-                hovered,
-            }
-        };
-
         Element::Container {
             style: outer_style,
             children: vec![
-                // Hero Header Card
-                Element::Container {
-                    style: header_style,
-                    children: vec![
-                        Element::Label {
-                            text: "SNIFFER LAUNCHER".to_string(),
-                            style: Style::builder()
-                                .text_color(crate::core::style::BUTTON_TEXT)
-                                .text_size(t.title_size)
-                                .build(),
-                        },
-                        Element::Label {
-                            text: "Platform-Agnostic UI System (v1.0)".to_string(),
-                            style: Style::builder()
-                                .text_color(crate::core::style::BUTTON_MUTED)
-                                .text_size(t.subtitle_size)
-                                .build(),
-                        },
-                    ],
-                },
-                // Button list card
-                Element::Container {
-                    style: card_style,
-                    children: vec![
-                        make_button(
-                            ButtonId::Settings,
-                            settings_bg,
-                            "Settings",
-                            state.hovered == Some(ButtonId::Settings),
-                        ),
-                        make_button(
-                            ButtonId::Contacts,
-                            contacts_bg,
-                            "Contacts",
-                            state.hovered == Some(ButtonId::Contacts),
-                        ),
-                        make_button(
-                            ButtonId::Camera,
-                            camera_bg,
-                            "Camera",
-                            state.hovered == Some(ButtonId::Camera),
-                        ),
-                    ],
-                },
+                build_header(&t),
+                build_button_list(state, &t),
             ],
         }
     }
 }
 
+fn build_header(t: &Tokens) -> Element {
+    let header_style = Style::builder()
+        .background_color(crate::core::style::HEADER_SURFACE)
+        .border_radius(t.card_radius)
+        .padding_all(t.header_padding)
+        .column()
+        .align_start()
+        .gap(t.dp(8.0))
+        .build();
+
+    Element::Container {
+        style: header_style,
+        children: vec![
+            Element::Label {
+                text: "SNIFFER LAUNCHER".to_string(),
+                style: Style::builder()
+                    .text_color(crate::core::style::BUTTON_TEXT)
+                    .text_size(t.title_size)
+                    .build(),
+            },
+            Element::Label {
+                text: "Platform-Agnostic UI System (v1.0)".to_string(),
+                style: Style::builder()
+                    .text_color(crate::core::style::BUTTON_MUTED)
+                    .text_size(t.subtitle_size)
+                    .build(),
+            },
+        ],
+    }
+}
+
+fn build_button_list(state: &LauncherState, t: &Tokens) -> Element {
+    let card_style = Style::builder()
+        .background_color(crate::core::style::HEADER_SURFACE)
+        .border_radius(t.card_radius)
+        .padding_all(t.card_padding)
+        .column()
+        .align_start()
+        .gap(t.button_gap)
+        .build();
+
+    let make_button = |id: ButtonId, bg: &str, title: &str, hovered: bool| {
+        let btn_style = Style::builder()
+            .background_color_from_tailwind(bg)
+            .border_radius(t.button_radius)
+            .padding_horizontal(t.button_px)
+            .padding_vertical(t.button_py)
+            .shadow_card()
+            .height_pixels(t.button_height)
+            .build();
+        Element::Button {
+            id,
+            title: title.to_string(),
+            style: btn_style,
+            hovered,
+        }
+    };
+
+    let settings_bg = if state.hovered == Some(ButtonId::Settings) { "bg-settings-hover" } else { "bg-settings" };
+    let contacts_bg = if state.hovered == Some(ButtonId::Contacts) { "bg-contacts-hover" } else { "bg-contacts" };
+    let camera_bg = if state.hovered == Some(ButtonId::Camera) { "bg-camera-hover" } else { "bg-camera" };
+
+    Element::Container {
+        style: card_style,
+        children: vec![
+            make_button(ButtonId::Settings, settings_bg, "Settings", state.hovered == Some(ButtonId::Settings)),
+            make_button(ButtonId::Contacts, contacts_bg, "Contacts", state.hovered == Some(ButtonId::Contacts)),
+            make_button(ButtonId::Camera, camera_bg, "Camera", state.hovered == Some(ButtonId::Camera)),
+        ],
+    }
+}
 // ── Helper: dp() from raw f32 ─────────────────────────────────────────────────
 // `t.dp(x)` is already scaled, but for gaps used inline we forward the method.
 impl Tokens {
