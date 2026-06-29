@@ -6,27 +6,27 @@ use crate::plugin::r#trait::UiPlugin;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// ID → Listener listesi eşlemesi.
+/// ID-to-listener subscription map.
 ///
-/// Eklenti kayıt (`register`) karmaşıklığı: `O(subscriptions.len())` (amortised)
-/// Olay dağıtım (`dispatch`) karmaşıklığı: `O(1)` `HashMap` lookup + `O(k)` dispatch
-///   burada `k` = o ID'ye kayıtlı eklenti sayısı (genellikle 1-3)
+/// Registration complexity  : `O(subscriptions.len())` amortised
+/// Dispatch complexity      : `O(1)` `HashMap` lookup + `O(k)` dispatch
+///   where `k` = number of plugins subscribed to a given ID (typically 1–3)
 ///
-/// # Kullanım
-/// ```
+/// # Example
+/// ```ignore
 /// let mut registry = PluginRegistry::default();
-/// registry.register(Arc::new(HoverEffectPlugin));
-/// // Her render frame'inde:
+/// registry.register(&Arc::new(HoverEffectPlugin));
+/// // Each render frame:
 /// registry.dispatch(&bus, &styles, &data);
 /// ```
 #[derive(Default)]
 pub struct PluginRegistry {
-    /// Anahtar: `WidgetId` (u64) | Değer: o ID'yi dinleyen eklentiler
+    /// Key: `WidgetId` (u64) | Value: plugins subscribed to that ID.
     subscriptions: HashMap<WidgetId, Vec<Arc<dyn UiPlugin>>>,
 }
 
 impl PluginRegistry {
-    /// Eklentiyi yükle — her abone olduğu ID'ye "sticker yapıştır".
+    /// Register a plugin — attaches it to every ID it declares in `subscriptions()`.
     pub fn register(&mut self, plugin: &Arc<dyn UiPlugin>) {
         for &id in plugin.subscriptions() {
             self.subscriptions
@@ -36,10 +36,9 @@ impl PluginRegistry {
         }
     }
 
-    /// `EventBus`'tan gelen olayları ilgili eklentilere dağıt.
+    /// Dispatch all queued events to their respective plugin listeners.
     ///
-    /// Render döngüsünde her frame çağrılır.
-    /// Kayıtlı olmayan ID'ler için O(1) miss — tam liste taranmaz.
+    /// Call once per render frame. IDs with no registered listeners cost O(1) miss.
     pub fn dispatch(&self, bus: &EventBus, styles: &StyleMap, data: &DataMap) {
         for event in bus.drain() {
             let id = event.widget_id();

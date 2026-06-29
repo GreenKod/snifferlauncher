@@ -1,22 +1,23 @@
 use crate::core::ui::widget::WidgetId;
 use std::sync::{Arc, Mutex};
 
-/// UI katmanından yayılan olaylar.
+/// Events emitted from the UI layer.
 ///
-/// Platform dokunma/fare kodları bu enum'a dönüştürülür ve `EventBus`'a iletilir.
-/// `PluginRegistry` her olayı ilgili eklentilere `O(1)` `HashMap` lookup ile dağıtır.
+/// Raw platform touch/mouse inputs are converted to this enum
+/// and pushed to the `EventBus`. `PluginRegistry` dispatches each event
+/// to the relevant plugins via `O(1)` `HashMap` lookup.
 #[derive(Clone, Debug)]
 pub enum UiEvent {
-    /// Kullanıcı bir widget'a tıkladı / dokundu.
+    /// User tapped or clicked a widget.
     Click(WidgetId),
-    /// İşaretçi bir widget'ın üzerine geldi.
+    /// Pointer entered a widget.
     Hover(WidgetId),
-    /// İşaretçi bir widget'ın üzerinden ayrıldı.
+    /// Pointer left a widget.
     HoverEnd(WidgetId),
 }
 
 impl UiEvent {
-    /// Olayın ait olduğu `WidgetId`'yi döner.
+    /// Return the `WidgetId` this event belongs to.
     #[must_use]
     pub const fn widget_id(&self) -> WidgetId {
         match self {
@@ -25,25 +26,24 @@ impl UiEvent {
     }
 }
 
-/// Tüm platform kodları tarafından paylaşılan thread-safe olay kuyruğu.
+/// Thread-safe event queue shared by all platform backends.
 ///
-/// Platform iş parçacığı (Android JNI, SDL event loop vb.) olayları
-/// `push()` ile ekler; render döngüsü `drain()` ile tüketir.
+/// Platform threads (Android JNI, SDL event loop, etc.) push events via
+/// `push()`; the render loop consumes them each frame with `drain()`.
 #[derive(Clone, Default)]
 pub struct EventBus {
     queue: Arc<Mutex<Vec<UiEvent>>>,
 }
 
 impl EventBus {
-    /// Olayı kuyruğa ekle — platform iş parçacığından güvenli.
+    /// Enqueue an event — safe to call from any platform thread.
     pub fn push(&self, event: UiEvent) {
         if let Ok(mut q) = self.queue.lock() {
             q.push(event);
         }
     }
 
-    /// Kuyruktaki tüm olayları tüket ve boşalt.
-    /// Render döngüsünde her frame çağrılır.
+    /// Drain and return all queued events. Called once per render frame.
     #[must_use]
     pub fn drain(&self) -> Vec<UiEvent> {
         self.queue
