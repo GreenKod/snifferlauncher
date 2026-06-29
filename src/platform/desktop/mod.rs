@@ -111,7 +111,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         // 7. Query current drawable size each frame (handles resize and DPI changes)
         let (w, h) = window.drawable_size();
-        let width  = f32::from(u16::try_from(w).expect("drawable width fits in u16"));
+        let width = f32::from(u16::try_from(w).expect("drawable width fits in u16"));
         let height = f32::from(u16::try_from(h).expect("drawable height fits in u16"));
 
         // Rebuild metrics every frame so window resizes and DPI changes are handled.
@@ -119,7 +119,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         // 8. View & Layout Pass
         let root_element = LauncherApp::view(&state, &metrics);
-        let layout_tree  = calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
+        let layout_tree = calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
 
         // 9. Event Dispatch / Processing
         if mouse_moved {
@@ -152,6 +152,6 @@ fn handle_action(action: Action) {
     match action {
         Action::OpenSettings => println!("Desktop Preview: Open Settings triggered"),
         Action::OpenContacts => println!("Desktop Preview: Open Contacts triggered"),
-        Action::OpenCamera   => println!("Desktop Preview: Open Camera triggered"),
+        Action::OpenCamera => println!("Desktop Preview: Open Camera triggered"),
     }
 }

@@ -239,7 +239,7 @@ pub fn get_density() -> (f32, f32) {
         let density = env
             .get_field(&display_metrics, jni_str!("density"), jni_sig!("F"))?
             .f()?;
-            
+
         let scaled_density = env
             .get_field(&display_metrics, jni_str!("scaledDensity"), jni_sig!("F"))?
             .f()?;

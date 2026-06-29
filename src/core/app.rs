@@ -1,7 +1,7 @@
+use crate::core::Point;
 use crate::core::ScreenMetrics;
 use crate::core::style::Style;
 use crate::core::types::{Action, Application, ButtonId, Element};
-use crate::core::Point;
 
 #[derive(Default, Debug)]
 pub struct LauncherState {
@@ -53,66 +53,66 @@ impl Tokens {
         if m.is_very_compact() {
             // ── Very Compact (< 320 logical dp) ────────────────────────────
             Self {
-                panel_padding:  m.dp(8.0),
-                section_gap:    m.dp(6.0),
-                card_padding:   m.dp(6.0),
-                button_gap:     m.dp(6.0),
-                button_height:  m.dp(60.0),
-                button_px:      m.dp(8.0),
-                button_py:      m.dp(10.0),
+                panel_padding: m.dp(8.0),
+                section_gap: m.dp(6.0),
+                card_padding: m.dp(6.0),
+                button_gap: m.dp(6.0),
+                button_height: m.dp(60.0),
+                button_px: m.dp(8.0),
+                button_py: m.dp(10.0),
                 header_padding: m.dp(10.0),
-                title_size:     m.sp(14.0),
-                subtitle_size:  m.sp(9.0),
-                card_radius:    m.dp(6.0),
-                button_radius:  m.dp(4.0),
+                title_size: m.sp(14.0),
+                subtitle_size: m.sp(9.0),
+                card_radius: m.dp(6.0),
+                button_radius: m.dp(4.0),
             }
         } else if m.is_compact() {
             // ── Compact (320–359 logical dp) ────────────────────────────────
             Self {
-                panel_padding:  m.dp(12.0),
-                section_gap:    m.dp(10.0),
-                card_padding:   m.dp(8.0),
-                button_gap:     m.dp(8.0),
-                button_height:  m.dp(72.0),
-                button_px:      m.dp(10.0),
-                button_py:      m.dp(14.0),
+                panel_padding: m.dp(12.0),
+                section_gap: m.dp(10.0),
+                card_padding: m.dp(8.0),
+                button_gap: m.dp(8.0),
+                button_height: m.dp(72.0),
+                button_px: m.dp(10.0),
+                button_py: m.dp(14.0),
                 header_padding: m.dp(14.0),
-                title_size:     m.sp(16.0),
-                subtitle_size:  m.sp(10.0),
-                card_radius:    m.dp(12.0),
-                button_radius:  m.dp(8.0),
+                title_size: m.sp(16.0),
+                subtitle_size: m.sp(10.0),
+                card_radius: m.dp(12.0),
+                button_radius: m.dp(8.0),
             }
         } else if m.is_large() {
             // ── Large (≥ 600 logical dp) ────────────────────────────────────
             Self {
-                panel_padding:  m.dp(32.0),
-                section_gap:    m.dp(24.0),
-                card_padding:   m.dp(20.0),
-                button_gap:     m.dp(20.0),
-                button_height:  m.dp(104.0),
-                button_px:      m.dp(20.0),
-                button_py:      m.dp(28.0),
+                panel_padding: m.dp(32.0),
+                section_gap: m.dp(24.0),
+                card_padding: m.dp(20.0),
+                button_gap: m.dp(20.0),
+                button_height: m.dp(104.0),
+                button_px: m.dp(20.0),
+                button_py: m.dp(28.0),
                 header_padding: m.dp(28.0),
-                title_size:     m.sp(26.0),
-                subtitle_size:  m.sp(15.0),
-                card_radius:    m.dp(24.0),
-                button_radius:  m.dp(18.0),
+                title_size: m.sp(26.0),
+                subtitle_size: m.sp(15.0),
+                card_radius: m.dp(24.0),
+                button_radius: m.dp(18.0),
             }
         } else {
             // ── Normal (360–599 logical dp) — baseline ──────────────────────
             Self {
-                panel_padding:  m.dp(22.0),
-                section_gap:    m.dp(16.0),
-                card_padding:   m.dp(10.0),
-                button_gap:     m.dp(12.0),
-                button_height:  m.dp(86.0),
-                button_px:      m.dp(14.0),
-                button_py:      m.dp(20.0),
+                panel_padding: m.dp(22.0),
+                section_gap: m.dp(16.0),
+                card_padding: m.dp(10.0),
+                button_gap: m.dp(12.0),
+                button_height: m.dp(86.0),
+                button_px: m.dp(14.0),
+                button_py: m.dp(20.0),
                 header_padding: m.dp(22.0),
-                title_size:     m.sp(20.0),
-                subtitle_size:  m.sp(12.0),
-                card_radius:    m.dp(24.0),
-                button_radius:  m.dp(18.0),
+                title_size: m.sp(20.0),
+                subtitle_size: m.sp(12.0),
+                card_radius: m.dp(24.0),
+                button_radius: m.dp(18.0),
             }
         }
     }
@@ -197,7 +197,12 @@ impl Application for LauncherApp {
                 .shadow_card()
                 .height_pixels(t.button_height)
                 .build();
-            Element::Button { id, title: title.to_string(), style: btn_style, hovered }
+            Element::Button {
+                id,
+                title: title.to_string(),
+                style: btn_style,
+                hovered,
+            }
         };
 
         Element::Container {
@@ -227,12 +232,24 @@ impl Application for LauncherApp {
                 Element::Container {
                     style: card_style,
                     children: vec![
-                        make_button(ButtonId::Settings, settings_bg, "Settings",
-                            state.hovered == Some(ButtonId::Settings)),
-                        make_button(ButtonId::Contacts, contacts_bg, "Contacts",
-                            state.hovered == Some(ButtonId::Contacts)),
-                        make_button(ButtonId::Camera, camera_bg, "Camera",
-                            state.hovered == Some(ButtonId::Camera)),
+                        make_button(
+                            ButtonId::Settings,
+                            settings_bg,
+                            "Settings",
+                            state.hovered == Some(ButtonId::Settings),
+                        ),
+                        make_button(
+                            ButtonId::Contacts,
+                            contacts_bg,
+                            "Contacts",
+                            state.hovered == Some(ButtonId::Contacts),
+                        ),
+                        make_button(
+                            ButtonId::Camera,
+                            camera_bg,
+                            "Camera",
+                            state.hovered == Some(ButtonId::Camera),
+                        ),
                     ],
                 },
             ],

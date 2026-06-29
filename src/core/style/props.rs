@@ -86,19 +86,19 @@ impl StyleBuilder {
     #[must_use]
     pub fn background_color_from_tailwind(mut self, name: &str) -> Self {
         use super::color::{
-            CARD_CAMERA, CARD_CAMERA_HOVER, CARD_CONTACTS, CARD_CONTACTS_HOVER,
-            CARD_SETTINGS, CARD_SETTINGS_HOVER, BACKGROUND, HEADER_SURFACE,
+            BACKGROUND, CARD_CAMERA, CARD_CAMERA_HOVER, CARD_CONTACTS, CARD_CONTACTS_HOVER,
+            CARD_SETTINGS, CARD_SETTINGS_HOVER, HEADER_SURFACE,
         };
         let color = match name {
-            "bg-background"      => Some(BACKGROUND),
-            "bg-header"          => Some(HEADER_SURFACE),
-            "bg-settings"        => Some(CARD_SETTINGS),
-            "bg-contacts"        => Some(CARD_CONTACTS),
-            "bg-camera"          => Some(CARD_CAMERA),
-            "bg-settings-hover"  => Some(CARD_SETTINGS_HOVER),
-            "bg-contacts-hover"  => Some(CARD_CONTACTS_HOVER),
-            "bg-camera-hover"    => Some(CARD_CAMERA_HOVER),
-            _                    => None,
+            "bg-background" => Some(BACKGROUND),
+            "bg-header" => Some(HEADER_SURFACE),
+            "bg-settings" => Some(CARD_SETTINGS),
+            "bg-contacts" => Some(CARD_CONTACTS),
+            "bg-camera" => Some(CARD_CAMERA),
+            "bg-settings-hover" => Some(CARD_SETTINGS_HOVER),
+            "bg-contacts-hover" => Some(CARD_CONTACTS_HOVER),
+            "bg-camera-hover" => Some(CARD_CAMERA_HOVER),
+            _ => None,
         };
         self.0.background_color = color;
         self
@@ -118,14 +118,14 @@ impl StyleBuilder {
 
     #[must_use]
     pub const fn padding_horizontal(mut self, v: f32) -> Self {
-        self.0.padding.left  = v;
+        self.0.padding.left = v;
         self.0.padding.right = v;
         self
     }
 
     #[must_use]
     pub const fn padding_vertical(mut self, v: f32) -> Self {
-        self.0.padding.top    = v;
+        self.0.padding.top = v;
         self.0.padding.bottom = v;
         self
     }
@@ -206,9 +206,9 @@ impl StyleBuilder {
     #[must_use]
     pub const fn shadow_card(mut self) -> Self {
         use super::color::{SHADOW, SHADOW_OFFSET_Y, SHADOW_SPREAD};
-        self.0.shadow_color    = Some(SHADOW);
+        self.0.shadow_color = Some(SHADOW);
         self.0.shadow_offset_y = SHADOW_OFFSET_Y;
-        self.0.shadow_spread   = SHADOW_SPREAD;
+        self.0.shadow_spread = SHADOW_SPREAD;
         self
     }
 
