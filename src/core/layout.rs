@@ -1,5 +1,5 @@
 use crate::core::component::Element;
-use crate::core::geometry::{Point, Rect, Size};
+use crate::core::{Point, Rect, Size};
 use crate::core::style::{AlignItems, Dimension, FlexDirection, JustifyContent};
 
 pub type LayoutChildren = Vec<LayoutNode>;

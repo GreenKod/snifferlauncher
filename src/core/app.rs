@@ -1,5 +1,5 @@
 use crate::core::component::{Action, Application, ButtonId, Element};
-use crate::core::geometry::Point;
+use crate::core::Point;
 use crate::core::style::Style;
 
 #[derive(Default, Debug)]
