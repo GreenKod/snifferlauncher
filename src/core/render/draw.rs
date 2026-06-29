@@ -53,7 +53,12 @@ pub fn find_hovered_button(
 }
 
 /// Platform-agnostic traversal to draw the UI elements using the Renderer interface.
-pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNode, metrics: &ScreenMetrics) {
+pub fn draw_ui(
+    renderer: &mut dyn Renderer,
+    element: &Element,
+    layout: &LayoutNode,
+    metrics: &ScreenMetrics,
+) {
     let rect = layout.rect;
     let style = element.style();
 
@@ -91,7 +96,7 @@ pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNo
             // Calculate proportions based on the actual height of the button (which scales by breakpoint)
             let icon_size = rect.height * 0.65;
             let icon_padding_left = rect.height * 0.16;
-            
+
             // Left Icon Box
             let icon_box = Rect::new(
                 rect.x + icon_padding_left,
@@ -106,7 +111,7 @@ pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNo
             let text_left = icon_box.x + icon_box.width + (rect.height * 0.2);
             let title_size = rect.height * 0.18; // ~16sp at 86dp
             let subtitle_size = rect.height * 0.11; // ~10sp at 86dp
-            
+
             // Center texts vertically
             let text_gap = rect.height * 0.09;
             let total_text_height = title_size + text_gap + subtitle_size;
@@ -144,8 +149,13 @@ pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNo
 }
 
 /// Helper to draw vector shapes representing icons for Settings, Contacts, Camera.
-pub fn draw_button_icon(renderer: &mut dyn Renderer, id: ButtonId, rect: Rect, _metrics: &ScreenMetrics) {
-    // We use proportional math based on the provided rect bounds 
+pub fn draw_button_icon(
+    renderer: &mut dyn Renderer,
+    id: ButtonId,
+    rect: Rect,
+    _metrics: &ScreenMetrics,
+) {
+    // We use proportional math based on the provided rect bounds
     // so it scales automatically with the icon_box size, regardless of density or breakpoint.
     let w = rect.width;
     let h = rect.height;
@@ -159,10 +169,20 @@ pub fn draw_button_icon(renderer: &mut dyn Renderer, id: ButtonId, rect: Rect, _
                 let track_x = rect.x + (w - track_w) * 0.5; // Centered
                 let track_y = rect.y + (h * y_ratio) - (track_h * 0.5);
 
-                renderer.draw_rect(Rect::new(track_x, track_y, track_w, track_h), BUTTON_MUTED, track_h * 0.5, 0.0, None);
+                renderer.draw_rect(
+                    Rect::new(track_x, track_y, track_w, track_h),
+                    BUTTON_MUTED,
+                    track_h * 0.5,
+                    0.0,
+                    None,
+                );
 
                 let knob_r = h * 0.11;
-                let knob_cx = if index % 2 == 0 { track_x + track_w * 0.25 } else { track_x + track_w * 0.75 };
+                let knob_cx = if index % 2 == 0 {
+                    track_x + track_w * 0.25
+                } else {
+                    track_x + track_w * 0.75
+                };
                 let knob_cy = track_y + (track_h * 0.5);
                 renderer.draw_circle(knob_cx, knob_cy, knob_r, BUTTON_TEXT);
             }
@@ -178,7 +198,13 @@ pub fn draw_button_icon(renderer: &mut dyn Renderer, id: ButtonId, rect: Rect, _
             let body_h = h * 0.22;
             let body_x = rect.x + (w - body_w) * 0.5;
             let body_y = rect.y + h * 0.65;
-            renderer.draw_rect(Rect::new(body_x, body_y, body_w, body_h), BUTTON_TEXT, body_h * 0.5, 0.0, None);
+            renderer.draw_rect(
+                Rect::new(body_x, body_y, body_w, body_h),
+                BUTTON_TEXT,
+                body_h * 0.5,
+                0.0,
+                None,
+            );
         }
         ButtonId::Camera => {
             // Draw camera body, lens, flash
@@ -186,7 +212,13 @@ pub fn draw_button_icon(renderer: &mut dyn Renderer, id: ButtonId, rect: Rect, _
             let body_h = h * 0.45;
             let body_x = rect.x + (w - body_w) * 0.5;
             let body_y = rect.y + (h - body_h) * 0.5 + (h * 0.05); // slightly shifted down
-            renderer.draw_rect(Rect::new(body_x, body_y, body_w, body_h), BUTTON_TEXT, body_h * 0.2, 0.0, None);
+            renderer.draw_rect(
+                Rect::new(body_x, body_y, body_w, body_h),
+                BUTTON_TEXT,
+                body_h * 0.2,
+                0.0,
+                None,
+            );
 
             let lens_r = h * 0.125;
             let lens_cx = rect.x + w * 0.5;
@@ -197,7 +229,13 @@ pub fn draw_button_icon(renderer: &mut dyn Renderer, id: ButtonId, rect: Rect, _
             let flash_h = h * 0.11;
             let flash_x = body_x + body_w * 0.15;
             let flash_y = body_y - flash_h * 0.5;
-            renderer.draw_rect(Rect::new(flash_x, flash_y, flash_w, flash_h), BUTTON_TEXT, flash_h * 0.5, 0.0, None);
+            renderer.draw_rect(
+                Rect::new(flash_x, flash_y, flash_w, flash_h),
+                BUTTON_TEXT,
+                flash_h * 0.5,
+                0.0,
+                None,
+            );
         }
     }
 }
