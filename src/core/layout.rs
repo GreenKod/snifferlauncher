@@ -1,6 +1,6 @@
-use crate::core::component::Element;
-use crate::core::{Point, Rect, Size};
+use crate::core::types::Element;
 use crate::core::style::{AlignItems, Dimension, FlexDirection, JustifyContent};
+use crate::core::{Point, Rect, Size};
 
 pub type LayoutChildren = Vec<LayoutNode>;
 
@@ -89,7 +89,6 @@ pub fn calculate_layout(
 
             for (i, child) in children.iter().enumerate() {
                 let child_style = child.style();
-                // Assign a target constraint size for the child
                 let target_width = match child_style.width {
                     Dimension::Pixels(w) => w,
                     Dimension::Percent(p) => inner_width * (p / 100.0),
@@ -171,7 +170,6 @@ pub fn calculate_layout(
                         }
                     };
 
-                    // Re-calculate child layout recursively relative to self
                     let final_child = calculate_layout(
                         child,
                         Size::new(layout.rect.width, layout.rect.height),
