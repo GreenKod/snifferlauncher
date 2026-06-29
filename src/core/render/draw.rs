@@ -2,7 +2,7 @@ use crate::core::layout::LayoutNode;
 use crate::core::render::api::Renderer;
 use crate::core::style::{BUTTON_MUTED, BUTTON_TEXT, ICON_SURFACE};
 use crate::core::types::{ButtonId, Element};
-use crate::core::{Point, Rect};
+use crate::core::{Point, Rect, ScreenMetrics};
 
 /// Recursively traverses the layout and element trees to find which button was clicked.
 #[must_use]
@@ -53,7 +53,7 @@ pub fn find_hovered_button(
 }
 
 /// Platform-agnostic traversal to draw the UI elements using the Renderer interface.
-pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNode) {
+pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNode, metrics: &ScreenMetrics) {
     let rect = layout.rect;
     let style = element.style();
 
@@ -83,84 +83,121 @@ pub fn draw_ui(renderer: &mut dyn Renderer, element: &Element, layout: &LayoutNo
     match element {
         Element::Container { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                draw_ui(renderer, child_el, child_lay);
+                draw_ui(renderer, child_el, child_lay, metrics);
             }
         }
         Element::Button { id, title, .. } => {
             // Sub-elements of the Button:
+            // Calculate proportions based on the actual height of the button (which scales by breakpoint)
+            let icon_size = rect.height * 0.65;
+            let icon_padding_left = rect.height * 0.16;
+            
             // Left Icon Box
             let icon_box = Rect::new(
-                rect.x + 14.0,
-                (rect.height - 56.0).mul_add(0.5, rect.y),
-                56.0,
-                56.0,
+                rect.x + icon_padding_left,
+                (rect.height - icon_size).mul_add(0.5, rect.y),
+                icon_size,
+                icon_size,
             );
-            renderer.draw_rect(icon_box, ICON_SURFACE, 16.0, 0.0, None);
-            draw_button_icon(renderer, *id, icon_box);
+            renderer.draw_rect(icon_box, ICON_SURFACE, icon_size * 0.28, 0.0, None);
+            draw_button_icon(renderer, *id, icon_box, metrics);
 
             // Left Title / Description text
-            let text_left = icon_box.x + icon_box.width + 18.0;
-            renderer.draw_text(title, text_left, rect.y + 21.0, 16.0, BUTTON_TEXT);
+            let text_left = icon_box.x + icon_box.width + (rect.height * 0.2);
+            let title_size = rect.height * 0.18; // ~16sp at 86dp
+            let subtitle_size = rect.height * 0.11; // ~10sp at 86dp
+            
+            // Center texts vertically
+            let text_gap = rect.height * 0.09;
+            let total_text_height = title_size + text_gap + subtitle_size;
+            let text_start_y = rect.y + (rect.height - total_text_height) * 0.5;
+
+            renderer.draw_text(title, text_left, text_start_y, title_size, BUTTON_TEXT);
             renderer.draw_text(
                 "Tap to launch application",
                 text_left,
-                rect.y + 45.0,
-                10.0,
+                text_start_y + title_size + text_gap,
+                subtitle_size,
                 BUTTON_MUTED,
             );
 
             // Right Accent Pill
+            let pill_height = rect.height * 0.28;
+            let pill_width = pill_height * 1.5;
+            let pill_padding_right = rect.height * 0.16;
             let pill = Rect::new(
-                rect.x + rect.width - 50.0,
-                (rect.height - 24.0).mul_add(0.5, rect.y),
-                36.0,
-                24.0,
+                rect.x + rect.width - pill_padding_right - pill_width,
+                (rect.height - pill_height).mul_add(0.5, rect.y),
+                pill_width,
+                pill_height,
             );
-            renderer.draw_rect(pill, BUTTON_TEXT, 12.0, 0.0, None);
+            renderer.draw_rect(pill, BUTTON_TEXT, pill_height * 0.5, 0.0, None);
         }
         Element::Label { text, .. } => {
             let color = style.text_color.unwrap_or(BUTTON_TEXT);
             renderer.draw_text(text, rect.x, rect.y, style.text_size, color);
         }
         Element::Icon { id, .. } => {
-            draw_button_icon(renderer, *id, rect);
+            draw_button_icon(renderer, *id, rect, metrics);
         }
     }
 }
 
 /// Helper to draw vector shapes representing icons for Settings, Contacts, Camera.
-pub fn draw_button_icon(renderer: &mut dyn Renderer, id: ButtonId, rect: Rect) {
+pub fn draw_button_icon(renderer: &mut dyn Renderer, id: ButtonId, rect: Rect, _metrics: &ScreenMetrics) {
+    // We use proportional math based on the provided rect bounds 
+    // so it scales automatically with the icon_box size, regardless of density or breakpoint.
+    let w = rect.width;
+    let h = rect.height;
+
     match id {
         ButtonId::Settings => {
             // Draws slider controls
-            for (index, y) in [14.0f32, 28.0, 42.0].into_iter().enumerate() {
-                let track = Rect::new(rect.x + 10.0, rect.y + y, rect.width - 20.0, 4.0);
-                renderer.draw_rect(track, BUTTON_MUTED, 2.0, 0.0, None);
+            for (index, y_ratio) in [0.25f32, 0.50, 0.75].into_iter().enumerate() {
+                let track_w = w * 0.65;
+                let track_h = h * 0.07;
+                let track_x = rect.x + (w - track_w) * 0.5; // Centered
+                let track_y = rect.y + (h * y_ratio) - (track_h * 0.5);
 
-                let knob_x = rect.x + if index % 2 == 0 { 16.0 } else { 30.0 };
-                renderer.draw_circle(knob_x + 6.0, track.y + 2.0, 6.0, BUTTON_TEXT);
+                renderer.draw_rect(Rect::new(track_x, track_y, track_w, track_h), BUTTON_MUTED, track_h * 0.5, 0.0, None);
+
+                let knob_r = h * 0.11;
+                let knob_cx = if index % 2 == 0 { track_x + track_w * 0.25 } else { track_x + track_w * 0.75 };
+                let knob_cy = track_y + (track_h * 0.5);
+                renderer.draw_circle(knob_cx, knob_cy, knob_r, BUTTON_TEXT);
             }
         }
         ButtonId::Contacts => {
             // Draw person avatar
-            let head_center_x = rect.width.mul_add(0.5, rect.x);
-            let head_center_y = rect.y + 22.0;
-            renderer.draw_circle(head_center_x, head_center_y, 10.0, BUTTON_TEXT);
+            let head_r = h * 0.18;
+            let head_cx = rect.x + w * 0.5;
+            let head_cy = rect.y + h * 0.35;
+            renderer.draw_circle(head_cx, head_cy, head_r, BUTTON_TEXT);
 
-            let body = Rect::new(rect.x + 14.0, rect.y + 36.0, 28.0, 12.0);
-            renderer.draw_rect(body, BUTTON_TEXT, 6.0, 0.0, None);
+            let body_w = w * 0.5;
+            let body_h = h * 0.22;
+            let body_x = rect.x + (w - body_w) * 0.5;
+            let body_y = rect.y + h * 0.65;
+            renderer.draw_rect(Rect::new(body_x, body_y, body_w, body_h), BUTTON_TEXT, body_h * 0.5, 0.0, None);
         }
         ButtonId::Camera => {
             // Draw camera body, lens, flash
-            let body = Rect::new(rect.x + 11.0, rect.y + 16.0, 34.0, 24.0);
-            renderer.draw_rect(body, BUTTON_TEXT, 8.0, 0.0, None);
+            let body_w = w * 0.6;
+            let body_h = h * 0.45;
+            let body_x = rect.x + (w - body_w) * 0.5;
+            let body_y = rect.y + (h - body_h) * 0.5 + (h * 0.05); // slightly shifted down
+            renderer.draw_rect(Rect::new(body_x, body_y, body_w, body_h), BUTTON_TEXT, body_h * 0.2, 0.0, None);
 
-            let lens_center_x = rect.x + 28.0;
-            let lens_center_y = rect.y + 28.0;
-            renderer.draw_circle(lens_center_x, lens_center_y, 7.0, ICON_SURFACE);
+            let lens_r = h * 0.125;
+            let lens_cx = rect.x + w * 0.5;
+            let lens_cy = body_y + body_h * 0.5;
+            renderer.draw_circle(lens_cx, lens_cy, lens_r, ICON_SURFACE);
 
-            let flash = Rect::new(rect.x + 18.0, rect.y + 12.0, 10.0, 6.0);
-            renderer.draw_rect(flash, BUTTON_TEXT, 3.0, 0.0, None);
+            let flash_w = w * 0.18;
+            let flash_h = h * 0.11;
+            let flash_x = body_x + body_w * 0.15;
+            let flash_y = body_y - flash_h * 0.5;
+            renderer.draw_rect(Rect::new(flash_x, flash_y, flash_w, flash_h), BUTTON_TEXT, flash_h * 0.5, 0.0, None);
         }
     }
 }
