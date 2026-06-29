@@ -1,4 +1,4 @@
-use crate::core::geometry::{Point, Rect};
+use crate::core::{Point, Rect};
 use crate::core::layout::LayoutNode;
 use crate::core::renderer::Renderer;
 use crate::core::style::Style;

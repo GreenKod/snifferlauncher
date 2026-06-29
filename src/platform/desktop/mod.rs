@@ -57,7 +57,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Audiowide font gömülü olarak binary'ye dahil edildi
-    let font_bytes: &[u8] = include_bytes!("../fonts/audiowide.ttf");
+    let font_bytes: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
     let mut renderer = unsafe { GlowRenderer::with_font(gl, Some(font_bytes))? };
     let mut event_pump = sdl_context.event_pump()?;
 

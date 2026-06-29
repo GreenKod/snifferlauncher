@@ -1,6 +1,6 @@
-use crate::core::font::{FONT_DATA, FONT_HEIGHT, FONT_WIDTH};
-use crate::core::font_atlas::{self, FontAtlas};
-use crate::core::geometry::Rect;
+use crate::core::render::text::font::{FONT_DATA, FONT_HEIGHT, FONT_WIDTH};
+use crate::core::render::text::font_atlas::{self, FontAtlas};
+use crate::core::render::math::geometry::Rect;
 use glow::HasContext;
 
 pub trait Renderer {
@@ -89,18 +89,18 @@ impl GlowRenderer {
             // 2. Compile shaders based on target OS
             #[cfg(target_os = "android")]
             let (shape_vertex_src, shape_fragment_src, text_vertex_src, text_fragment_src) = (
-                include_str!("shaders/shape_android.vs"),
-                include_str!("shaders/shape_android.fs"),
-                include_str!("shaders/text_android.vs"),
-                include_str!("shaders/text_android.fs"),
+                include_str!("render/shaders/shape_android.vs"),
+                include_str!("render/shaders/shape_android.fs"),
+                include_str!("render/shaders/text_android.vs"),
+                include_str!("render/shaders/text_android.fs"),
             );
 
             #[cfg(not(target_os = "android"))]
             let (shape_vertex_src, shape_fragment_src, text_vertex_src, text_fragment_src) = (
-                include_str!("shaders/shape_desktop.vs"),
-                include_str!("shaders/shape_desktop.fs"),
-                include_str!("shaders/text_desktop.vs"),
-                include_str!("shaders/text_desktop.fs"),
+                include_str!("render/shaders/shape_desktop.vs"),
+                include_str!("render/shaders/shape_desktop.fs"),
+                include_str!("render/shaders/text_desktop.vs"),
+                include_str!("render/shaders/text_desktop.fs"),
             );
 
             let shape_program = compile_program(&gl, shape_vertex_src, shape_fragment_src)?;
