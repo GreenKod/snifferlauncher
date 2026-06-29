@@ -2,7 +2,7 @@ use crate::core::render::draw::{draw_ui, find_clicked_button, find_hovered_butto
 use crate::core::style::{BACKGROUND, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::core::{
     Action, Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point,
-    Renderer, Size, calculate_layout,
+    Renderer, ScreenMetrics, Size, calculate_layout,
 };
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -56,12 +56,19 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         glow::Context::from_loader_function(|s| video_subsystem.gl_get_proc_address(s).cast())
     };
 
+    // 4. Read display DPI and build initial ScreenMetrics.
+    //    SDL2 returns (diagonal_dpi, horizontal_dpi, vertical_dpi).
+    //    We use horizontal DPI with 160 as the baseline (Android mdpi convention).
+    let dpi = video_subsystem
+        .display_dpi(0)
+        .map_or(96.0, |(_ddpi, hdpi, _vdpi)| hdpi); // 96 dpi is a safe desktop fallback
+
     // Audiowide font gömülü olarak binary'ye dahil edildi
     let font_bytes: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
     let mut renderer = unsafe { GlowRenderer::with_font(gl, Some(font_bytes))? };
     let mut event_pump = sdl_context.event_pump()?;
 
-    // 4. Initialize UI State
+    // 5. Initialize UI State
     let mut state = LauncherState::default();
     let mut last_mouse_pos = Point::zero();
 
@@ -70,7 +77,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut clicked_pos = None;
         let mut mouse_moved = false;
 
-        // 5. Poll Events
+        // 6. Poll Events
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -102,16 +109,19 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // 6. Query current window size each frame (handles resize, DPI changes)
+        // 7. Query current drawable size each frame (handles resize and DPI changes)
         let (w, h) = window.drawable_size();
-        let width = f32::from(u16::try_from(w).expect("drawable width fits in u16"));
+        let width  = f32::from(u16::try_from(w).expect("drawable width fits in u16"));
         let height = f32::from(u16::try_from(h).expect("drawable height fits in u16"));
 
-        // 6. View & Layout Pass
-        let root_element = LauncherApp::view(&state);
-        let layout_tree = calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
+        // Rebuild metrics every frame so window resizes and DPI changes are handled.
+        let metrics = ScreenMetrics::from_dpi(width, height, dpi);
 
-        // 7. Event Dispatch / Processing
+        // 8. View & Layout Pass
+        let root_element = LauncherApp::view(&state, &metrics);
+        let layout_tree  = calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
+
+        // 9. Event Dispatch / Processing
         if mouse_moved {
             let hovered_btn = find_hovered_button(&root_element, &layout_tree, last_mouse_pos);
             let _action =
@@ -128,9 +138,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         renderer.begin_frame(width, height);
         renderer.clear(BACKGROUND);
-
         draw_ui(&mut renderer, &root_element, &layout_tree);
-
         renderer.end_frame();
 
         window.gl_swap_window();
@@ -142,14 +150,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 fn handle_action(action: Action) {
     match action {
-        Action::OpenSettings => {
-            println!("Desktop Preview: Open Settings triggered");
-        }
-        Action::OpenContacts => {
-            println!("Desktop Preview: Open Contacts triggered");
-        }
-        Action::OpenCamera => {
-            println!("Desktop Preview: Open Camera triggered");
-        }
+        Action::OpenSettings => println!("Desktop Preview: Open Settings triggered"),
+        Action::OpenContacts => println!("Desktop Preview: Open Contacts triggered"),
+        Action::OpenCamera   => println!("Desktop Preview: Open Camera triggered"),
     }
 }

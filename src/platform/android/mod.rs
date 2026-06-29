@@ -24,7 +24,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::style::BACKGROUND;
     use crate::core::{
         Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point, Renderer,
-        Size, calculate_layout,
+        ScreenMetrics, Size, calculate_layout,
     };
     use android_activity::{
         InputStatus, MainEvent, PollEvent, input::InputEvent, input::MotionAction,
@@ -189,7 +189,16 @@ pub fn android_main(app: android_activity::AndroidApp) {
                             })
                             .unwrap_or((0.0, 0.0));
 
-                    let root_element = LauncherApp::view(&state);
+                    // Build responsive screen metrics from Android DisplayMetrics
+                    let (density, scaled_density) = crate::platform::android::jni::get_density();
+                    let metrics = ScreenMetrics::from_scale(
+                        width,
+                        height - safe_area_top - safe_area_bottom,
+                        density,
+                        scaled_density,
+                    );
+
+                    let root_element = LauncherApp::view(&state, &metrics);
                     let layout_tree = calculate_layout(
                         &root_element,
                         Size::new(width, height - safe_area_top - safe_area_bottom),
@@ -263,7 +272,16 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     })
                                                     .unwrap_or((0.0, 0.0));
 
-                                            let root_element = LauncherApp::view(&state);
+                                            // Build metrics for touch-path view, same as render path
+                                            let (density, scaled_density) = crate::platform::android::jni::get_density();
+                                            let metrics = ScreenMetrics::from_scale(
+                                                width,
+                                                height - safe_area_top - safe_area_bottom,
+                                                density,
+                                                scaled_density,
+                                            );
+
+                                            let root_element = LauncherApp::view(&state, &metrics);
                                             let layout_tree = calculate_layout(
                                                 &root_element,
                                                 Size::new(
