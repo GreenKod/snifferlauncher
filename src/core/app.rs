@@ -152,10 +152,7 @@ impl Application for LauncherApp {
 
         Element::Container {
             style: outer_style,
-            children: vec![
-                build_header(&t),
-                build_button_list(state, &t),
-            ],
+            children: vec![build_header(&t), build_button_list(state, &t)],
         }
     }
 }
@@ -218,16 +215,43 @@ fn build_button_list(state: &LauncherState, t: &Tokens) -> Element {
         }
     };
 
-    let settings_bg = if state.hovered == Some(ButtonId::Settings) { "bg-settings-hover" } else { "bg-settings" };
-    let contacts_bg = if state.hovered == Some(ButtonId::Contacts) { "bg-contacts-hover" } else { "bg-contacts" };
-    let camera_bg = if state.hovered == Some(ButtonId::Camera) { "bg-camera-hover" } else { "bg-camera" };
+    let settings_bg = if state.hovered == Some(ButtonId::Settings) {
+        "bg-settings-hover"
+    } else {
+        "bg-settings"
+    };
+    let contacts_bg = if state.hovered == Some(ButtonId::Contacts) {
+        "bg-contacts-hover"
+    } else {
+        "bg-contacts"
+    };
+    let camera_bg = if state.hovered == Some(ButtonId::Camera) {
+        "bg-camera-hover"
+    } else {
+        "bg-camera"
+    };
 
     Element::Container {
         style: card_style,
         children: vec![
-            make_button(ButtonId::Settings, settings_bg, "Settings", state.hovered == Some(ButtonId::Settings)),
-            make_button(ButtonId::Contacts, contacts_bg, "Contacts", state.hovered == Some(ButtonId::Contacts)),
-            make_button(ButtonId::Camera, camera_bg, "Camera", state.hovered == Some(ButtonId::Camera)),
+            make_button(
+                ButtonId::Settings,
+                settings_bg,
+                "Settings",
+                state.hovered == Some(ButtonId::Settings),
+            ),
+            make_button(
+                ButtonId::Contacts,
+                contacts_bg,
+                "Contacts",
+                state.hovered == Some(ButtonId::Contacts),
+            ),
+            make_button(
+                ButtonId::Camera,
+                camera_bg,
+                "Camera",
+                state.hovered == Some(ButtonId::Camera),
+            ),
         ],
     }
 }
