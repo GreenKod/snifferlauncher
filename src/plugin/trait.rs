@@ -3,24 +3,24 @@ use crate::core::ui::event::UiEvent;
 use crate::core::ui::style_map::StyleMap;
 use crate::core::ui::widget::WidgetId;
 
-/// Harici eklentilerin uygulaması gereken arayüz.
+/// Interface that external plugins must implement.
 ///
-/// Bir plugin yüklenirken sistem `subscriptions()` metodunu okur ve
-/// `PluginRegistry`'nin iç `HashMap`'ine `ID → [this_plugin]` kayıtlarını ekler.
-/// Olay geldiğinde sadece ilgili ID'nin listener'ları çağrılır.
+/// When a plugin is registered, the system reads `subscriptions()` and
+/// inserts `ID -> [this_plugin]` entries into `PluginRegistry`'s internal `HashMap`.
+/// When an event arrives, only the listeners for that specific ID are invoked.
 ///
 /// # Thread Safety
-/// `Send + Sync` zorunludur; plugin'ler render iş parçacığından çağrılır
-/// ancak başka iş parçacıklarıyla paylaşılabilir olmalıdır.
+/// `Send + Sync` is required; plugins are called from the render thread
+/// but may be shared across other threads.
 pub trait UiPlugin: Send + Sync {
-    /// Bu plugin'in dinlemek istediği widget ID'leri.
+    /// The widget IDs this plugin wants to observe.
     ///
-    /// Slice döndürülür — heap allocation yok, sıfır maliyet.
+    /// Returns a slice — no heap allocation, zero cost.
     fn subscriptions(&self) -> &[WidgetId];
 
-    /// İlgili bir `UiEvent` geldiğinde çağrılır.
+    /// Called when a relevant `UiEvent` is received for a subscribed ID.
     ///
-    /// Plugin bu metot içinde `StyleMap` veya `DataMap` üzerinden
-    /// widget'ların görünümünü ve içeriğini değiştirebilir.
+    /// The plugin may update `StyleMap` or `DataMap` to change the appearance
+    /// or content of widgets without touching `app.rs`.
     fn on_event(&self, event: &UiEvent, styles: &StyleMap, data: &DataMap);
 }

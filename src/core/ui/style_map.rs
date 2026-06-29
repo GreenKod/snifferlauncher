@@ -3,36 +3,36 @@ use crate::core::ui::widget::WidgetId;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-/// Runtime stil override haritası.
+/// Runtime style override map.
 ///
-/// `app.rs` widget ağacını statik olarak inşa eder; plugin'ler veya hover
-/// mantığı `StyleMap` üzerinden belirli widget'ların stilini ezar.
-/// Render aşamasında `draw_ui` önce `StyleMap`'i kontrol eder,
-/// yoksa widget'ın kendi stilini kullanır.
+/// `app.rs` builds the widget tree statically; plugins or hover logic use
+/// `StyleMap` to override the style of specific widgets at runtime.
+/// During the render pass, `draw_ui` checks `StyleMap` first — if an override
+/// is present it takes precedence over the widget's own baked-in style.
 ///
-/// `Arc<RwLock<_>>` ile birden fazla iş parçacığından güvenli erişim sağlanır:
-/// - Okuma: render iş parçacığı (sık, bloklama olmadan)
-/// - Yazma: plugin'ler / event bus dispatch (seyrek)
+/// `Arc<RwLock<_>>` provides thread-safe access:
+/// - Readers: render thread (frequent, non-blocking)
+/// - Writers: plugins / event-bus dispatch (infrequent)
 #[derive(Clone, Default)]
 pub struct StyleMap {
     inner: Arc<RwLock<HashMap<WidgetId, Style>>>,
 }
 
 impl StyleMap {
-    /// Belirli bir widget'ın stilini override et.
+    /// Override the style for a specific widget.
     pub fn set(&self, id: WidgetId, style: Style) {
         if let Ok(mut map) = self.inner.write() {
             map.insert(id, style);
         }
     }
 
-    /// Widget'ın aktif override stilini döner (`None` → widget kendi stilini kullanır).
+    /// Return the active override style for a widget (`None` means use its own style).
     #[must_use]
     pub fn get(&self, id: WidgetId) -> Option<Style> {
         self.inner.read().ok()?.get(&id).cloned()
     }
 
-    /// Override'ı kaldır — widget kendi statik stiline geri döner.
+    /// Remove the override — the widget falls back to its static style.
     pub fn clear(&self, id: WidgetId) {
         if let Ok(mut map) = self.inner.write() {
             map.remove(&id);

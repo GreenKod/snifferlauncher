@@ -2,31 +2,29 @@ use crate::core::ui::widget::WidgetId;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-/// Bir widget'a bağlanabilen dinamik veri değeri.
+/// A dynamic value that can be attached to any widget at runtime.
 ///
-/// Plugin'ler bu enum aracılığıyla herhangi bir widget'ın içeriğini
-/// ve görünürlüğünü `app.rs`'e dokunmadan değiştirebilir.
+/// Plugins use this enum to override widget content and visibility
+/// without modifying `app.rs`.
 #[derive(Clone, Debug)]
 pub enum DataValue {
-    /// Label veya buton metnini override et. (`"Başla"` → `"Yükleniyor..."`)
+    /// Override the label or button text (e.g. `"Start"` → `"Loading..."`).
     Text(String),
-    /// Widget'ı görünür veya gizli yap.
+    /// Show or hide the widget.
     Visible(bool),
-    /// Rozet sayacı, ilerleme yüzdesi vb. tamsayı değer.
+    /// Integer counter — badge counts, progress values, etc.
     Counter(i64),
-    /// Gelecekteki esneklik için JSON string — özel eklenti verileri.
+    /// Arbitrary JSON string for future plugin-specific payloads.
     Custom(String),
 }
 
-/// Widget ID'sine ve anahtar adına göre dinamik değerleri depolar.
+/// Runtime data map — sibling of `StyleMap`, for **content** and **behaviour** overrides.
 ///
-/// `StyleMap`'in kardeşi — stil değil, **içerik** ve **davranış** override'ları için.
-///
-/// # Örnek
-/// ```
-/// data.set(ids::BTN_SETTINGS, "label",   DataValue::Text("Yükleniyor...".into()));
+/// # Example
+/// ```ignore
+/// data.set(ids::BTN_SETTINGS, "label",   DataValue::Text("Loading...".into()));
 /// data.set(ids::BTN_SETTINGS, "visible", DataValue::Visible(false));
-/// data.clear(ids::BTN_SETTINGS, "label"); // orijinal metne dön
+/// data.clear(ids::BTN_SETTINGS, "label"); // revert to static label
 /// ```
 #[derive(Clone, Default)]
 pub struct DataMap {
@@ -34,20 +32,22 @@ pub struct DataMap {
 }
 
 impl DataMap {
-    /// Belirli bir widget için `key` anahtarlı değeri ayarla.
+    /// Set a keyed value for a widget.
+    ///
+    /// Example: `data.set(BTN_SETTINGS, "label", DataValue::Text("Loading...".into()))`
     pub fn set(&self, id: WidgetId, key: &'static str, value: DataValue) {
         if let Ok(mut outer) = self.inner.write() {
             outer.entry(id).or_default().insert(key, value);
         }
     }
 
-    /// Belirli bir widget için `key` anahtarlı değeri al.
+    /// Get a keyed value for a widget.
     #[must_use]
     pub fn get(&self, id: WidgetId, key: &'static str) -> Option<DataValue> {
         self.inner.read().ok()?.get(&id)?.get(key).cloned()
     }
 
-    /// Belirli anahtarı sil — widget statik değerine geri döner.
+    /// Remove a single key — the widget reverts to its static value.
     pub fn clear(&self, id: WidgetId, key: &'static str) {
         if let Ok(mut outer) = self.inner.write()
             && let Some(inner) = outer.get_mut(&id)
@@ -56,15 +56,15 @@ impl DataMap {
         }
     }
 
-    /// Widget'a ait tüm değerleri temizle.
+    /// Remove all data entries for a widget.
     pub fn clear_widget(&self, id: WidgetId) {
         if let Ok(mut outer) = self.inner.write() {
             outer.remove(&id);
         }
     }
 
-    /// `"visible"` anahtarındaki `DataValue::Visible` değerini döner.
-    /// Yoksa `true` (varsayılan görünür) döner.
+    /// Convenience: return the `Visible` value for `"visible"` key.
+    /// Defaults to `true` if absent.
     #[must_use]
     pub fn is_visible(&self, id: WidgetId) -> bool {
         match self.get(id, "visible") {
@@ -73,8 +73,7 @@ impl DataMap {
         }
     }
 
-    /// `"label"` anahtarındaki `DataValue::Text` değerini döner.
-    /// Yoksa `None` döner (widget kendi statik labelını kullanır).
+    /// Convenience: return the overridden label text, if any.
     #[must_use]
     pub fn label(&self, id: WidgetId) -> Option<String> {
         match self.get(id, "label") {

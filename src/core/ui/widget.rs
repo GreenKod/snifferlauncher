@@ -1,12 +1,15 @@
 use crate::core::style::Style;
 
-/// Her widget'ın benzersiz kimliği.
-/// FNV-1a hash of &'static str — derleme zamanında hesaplanır, runtime maliyeti sıfır.
+/// Unique identifier for every UI widget.
+/// Computed via FNV-1a hash of a `&[u8]` literal at compile time — zero runtime cost.
 pub type WidgetId = u64;
 
-/// Derleme zamanında bir string literal'i `WidgetId` (u64) değerine dönüştürür.
+/// Compute a `WidgetId` (u64) from a byte-string literal at compile time.
 ///
-/// # Örnek
+/// Uses the FNV-1a hash algorithm; collisions are astronomically unlikely for
+/// typical widget name sets.
+///
+/// # Example
 /// ```
 /// const MY_BUTTON: u64 = snifferlauncher::wid!(b"my-button");
 /// ```
@@ -27,10 +30,10 @@ macro_rules! wid {
     }};
 }
 
-/// Tüm tanımlı widget ID'leri — merkezi tek kaynak.
+/// All declared widget IDs — single source of truth.
 ///
-/// Yeni bir widget eklendiğinde buraya eklenir; `wid!` makrosu çakışmaları
-/// derleme zamanında önler (her literal benzersiz hash üretir).
+/// Add new widgets here. The `wid!` macro guarantees compile-time uniqueness
+/// (each byte literal produces a distinct hash).
 pub mod ids {
     use super::WidgetId;
 
@@ -42,42 +45,43 @@ pub mod ids {
     pub const BTN_CAMERA: WidgetId = crate::wid!(b"btn-camera");
 }
 
-/// Platform-agnostik UI ağaç düğümü.
+/// Platform-agnostic UI tree node.
 ///
-/// `Widget` ağacı her frame `build_ui()` tarafından yeniden inşa edilir;
-/// `StyleMap` ve `DataMap` override'ları render aşamasında uygulanır.
+/// The `Widget` tree is rebuilt every frame by `build_ui()`.
+/// `StyleMap` and `DataMap` overrides are applied during the render pass.
 #[derive(Clone, Debug)]
 pub enum Widget {
-    /// İç içe yerleşim düğümü.
+    /// Layout container — holds child widgets.
     Container {
         id: Option<WidgetId>,
         style: Style,
         children: Vec<Self>,
     },
-    /// Tıklanabilir aksiyon butonu.
+    /// Tappable action button.
     Button {
         id: WidgetId,
         label: String,
         style: Style,
         hovered: bool,
     },
-    /// Sadece metin gösterimi.
+    /// Text display element.
     Label {
         id: Option<WidgetId>,
         text: String,
         style: Style,
         visible: bool,
     },
-    /// Bağımsız ikon elemanı.
+    /// Stand-alone icon element.
     Icon {
         id: Option<WidgetId>,
-        widget_id: WidgetId, // hangi buton ikonunu çizeceğini belirtir
+        /// Which button icon shape to draw.
+        widget_id: WidgetId,
         style: Style,
     },
 }
 
 impl Widget {
-    /// Herhangi bir `Widget` varyantının stiline referans döner.
+    /// Return a reference to the style of any `Widget` variant.
     #[must_use]
     pub const fn style(&self) -> &Style {
         match self {
@@ -88,7 +92,7 @@ impl Widget {
         }
     }
 
-    /// Widget'ın ID'sini döner (`None` ise anonim elemandır).
+    /// Return the widget's ID (`None` for anonymous elements).
     #[must_use]
     pub const fn widget_id(&self) -> Option<WidgetId> {
         match self {

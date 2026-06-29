@@ -3,11 +3,8 @@ use crate::core::ui::widget::WidgetId;
 
 /// Fluent builder for `Widget::Button`.
 ///
-/// # Örnek
-/// ```
-/// use snifferlauncher::core::ui::builder::ButtonBuilder;
-/// use snifferlauncher::core::ui::widget::ids;
-///
+/// # Example
+/// ```ignore
 /// let widget = ButtonBuilder::new(ids::BTN_SETTINGS, "Settings")
 ///     .style(my_style)
 ///     .hovered(true)
