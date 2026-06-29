@@ -101,13 +101,23 @@ impl ScreenMetrics {
     #[allow(clippy::missing_const_for_fn)] // f32::clamp is not const
     pub fn from_dpi(physical_width: f32, physical_height: f32, dpi: f32) -> Self {
         let scale_factor = (dpi / 160.0).clamp(0.75, 4.0);
-        Self { physical_width, physical_height, scale_factor, font_scale_factor: scale_factor }
+        Self {
+            physical_width,
+            physical_height,
+            scale_factor,
+            font_scale_factor: scale_factor,
+        }
     }
 
     /// Construct with explicit scale factors (e.g. from Android `DisplayMetrics`).
     #[must_use]
     #[allow(clippy::missing_const_for_fn)] // f32::clamp is not const
-    pub fn from_scale(physical_width: f32, physical_height: f32, scale_factor: f32, font_scale_factor: f32) -> Self {
+    pub fn from_scale(
+        physical_width: f32,
+        physical_height: f32,
+        scale_factor: f32,
+        font_scale_factor: f32,
+    ) -> Self {
         Self {
             physical_width,
             physical_height,
@@ -119,7 +129,12 @@ impl ScreenMetrics {
     /// Fallback: assume 160 DPI (1× density) — safe default when DPI is unavailable.
     #[must_use]
     pub const fn default_mdpi(physical_width: f32, physical_height: f32) -> Self {
-        Self { physical_width, physical_height, scale_factor: 1.0, font_scale_factor: 1.0 }
+        Self {
+            physical_width,
+            physical_height,
+            scale_factor: 1.0,
+            font_scale_factor: 1.0,
+        }
     }
 
     /// Logical width in dp units (`physical_width / scale_factor`).
