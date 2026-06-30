@@ -1,8 +1,10 @@
 #[cfg(target_os = "android")]
-pub mod intent;
+pub mod jni;
+#[cfg(target_os = "android")]
+pub mod types;
 
 #[cfg(target_os = "android")]
-pub use intent::launch_action;
+pub use jni::intent::launch_action;
 
 #[cfg(not(target_os = "android"))]
 /// Launch the requested action on non-Android targets.
@@ -18,11 +20,11 @@ pub fn launch_action(_action: crate::core::Action) -> Result<(), String> {
 #[unsafe(no_mangle)]
 #[allow(clippy::pedantic)]
 pub fn android_main(app: android_activity::AndroidApp) {
+    use crate::core::render::draw::{draw_ui, find_clicked_button, find_hovered_button};
+    use crate::core::style::BACKGROUND;
     use crate::core::{
         Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point, Renderer,
-        Size, calculate_layout,
-        component::{draw_ui, find_clicked_button, find_hovered_button},
-        style::BACKGROUND,
+        ScreenMetrics, Size, calculate_layout,
     };
     use android_activity::{
         InputStatus, MainEvent, PollEvent, input::InputEvent, input::MotionAction,
@@ -124,7 +126,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     })
                 };
                 // Audiowide font gömülü olarak binary'ye dahil edildi
-                static FONT_BYTES: &[u8] = include_bytes!("../fonts/audiowide.ttf");
+                static FONT_BYTES: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
                 let glow_renderer = unsafe { GlowRenderer::with_font(gl, Some(FONT_BYTES))? };
                 self.renderer = Some(glow_renderer);
             }
@@ -173,7 +175,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     );
 
                     let (safe_area_top, safe_area_bottom) =
-                        crate::android::intent::get_safe_area(&app)
+                        crate::platform::android::jni::get_safe_area(&app)
                             .map(|(top, bottom)| {
                                 (
                                     f32::from(
@@ -187,7 +189,16 @@ pub fn android_main(app: android_activity::AndroidApp) {
                             })
                             .unwrap_or((0.0, 0.0));
 
-                    let root_element = LauncherApp::view(&state);
+                    // Build responsive screen metrics from Android DisplayMetrics
+                    let (density, scaled_density) = crate::platform::android::jni::get_density();
+                    let metrics = ScreenMetrics::from_scale(
+                        width,
+                        height - safe_area_top - safe_area_bottom,
+                        density,
+                        scaled_density,
+                    );
+
+                    let root_element = LauncherApp::view(&state, &metrics);
                     let layout_tree = calculate_layout(
                         &root_element,
                         Size::new(width, height - safe_area_top - safe_area_bottom),
@@ -198,7 +209,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     renderer.begin_frame(width, height);
                     renderer.clear(BACKGROUND);
 
-                    draw_ui(renderer, &root_element, &layout_tree);
+                    draw_ui(renderer, &root_element, &layout_tree, &metrics);
 
                     renderer.end_frame();
 
@@ -246,7 +257,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     .expect("window height fits in u16"),
                                             );
                                             let (safe_area_top, safe_area_bottom) =
-                                                crate::android::intent::get_safe_area(&app)
+                                                crate::platform::android::jni::get_safe_area(&app)
                                                     .map(|(top, bottom)| {
                                                         (
                                                             f32::from(i16::try_from(top).expect(
@@ -261,7 +272,17 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     })
                                                     .unwrap_or((0.0, 0.0));
 
-                                            let root_element = LauncherApp::view(&state);
+                                            // Build metrics for touch-path view, same as render path
+                                            let (density, scaled_density) =
+                                                crate::platform::android::jni::get_density();
+                                            let metrics = ScreenMetrics::from_scale(
+                                                width,
+                                                height - safe_area_top - safe_area_bottom,
+                                                density,
+                                                scaled_density,
+                                            );
+
+                                            let root_element = LauncherApp::view(&state, &metrics);
                                             let layout_tree = calculate_layout(
                                                 &root_element,
                                                 Size::new(
