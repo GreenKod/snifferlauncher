@@ -43,6 +43,20 @@ pub mod ids {
     pub const BTN_SETTINGS: WidgetId = crate::wid!(b"btn-settings");
     pub const BTN_CONTACTS: WidgetId = crate::wid!(b"btn-contacts");
     pub const BTN_CAMERA: WidgetId = crate::wid!(b"btn-camera");
+
+    /// Map a legacy `ButtonId` to the equivalent `WidgetId` (u64 hash).
+    ///
+    /// Provides the bridge between the existing `find_clicked_button` /
+    /// `find_hovered_button` infrastructure (which still returns `ButtonId`)
+    /// and the new event-bus system (which works with `WidgetId`).
+    #[must_use]
+    pub const fn from_button_id(id: crate::core::types::ButtonId) -> WidgetId {
+        match id {
+            crate::core::types::ButtonId::Settings => BTN_SETTINGS,
+            crate::core::types::ButtonId::Contacts => BTN_CONTACTS,
+            crate::core::types::ButtonId::Camera => BTN_CAMERA,
+        }
+    }
 }
 
 /// Platform-agnostic UI tree node.
