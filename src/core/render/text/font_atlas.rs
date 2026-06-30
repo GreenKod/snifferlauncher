@@ -1,4 +1,6 @@
 use glow::HasContext;
+use swash::scale::{ScaleContext, Render, Source, image::Content};
+use swash::FontRef;
 
 const PADDING: u32 = 2;
 
@@ -6,7 +8,6 @@ struct GlyphData {
     width: u32,
     height: u32,
     bearing_x: f32,
-    // bearing_y = top above baseline = ymin + height.
     bearing_y: f32,
     advance_width: f32,
     bitmap: Vec<u8>,
@@ -35,7 +36,7 @@ pub struct FontAtlas {
     pub atlas_height: i32,
     /// The pixel size used when rasterizing glyphs
     pub rasterize_size: f32,
-    /// Ascent from `horizontal_line_metrics` (baseline to top of line).
+    /// Ascent from horizontal_line_metrics (baseline to top of line).
     pub ascent: f32,
     /// Space character advance
     pub space_advance: f32,
@@ -57,21 +58,22 @@ pub fn build_font_atlas(
     font_bytes: &[u8],
     pixel_size: f32,
 ) -> Result<FontAtlas, String> {
-    let font = fontdue::Font::from_bytes(font_bytes, fontdue::FontSettings::default())
-        .map_err(|e| format!("Failed to parse font: {e:?}"))?;
+    let font = FontRef::from_index(font_bytes, 0)
+        .ok_or_else(|| "Failed to parse font".to_string())?;
 
-    // Gather metrics for each printable ASCII character
-    let line_metrics = font
-        .horizontal_line_metrics(pixel_size)
-        .ok_or("No horizontal line metrics")?;
-    let ascent = line_metrics.ascent;
+    let font_metrics = font.metrics(&[]);
+    let units_per_em = font_metrics.units_per_em as f32;
+    let scale_factor = pixel_size / units_per_em;
+    let ascent = font_metrics.ascent as f32 * scale_factor;
 
     let space_advance = {
-        let idx = font.lookup_glyph_index(' ');
-        font.metrics_indexed(idx, pixel_size).advance_width
+        let charmap = font.charmap();
+        let glyph_id = charmap.map(' ');
+        let glyph_metrics = font.glyph_metrics(&[]);
+        glyph_metrics.advance_width(glyph_id) as f32 * scale_factor
     };
 
-    let glyphs_data = collect_glyph_data(&font, pixel_size)?;
+    let glyphs_data = collect_glyph_data(&font, pixel_size, scale_factor)?;
 
     let atlas_height = glyphs_data
         .iter()
@@ -144,22 +146,71 @@ pub fn build_font_atlas(
     })
 }
 
-fn collect_glyph_data(font: &fontdue::Font, pixel_size: f32) -> Result<Vec<GlyphData>, String> {
+fn collect_glyph_data(
+    font: &FontRef,
+    pixel_size: f32,
+    scale_factor: f32,
+) -> Result<Vec<GlyphData>, String> {
+    let mut context = ScaleContext::new();
+    let mut scaler = context
+        .builder(*font)
+        .size(pixel_size)
+        .hint(true)
+        .build();
+
+    let renderer = Render::new(&[Source::Outline, Source::Bitmap(swash::scale::StrikeWith::Index(0))]);
+
+    let charmap = font.charmap();
+    let glyph_metrics = font.glyph_metrics(&[]);
+
     let mut glyphs_data = Vec::with_capacity(96);
     for c in 32u8..128u8 {
-        let (metrics, bitmap) = font.rasterize(char::from(c), pixel_size);
-        let width = u32::try_from(metrics.width)
-            .map_err(|_| "Glyph width is negative or too large".to_string())?;
-        let height = u32::try_from(metrics.height)
-            .map_err(|_| "Glyph height is negative or too large".to_string())?;
-        let bearing_y = f32::from(i16::try_from(metrics.ymin).expect("glyph ymin fits in i16"))
-            + f32::from(u16::try_from(height).expect("glyph height fits in u16"));
+        let character = char::from(c);
+        let glyph_id = charmap.map(character);
+        
+        let advance_width = glyph_metrics.advance_width(glyph_id) as f32 * scale_factor;
+        
+        let image = renderer.render(&mut scaler, glyph_id);
+        
+        let (width, height, bearing_x, bearing_y, bitmap) = match image {
+            Some(img) => {
+                let w = img.placement.width;
+                let h = img.placement.height;
+                let bx = img.placement.left as f32;
+                let by = img.placement.top as f32;
+                
+                let data = match img.content {
+                    Content::Mask => img.data,
+                    Content::SubpixelMask => {
+                        let mut gray = Vec::with_capacity(img.data.len() / 3);
+                        for chunk in img.data.chunks_exact(3) {
+                            let g = (u32::from(chunk[0]) + u32::from(chunk[1]) + u32::from(chunk[2])) / 3;
+                            gray.push(g as u8);
+                        }
+                        gray
+                    }
+                    Content::Color => {
+                        let mut gray = Vec::with_capacity(img.data.len() / 4);
+                        for chunk in img.data.chunks_exact(4) {
+                            gray.push(chunk[3]);
+                        }
+                        gray
+                    }
+                };
+                
+                (w, h, bx, by, data)
+            }
+            None => {
+                (0, 0, 0.0, 0.0, Vec::new())
+            }
+        };
+
         glyphs_data.push(GlyphData {
             width,
             height,
-            bearing_x: f32::from(i16::try_from(metrics.xmin).expect("glyph xmin fits in i16")),
+            bearing_x,
             bearing_y,
-            advance_width: metrics.advance_width,
+            advance_width,
             bitmap,
         });
     }
