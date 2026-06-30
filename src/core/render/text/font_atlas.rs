@@ -1,6 +1,6 @@
 use glow::HasContext;
-use swash::scale::{ScaleContext, Render, Source, image::Content};
 use swash::FontRef;
+use swash::scale::{Render, ScaleContext, Source, image::Content};
 
 const PADDING: u32 = 2;
 
@@ -58,8 +58,8 @@ pub fn build_font_atlas(
     font_bytes: &[u8],
     pixel_size: f32,
 ) -> Result<FontAtlas, String> {
-    let font = FontRef::from_index(font_bytes, 0)
-        .ok_or_else(|| "Failed to parse font".to_string())?;
+    let font =
+        FontRef::from_index(font_bytes, 0).ok_or_else(|| "Failed to parse font".to_string())?;
 
     let font_metrics = font.metrics(&[]);
     let units_per_em = font_metrics.units_per_em as f32;
@@ -152,13 +152,12 @@ fn collect_glyph_data(
     scale_factor: f32,
 ) -> Result<Vec<GlyphData>, String> {
     let mut context = ScaleContext::new();
-    let mut scaler = context
-        .builder(*font)
-        .size(pixel_size)
-        .hint(true)
-        .build();
+    let mut scaler = context.builder(*font).size(pixel_size).hint(true).build();
 
-    let renderer = Render::new(&[Source::Outline, Source::Bitmap(swash::scale::StrikeWith::Index(0))]);
+    let renderer = Render::new(&[
+        Source::Outline,
+        Source::Bitmap(swash::scale::StrikeWith::Index(0)),
+    ]);
 
     let charmap = font.charmap();
     let glyph_metrics = font.glyph_metrics(&[]);
@@ -167,24 +166,26 @@ fn collect_glyph_data(
     for c in 32u8..128u8 {
         let character = char::from(c);
         let glyph_id = charmap.map(character);
-        
+
         let advance_width = glyph_metrics.advance_width(glyph_id) as f32 * scale_factor;
-        
+
         let image = renderer.render(&mut scaler, glyph_id);
-        
+
         let (width, height, bearing_x, bearing_y, bitmap) = match image {
             Some(img) => {
                 let w = img.placement.width;
                 let h = img.placement.height;
                 let bx = img.placement.left as f32;
                 let by = img.placement.top as f32;
-                
+
                 let data = match img.content {
                     Content::Mask => img.data,
                     Content::SubpixelMask => {
                         let mut gray = Vec::with_capacity(img.data.len() / 3);
                         for chunk in img.data.chunks_exact(3) {
-                            let g = (u32::from(chunk[0]) + u32::from(chunk[1]) + u32::from(chunk[2])) / 3;
+                            let g =
+                                (u32::from(chunk[0]) + u32::from(chunk[1]) + u32::from(chunk[2]))
+                                    / 3;
                             gray.push(g as u8);
                         }
                         gray
@@ -197,12 +198,10 @@ fn collect_glyph_data(
                         gray
                     }
                 };
-                
+
                 (w, h, bx, by, data)
             }
-            None => {
-                (0, 0, 0.0, 0.0, Vec::new())
-            }
+            None => (0, 0, 0.0, 0.0, Vec::new()),
         };
 
         glyphs_data.push(GlyphData {
