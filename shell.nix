@@ -25,11 +25,9 @@
     };
     overlays = [
       # rust-overlay — provides pkgs.rust-bin.stable / nightly / beta
-      # To pin a specific commit, replace the URL with a tagged archive and
-      # update the sha256 via: nix-prefetch-url --unpack <url>
-      (import (builtins.fetchTarball {
-        url    = "https://github.com/oxalica/rust-overlay/archive/master.tar.gz";
-        sha256 = "0j0xcafzm4956rmlqssdyj1jaii98wlzx6yc9hp54n80s6pxz4sq";
+      (import (builtins.fetchGit {
+        url = "https://github.com/oxalica/rust-overlay.git";
+        ref = "master";
       }))
     ];
   }
