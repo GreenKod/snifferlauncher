@@ -1,9 +1,13 @@
 use crate::core::render::draw::{draw_ui, find_clicked_button, find_hovered_button};
 use crate::core::style::{BACKGROUND, WINDOW_HEIGHT, WINDOW_WIDTH};
+use crate::core::ui::data_map::DataMap;
+use crate::core::ui::event::{EventBus, UiEvent};
+use crate::core::ui::style_map::StyleMap;
 use crate::core::{
     Action, Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point,
     Renderer, ScreenMetrics, Size, calculate_layout,
 };
+use crate::plugin::registry::PluginRegistry;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use std::time::Duration;
@@ -19,6 +23,7 @@ use std::time::Duration;
 /// Panics if mouse or drawable dimensions do not fit the narrow integer
 /// conversions used for clippy-clean float handling.
 #[allow(clippy::missing_panics_doc)]
+#[allow(clippy::too_many_lines)]
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Initialize SDL2
     let sdl_context = sdl2::init()?;
@@ -63,21 +68,32 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         .display_dpi(0)
         .map_or(96.0, |(_ddpi, hdpi, _vdpi)| hdpi); // 96 dpi is a safe desktop fallback
 
-    // Audiowide font gömülü olarak binary'ye dahil edildi
+    // Audiowide font embedded as binary
     let font_bytes: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
     let mut renderer = unsafe { GlowRenderer::with_font(gl, Some(font_bytes))? };
     let mut event_pump = sdl_context.event_pump()?;
 
-    // 5. Initialize UI State
+    // 5. Initialize UI state
     let mut state = LauncherState::default();
     let mut last_mouse_pos = Point::zero();
+
+    // 6. Initialize the event-driven plugin system
+    let event_bus = EventBus::default();
+    let style_map = StyleMap::default();
+    let data_map = DataMap::default();
+
+    let mut plugin_registry = PluginRegistry::default();
+
+    // Instead of hardcoding, we load from .plugins/plugins.json
+    let loader = crate::plugin::PluginLoader::new(".plugins");
+    loader.register_all(&mut plugin_registry);
 
     let mut running = true;
     while running {
         let mut clicked_pos = None;
         let mut mouse_moved = false;
 
-        // 6. Poll Events
+        // 7. Poll SDL2 events
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -109,7 +125,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // 7. Query current drawable size each frame (handles resize and DPI changes)
+        // 8. Query current drawable size each frame (handles resize and DPI changes)
         let (w, h) = window.drawable_size();
         let width = f32::from(u16::try_from(w).expect("drawable width fits in u16"));
         let height = f32::from(u16::try_from(h).expect("drawable height fits in u16"));
@@ -117,25 +133,45 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // Rebuild metrics every frame so window resizes and DPI changes are handled.
         let metrics = ScreenMetrics::from_dpi(width, height, dpi);
 
-        // 8. View & Layout Pass
+        // 9. View & Layout pass
         let root_element = LauncherApp::view(&state, &metrics);
         let layout_tree = calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
 
-        // 9. Event Dispatch / Processing
+        // 10. Translate pointer events → UiEvent → EventBus
         if mouse_moved {
+            let prev_hovered = state.hovered;
             let hovered_btn = find_hovered_button(&root_element, &layout_tree, last_mouse_pos);
-            let _action =
-                LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
+
+            let _ = LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
+
+            // Emit hover events for new / cleared hover
+            if let Some(btn) = hovered_btn {
+                let id = crate::core::ui::widget::ids::from_button_id(btn);
+                event_bus.push(UiEvent::Hover(id));
+            } else if let Some(prev) = prev_hovered {
+                let id = crate::core::ui::widget::ids::from_button_id(prev);
+                event_bus.push(UiEvent::HoverEnd(id));
+            }
         }
 
         if let Some(clicked_pt) = clicked_pos
             && let Some(clicked_btn) = find_clicked_button(&root_element, &layout_tree, clicked_pt)
-            && let Some(action) =
-                LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn))
         {
-            handle_action(action);
+            // Push Click to event bus before updating state
+            let id = crate::core::ui::widget::ids::from_button_id(clicked_btn);
+            event_bus.push(UiEvent::Click(id));
+
+            if let Some(action) =
+                LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn))
+            {
+                handle_action(action);
+            }
         }
 
+        // 11. Dispatch queued events to plugins (O(1) per event)
+        plugin_registry.dispatch(&event_bus, &style_map, &data_map);
+
+        // 12. Render
         renderer.begin_frame(width, height);
         renderer.clear(BACKGROUND);
         draw_ui(&mut renderer, &root_element, &layout_tree, &metrics);

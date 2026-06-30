@@ -1,0 +1,30 @@
+[
+  {
+    "identifier": {
+      "id": "com.greenkod.hover-effect",
+      "uuid": "a1b2c3d4-e5f6-7890-1234-56789abcdef0"
+    },
+    "version": "1.0.0",
+    "location": {
+      "$mid": 1,
+      "path": ".plugins/com.greenkod.hover-effect",
+      "scheme": "file"
+    },
+    "relativeLocation": "com.greenkod.hover-effect",
+    "metadata": {
+      "isApplicationScoped": false,
+      "isMachineScoped": false,
+      "isBuiltin": true,
+      "installedTimestamp": 1782681929785,
+      "source": "gallery",
+      "id": "a1b2c3d4-e5f6-7890-1234-56789abcdef0",
+      "publisherId": "greenkod",
+      "publisherDisplayName": "GreenKod",
+      "targetPlatform": "undefined",
+      "updated": false,
+      "private": false,
+      "isPreReleaseVersion": false,
+      "hasPreReleaseVersion": false
+    }
+  }
+]
