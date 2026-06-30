@@ -1,14 +1,14 @@
 use crate::core::render::draw::{draw_ui, find_clicked_button, find_hovered_button};
 use crate::core::style::{BACKGROUND, WINDOW_HEIGHT, WINDOW_WIDTH};
+use crate::core::ui::data_map::DataMap;
+use crate::core::ui::event::{EventBus, UiEvent};
+use crate::core::ui::style_map::StyleMap;
 use crate::core::{
     Action, Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point,
     Renderer, ScreenMetrics, Size, calculate_layout,
 };
-use crate::core::ui::event::{EventBus, UiEvent};
-use crate::core::ui::style_map::StyleMap;
-use crate::core::ui::data_map::DataMap;
-use crate::plugin::registry::PluginRegistry;
 use crate::plugin::HoverEffectPlugin;
+use crate::plugin::registry::PluginRegistry;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use std::sync::Arc;
@@ -84,7 +84,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let data_map = DataMap::default();
 
     let mut plugin_registry = PluginRegistry::default();
-    
+
     // Instead of hardcoding, we load from .plugins/plugins.json
     let loader = crate::plugin::PluginLoader::new(".plugins");
     loader.register_all(&mut plugin_registry);
@@ -156,8 +156,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if let Some(clicked_pt) = clicked_pos
-            && let Some(clicked_btn) =
-                find_clicked_button(&root_element, &layout_tree, clicked_pt)
+            && let Some(clicked_btn) = find_clicked_button(&root_element, &layout_tree, clicked_pt)
         {
             // Push Click to event bus before updating state
             let id = crate::core::ui::widget::ids::from_button_id(clicked_btn);

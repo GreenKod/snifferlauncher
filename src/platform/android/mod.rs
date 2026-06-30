@@ -22,15 +22,15 @@ pub fn launch_action(_action: crate::core::Action) -> Result<(), String> {
 pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::render::draw::{draw_ui, find_clicked_button, find_hovered_button};
     use crate::core::style::BACKGROUND;
+    use crate::core::ui::data_map::DataMap;
+    use crate::core::ui::event::{EventBus, UiEvent};
+    use crate::core::ui::style_map::StyleMap;
     use crate::core::{
         Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point, Renderer,
         ScreenMetrics, Size, calculate_layout,
     };
-    use crate::core::ui::event::{EventBus, UiEvent};
-    use crate::core::ui::style_map::StyleMap;
-    use crate::core::ui::data_map::DataMap;
-    use crate::plugin::registry::PluginRegistry;
     use crate::plugin::HoverEffectPlugin;
+    use crate::plugin::registry::PluginRegistry;
     use android_activity::{
         InputStatus, MainEvent, PollEvent, input::InputEvent, input::MotionAction,
     };
@@ -173,7 +173,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
     let data_map = DataMap::default();
 
     let mut plugin_registry = PluginRegistry::default();
-    
+
     // In Android, we'd normally extract this to internal storage, but for now we read from local .plugins
     let loader = crate::plugin::PluginLoader::new(".plugins");
     loader.register_all(&mut plugin_registry);

@@ -1,8 +1,8 @@
+use crate::plugin::HoverEffectPlugin;
+use crate::plugin::registry::PluginRegistry;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use crate::plugin::registry::PluginRegistry;
-use crate::plugin::HoverEffectPlugin;
 use std::sync::Arc;
 
 /// A struct reflecting the VS Code style `extensions.json` structure
@@ -77,7 +77,7 @@ impl PluginLoader {
         let entries = self.load_manifest();
         for entry in entries {
             println!("Loading plugin: {} v{}", entry.identifier.id, entry.version);
-            
+
             // For now, since we only have static plugins, we route by ID.
             // In the future (Phase 4), this will compile & load the Wasm module from `entry.location.path`.
             match entry.identifier.id.as_str() {
