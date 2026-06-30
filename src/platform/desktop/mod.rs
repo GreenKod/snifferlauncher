@@ -7,11 +7,9 @@ use crate::core::{
     Action, Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point,
     Renderer, ScreenMetrics, Size, calculate_layout,
 };
-use crate::plugin::HoverEffectPlugin;
 use crate::plugin::registry::PluginRegistry;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use std::sync::Arc;
 use std::time::Duration;
 
 /// Run the desktop preview.
@@ -25,6 +23,7 @@ use std::time::Duration;
 /// Panics if mouse or drawable dimensions do not fit the narrow integer
 /// conversions used for clippy-clean float handling.
 #[allow(clippy::missing_panics_doc)]
+#[allow(clippy::too_many_lines)]
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Initialize SDL2
     let sdl_context = sdl2::init()?;

@@ -29,12 +29,10 @@ pub fn android_main(app: android_activity::AndroidApp) {
         Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point, Renderer,
         ScreenMetrics, Size, calculate_layout,
     };
-    use crate::plugin::HoverEffectPlugin;
     use crate::plugin::registry::PluginRegistry;
     use android_activity::{
         InputStatus, MainEvent, PollEvent, input::InputEvent, input::MotionAction,
     };
-    use std::sync::Arc;
     use std::time::Duration;
 
     // Helper struct to manage EGL resources dynamically across window creation/destruction

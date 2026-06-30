@@ -36,7 +36,7 @@ pub struct FontAtlas {
     pub atlas_height: i32,
     /// The pixel size used when rasterizing glyphs
     pub rasterize_size: f32,
-    /// Ascent from horizontal_line_metrics (baseline to top of line).
+    /// Ascent from `horizontal_line_metrics` (baseline to top of line).
     pub ascent: f32,
     /// Space character advance
     pub space_advance: f32,
@@ -62,18 +62,18 @@ pub fn build_font_atlas(
         FontRef::from_index(font_bytes, 0).ok_or_else(|| "Failed to parse font".to_string())?;
 
     let font_metrics = font.metrics(&[]);
-    let units_per_em = font_metrics.units_per_em as f32;
+    let units_per_em = f32::from(font_metrics.units_per_em);
     let scale_factor = pixel_size / units_per_em;
-    let ascent = font_metrics.ascent as f32 * scale_factor;
+    let ascent = font_metrics.ascent * scale_factor;
 
     let space_advance = {
         let charmap = font.charmap();
         let glyph_id = charmap.map(' ');
         let glyph_metrics = font.glyph_metrics(&[]);
-        glyph_metrics.advance_width(glyph_id) as f32 * scale_factor
+        glyph_metrics.advance_width(glyph_id) * scale_factor
     };
 
-    let glyphs_data = collect_glyph_data(&font, pixel_size, scale_factor)?;
+    let glyphs_data = collect_glyph_data(&font, pixel_size, scale_factor);
 
     let atlas_height = glyphs_data
         .iter()
@@ -146,11 +146,7 @@ pub fn build_font_atlas(
     })
 }
 
-fn collect_glyph_data(
-    font: &FontRef,
-    pixel_size: f32,
-    scale_factor: f32,
-) -> Result<Vec<GlyphData>, String> {
+fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec<GlyphData> {
     let mut context = ScaleContext::new();
     let mut scaler = context.builder(*font).size(pixel_size).hint(true).build();
 
@@ -167,7 +163,7 @@ fn collect_glyph_data(
         let character = char::from(c);
         let glyph_id = charmap.map(character);
 
-        let advance_width = glyph_metrics.advance_width(glyph_id) as f32 * scale_factor;
+        let advance_width = glyph_metrics.advance_width(glyph_id) * scale_factor;
 
         let image = renderer.render(&mut scaler, glyph_id);
 
@@ -175,7 +171,9 @@ fn collect_glyph_data(
             Some(img) => {
                 let w = img.placement.width;
                 let h = img.placement.height;
+                #[allow(clippy::cast_precision_loss)]
                 let bx = img.placement.left as f32;
+                #[allow(clippy::cast_precision_loss)]
                 let by = img.placement.top as f32;
 
                 let data = match img.content {
@@ -186,6 +184,7 @@ fn collect_glyph_data(
                             let g =
                                 (u32::from(chunk[0]) + u32::from(chunk[1]) + u32::from(chunk[2]))
                                     / 3;
+                            #[allow(clippy::cast_possible_truncation)]
                             gray.push(g as u8);
                         }
                         gray
@@ -213,7 +212,7 @@ fn collect_glyph_data(
             bitmap,
         });
     }
-    Ok(glyphs_data)
+    glyphs_data
 }
 
 fn upload_font_texture(
