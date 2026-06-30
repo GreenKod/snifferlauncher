@@ -221,15 +221,15 @@ pub fn android_main(app: android_activity::AndroidApp) {
                         safe_area_top,
                     );
 
+                    // Dispatch any queued events to plugins BEFORE rendering
+                    plugin_registry.dispatch(&event_bus, &style_map, &data_map);
+
                     renderer.begin_frame(width, height);
                     renderer.clear(BACKGROUND);
 
-                    draw_ui(renderer, &root_element, &layout_tree, &metrics);
+                    draw_ui(renderer, &root_element, &layout_tree, &metrics, &style_map, &data_map);
 
                     renderer.end_frame();
-
-                    // Dispatch any queued events to plugins (O(1) per event)
-                    plugin_registry.dispatch(&event_bus, &style_map, &data_map);
 
                     egl.swap_buffers();
                 }

@@ -144,13 +144,29 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             let _ = LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
 
-            // Emit hover events for new / cleared hover
-            if let Some(btn) = hovered_btn {
-                let id = crate::core::ui::widget::ids::from_button_id(btn);
-                event_bus.push(UiEvent::Hover(id));
-            } else if let Some(prev) = prev_hovered {
-                let id = crate::core::ui::widget::ids::from_button_id(prev);
-                event_bus.push(UiEvent::HoverEnd(id));
+            match (prev_hovered, hovered_btn) {
+                (Some(prev), Some(current)) if prev != current => {
+                    // Moved from one button to another
+                    event_bus.push(UiEvent::HoverEnd(
+                        crate::core::ui::widget::ids::from_button_id(prev),
+                    ));
+                    event_bus.push(UiEvent::Hover(
+                        crate::core::ui::widget::ids::from_button_id(current),
+                    ));
+                }
+                (None, Some(current)) => {
+                    // Entered a button
+                    event_bus.push(UiEvent::Hover(
+                        crate::core::ui::widget::ids::from_button_id(current),
+                    ));
+                }
+                (Some(prev), None) => {
+                    // Left all buttons
+                    event_bus.push(UiEvent::HoverEnd(
+                        crate::core::ui::widget::ids::from_button_id(prev),
+                    ));
+                }
+                _ => {} // Same button, no change
             }
         }
 
@@ -174,7 +190,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // 12. Render
         renderer.begin_frame(width, height);
         renderer.clear(BACKGROUND);
-        draw_ui(&mut renderer, &root_element, &layout_tree, &metrics);
+        draw_ui(
+            &mut renderer,
+            &root_element,
+            &layout_tree,
+            &metrics,
+            &style_map,
+            &data_map,
+        );
         renderer.end_frame();
 
         window.gl_swap_window();
