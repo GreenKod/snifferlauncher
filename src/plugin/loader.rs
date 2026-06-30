@@ -62,11 +62,10 @@ impl PluginLoader {
         if let Ok(content) = fs::read_to_string(&json_path) {
             if let Ok(entries) = serde_json::from_str::<Vec<PluginEntry>>(&content) {
                 return entries;
-            } else {
-                eprintln!("Failed to parse plugins.json");
             }
+            eprintln!("Failed to parse plugins.json");
         } else {
-            eprintln!("Could not read plugins.json at {:?}", json_path);
+            eprintln!("Could not read plugins.json at {}", json_path.display());
         }
         Vec::new()
     }
