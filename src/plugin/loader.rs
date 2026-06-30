@@ -5,42 +5,56 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// A struct reflecting the VS Code style `extensions.json` structure
+/// Plugin type: either a native (compiled-in) Rust plugin or a Wasm sandbox plugin.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ExtensionIdentifier {
+#[serde(rename_all = "lowercase")]
+pub enum PluginType {
+    Native,
+    Wasm,
+}
+
+/// Minimal location block — only used when `plugin_type` is `wasm`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PluginLocation {
+    /// Relative path from `.plugins/` to the compiled `.wasm` file.
+    /// Example: `"com.greenkod.wasm-sample/wasm_sample.wasm"`
+    pub path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PluginIdentifier {
     pub id: String,
     pub uuid: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ExtensionLocation {
-    #[serde(rename = "$mid")]
-    pub mid: u32,
-    pub path: String,
-    pub scheme: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ExtensionMetadata {
-    pub source: String,
-    pub id: String,
-    #[serde(rename = "publisherId")]
-    pub publisher_id: String,
+pub struct PluginMetadata {
+    #[serde(rename = "isBuiltin", default)]
+    pub is_builtin: bool,
     #[serde(rename = "publisherDisplayName")]
     pub publisher_display_name: String,
 }
 
+/// A single entry in `plugins.json`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PluginEntry {
-    pub identifier: ExtensionIdentifier,
+    pub identifier: PluginIdentifier,
     pub version: String,
-    pub location: ExtensionLocation,
-    #[serde(rename = "relativeLocation")]
-    pub relative_location: String,
-    pub metadata: ExtensionMetadata,
+    #[serde(rename = "type")]
+    pub plugin_type: PluginType,
+    /// True when the plugin source lives in `.plugins/<source_dir>/`.
+    /// The build script compiles it; the output `.wasm` lands in `location.path`.
+    pub has_source: bool,
+    /// Present only when `has_source` is true. Folder name inside `.plugins/`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_dir: Option<String>,
+    /// Present only for `type = "wasm"` plugins.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<PluginLocation>,
+    pub metadata: PluginMetadata,
 }
 
-/// Loads plugins from a `plugins.json` file in a specified directory.
+/// Loads and registers plugins declared in `.plugins/plugins.json`.
 pub struct PluginLoader {
     plugins_dir: PathBuf,
 }
@@ -55,38 +69,69 @@ impl PluginLoader {
     }
 
     /// Read the `plugins.json` file and parse the entries.
-    /// Returns an empty list if the file doesn't exist or parsing fails.
+    ///
+    /// # Errors
+    /// Returns an empty list if the file doesn't exist or cannot be parsed.
     #[must_use]
     pub fn load_manifest(&self) -> Vec<PluginEntry> {
         let json_path = self.plugins_dir.join("plugins.json");
-        if let Ok(content) = fs::read_to_string(&json_path) {
-            if let Ok(entries) = serde_json::from_str::<Vec<PluginEntry>>(&content) {
-                return entries;
+        match fs::read_to_string(&json_path) {
+            Ok(content) => match serde_json::from_str::<Vec<PluginEntry>>(&content) {
+                Ok(entries) => entries,
+                Err(e) => {
+                    eprintln!("Failed to parse plugins.json: {e}");
+                    Vec::new()
+                }
+            },
+            Err(e) => {
+                eprintln!(
+                    "Could not read plugins.json at {}: {e}",
+                    json_path.display()
+                );
+                Vec::new()
             }
-            eprintln!("Failed to parse plugins.json");
-        } else {
-            eprintln!("Could not read plugins.json at {}", json_path.display());
         }
-        Vec::new()
     }
 
-    /// Instantiates and registers the native (or in the future, Wasm) plugins
-    /// based on the loaded manifest.
+    /// Instantiate and register all plugins declared in the manifest.
     pub fn register_all(&self, registry: &mut PluginRegistry) {
-        let entries = self.load_manifest();
-        for entry in entries {
+        for entry in self.load_manifest() {
             println!("Loading plugin: {} v{}", entry.identifier.id, entry.version);
 
-            // For now, since we only have static plugins, we route by ID.
-            // In the future (Phase 4), this will compile & load the Wasm module from `entry.location.path`.
-            match entry.identifier.id.as_str() {
-                "com.greenkod.hover-effect" => {
-                    let plugin = Arc::new(HoverEffectPlugin) as Arc<dyn crate::plugin::UiPlugin>;
-                    registry.register(&plugin);
+            match entry.plugin_type {
+                PluginType::Wasm => {
+                    let Some(loc) = &entry.location else {
+                        eprintln!("Wasm plugin {} has no location field", entry.identifier.id);
+                        continue;
+                    };
+                    let wasm_path = self.plugins_dir.join(&loc.path);
+                    match fs::read(&wasm_path) {
+                        Ok(bytes) => match crate::plugin::WasmPlugin::new(&bytes) {
+                            Ok(plugin) => {
+                                registry.register(
+                                    &(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>),
+                                );
+                                println!(
+                                    "Successfully loaded Wasm plugin: {}",
+                                    entry.identifier.id
+                                );
+                            }
+                            Err(e) => eprintln!(
+                                "Failed to instantiate Wasm plugin {}: {e}",
+                                entry.identifier.id
+                            ),
+                        },
+                        Err(e) => eprintln!("Could not read .wasm at {}: {e}", wasm_path.display()),
+                    }
                 }
-                _ => {
-                    eprintln!("Unknown plugin ID: {}", entry.identifier.id);
-                }
+                PluginType::Native => match entry.identifier.id.as_str() {
+                    "com.greenkod.hover-effect" => {
+                        registry.register(
+                            &(Arc::new(HoverEffectPlugin) as Arc<dyn crate::plugin::UiPlugin>),
+                        );
+                    }
+                    id => eprintln!("Unknown native plugin ID: {id}"),
+                },
             }
         }
     }

@@ -58,6 +58,7 @@ in pkgs.mkShell {
     pkgs.cmake
     pkgs.ninja
     pkgs.clang
+    pkgs.jq                              # used by .plugins/build_plugins.sh
     pkgs.llvmPackages.bintools          # lld, llvm-ar, llvm-objcopy, …
     pkgs.lld
 

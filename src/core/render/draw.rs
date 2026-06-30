@@ -2,6 +2,9 @@ use crate::core::layout::LayoutNode;
 use crate::core::render::api::Renderer;
 use crate::core::style::{BUTTON_MUTED, BUTTON_TEXT, ICON_SURFACE};
 use crate::core::types::{ButtonId, Element};
+use crate::core::ui::data_map::DataMap;
+use crate::core::ui::style_map::StyleMap;
+use crate::core::ui::widget::ids::from_button_id;
 use crate::core::{Point, Rect, ScreenMetrics};
 
 /// Recursively traverses the layout and element trees to find which button was clicked.
@@ -58,9 +61,19 @@ pub fn draw_ui(
     element: &Element,
     layout: &LayoutNode,
     metrics: &ScreenMetrics,
+    style_map: &StyleMap,
+    data_map: &DataMap,
 ) {
     let rect = layout.rect;
-    let style = element.style();
+    // Use plugin-provided style override if available, fallback to element's own style
+    let style = if let Element::Button { id, .. } = element {
+        let widget_id = from_button_id(*id);
+        style_map
+            .get(widget_id)
+            .unwrap_or_else(|| element.style().clone())
+    } else {
+        element.style().clone()
+    };
 
     // 1. Draw drop shadow
     if let Some(shadow_color) = style.shadow_color {
@@ -88,10 +101,14 @@ pub fn draw_ui(
     match element {
         Element::Container { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                draw_ui(renderer, child_el, child_lay, metrics);
+                draw_ui(renderer, child_el, child_lay, metrics, style_map, data_map);
             }
         }
         Element::Button { id, title, .. } => {
+            // Use DataMap label override if set, otherwise use static title
+            let widget_id = from_button_id(*id);
+            let display_title = data_map.label(widget_id).unwrap_or_else(|| title.clone());
+            let title_ref: &str = &display_title;
             // Sub-elements of the Button:
             // Calculate proportions based on the actual height of the button (which scales by breakpoint)
             let icon_size = rect.height * 0.65;
@@ -117,7 +134,7 @@ pub fn draw_ui(
             let total_text_height = title_size + text_gap + subtitle_size;
             let text_start_y = (rect.height - total_text_height).mul_add(0.5, rect.y);
 
-            renderer.draw_text(title, text_left, text_start_y, title_size, BUTTON_TEXT);
+            renderer.draw_text(title_ref, text_left, text_start_y, title_size, BUTTON_TEXT);
             renderer.draw_text(
                 "Tap to launch application",
                 text_left,

@@ -4,3 +4,12 @@
 .vscode/
 .cargo/
 .extensions/
+
+# Plugins build artifacts
+.plugins/*.wasm
+.plugins/*/target/
+.plugins/*/build/
+.plugins/*/local.properties
+.plugins/*.vscode/
+.plugins/*.cargo/
+.plugins/*.extensions/

@@ -5,26 +5,28 @@
       "uuid": "a1b2c3d4-e5f6-7890-1234-56789abcdef0"
     },
     "version": "1.0.0",
-    "location": {
-      "$mid": 1,
-      "path": ".plugins/com.greenkod.hover-effect",
-      "scheme": "file"
-    },
-    "relativeLocation": "com.greenkod.hover-effect",
+    "type": "native",
+    "has_source": false,
     "metadata": {
-      "isApplicationScoped": false,
-      "isMachineScoped": false,
       "isBuiltin": true,
-      "installedTimestamp": 1782681929785,
-      "source": "gallery",
-      "id": "a1b2c3d4-e5f6-7890-1234-56789abcdef0",
-      "publisherId": "greenkod",
-      "publisherDisplayName": "GreenKod",
-      "targetPlatform": "undefined",
-      "updated": false,
-      "private": false,
-      "isPreReleaseVersion": false,
-      "hasPreReleaseVersion": false
+      "publisherDisplayName": "GreenKod"
+    }
+  },
+  {
+    "identifier": {
+      "id": "com.greenkod.wasm-sample",
+      "uuid": "b2c3d4e5-f6a7-8901-2345-6789abcdef01"
+    },
+    "version": "1.0.0",
+    "type": "wasm",
+    "has_source": true,
+    "source_dir": "com.greenkod.wasm-sample",
+    "location": {
+      "path": "com.greenkod.wasm-sample/wasm_sample.wasm"
+    },
+    "metadata": {
+      "isBuiltin": false,
+      "publisherDisplayName": "GreenKod"
     }
   }
 ]
