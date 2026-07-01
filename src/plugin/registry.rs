@@ -1,3 +1,15 @@
+//! Plugin Registry and Dispatch System
+//!
+//! The Plugin Registry is the heart of the modular UI architecture. Instead of hardcoding
+//! application logic (like hover effects, clicks, and navigation) directly into the
+//! core platform code, the `PluginRegistry` allows isolated components (Plugins) to subscribe
+//! to specific widget IDs.
+//!
+//! Plugins can be either Native (compiled Rust) or WebAssembly (sandboxed modules loaded at runtime).
+//! When an event occurs, the Registry efficiently routes the event only to the plugins
+//! that explicitly subscribed to the target widget, guaranteeing O(1) event dispatching
+//! for non-interactive elements.
+
 use crate::core::ui::data_map::DataMap;
 use crate::core::ui::event::EventBus;
 use crate::core::ui::style_map::StyleMap;
@@ -6,7 +18,7 @@ use crate::plugin::r#trait::UiPlugin;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// ID-to-listener subscription map.
+/// Manages a collection of plugins and efficiently routes events to them.
 ///
 /// Registration complexity  : `O(subscriptions.len())` amortised
 /// Dispatch complexity      : `O(1)` `HashMap` lookup + `O(k)` dispatch
@@ -39,12 +51,18 @@ impl PluginRegistry {
     /// Dispatch all queued events to their respective plugin listeners.
     ///
     /// Call once per render frame. IDs with no registered listeners cost O(1) miss.
-    pub fn dispatch(&self, bus: &EventBus, styles: &StyleMap, data: &DataMap) {
+    pub fn dispatch(
+        &self,
+        bus: &EventBus,
+        styles: &StyleMap,
+        data: &DataMap,
+        actions: &std::sync::Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
+    ) {
         for event in bus.drain() {
             let id = event.widget_id();
             if let Some(listeners) = self.subscriptions.get(&id) {
                 for plugin in listeners {
-                    plugin.on_event(&event, styles, data);
+                    plugin.on_event(&event, styles, data, actions);
                 }
             }
         }

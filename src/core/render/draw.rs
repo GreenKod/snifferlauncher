@@ -13,16 +13,16 @@ pub fn find_clicked_button(
     element: &Element,
     layout: &LayoutNode,
     point: Point,
-) -> Option<ButtonId> {
+) -> Option<(ButtonId, Rect)> {
     if !layout.rect.contains(point) {
         return None;
     }
     match element {
-        Element::Button { id, .. } => Some(*id),
+        Element::Button { id, .. } => Some((*id, layout.rect)),
         Element::Container { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                if let Some(clicked_id) = find_clicked_button(child_el, child_lay, point) {
-                    return Some(clicked_id);
+                if let Some(clicked_data) = find_clicked_button(child_el, child_lay, point) {
+                    return Some(clicked_data);
                 }
             }
             None
@@ -37,16 +37,16 @@ pub fn find_hovered_button(
     element: &Element,
     layout: &LayoutNode,
     point: Point,
-) -> Option<ButtonId> {
+) -> Option<(ButtonId, Rect)> {
     if !layout.rect.contains(point) {
         return None;
     }
     match element {
-        Element::Button { id, .. } => Some(*id),
+        Element::Button { id, .. } => Some((*id, layout.rect)),
         Element::Container { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                if let Some(hovered_id) = find_hovered_button(child_el, child_lay, point) {
-                    return Some(hovered_id);
+                if let Some(hovered_data) = find_hovered_button(child_el, child_lay, point) {
+                    return Some(hovered_data);
                 }
             }
             None
@@ -56,6 +56,7 @@ pub fn find_hovered_button(
 }
 
 /// Platform-agnostic traversal to draw the UI elements using the Renderer interface.
+#[allow(clippy::too_many_lines)]
 pub fn draw_ui(
     renderer: &mut dyn Renderer,
     element: &Element,
@@ -64,13 +65,16 @@ pub fn draw_ui(
     style_map: &StyleMap,
     data_map: &DataMap,
 ) {
+    use crate::core::ui::data_map::DataValue;
+    use crate::core::ui::data_map::DrawCommand;
     let rect = layout.rect;
     // Use plugin-provided style override if available, fallback to element's own style
     let style = if let Element::Button { id, .. } = element {
         let widget_id = from_button_id(*id);
-        style_map
-            .get(widget_id)
-            .unwrap_or_else(|| element.style().clone())
+        style_map.get(widget_id).map_or_else(
+            || element.style().clone(),
+            |override_style| override_style.apply(element.style().clone()),
+        )
     } else {
         element.style().clone()
     };
@@ -105,8 +109,40 @@ pub fn draw_ui(
             }
         }
         Element::Button { id, title, .. } => {
-            // Use DataMap label override if set, otherwise use static title
             let widget_id = from_button_id(*id);
+
+            // If plugin provided a custom draw list, render that INSTEAD of default internals
+            if let Some(DataValue::DrawList(cmds)) = data_map.get(widget_id, "draw_list") {
+                for cmd in cmds {
+                    match cmd {
+                        DrawCommand::Rect {
+                            x,
+                            y,
+                            w,
+                            h,
+                            color,
+                            radius,
+                        } => {
+                            let r = Rect::new(rect.x + x, rect.y + y, w, h);
+                            renderer.draw_rect(r, color, radius, 0.0, None);
+                        }
+                        DrawCommand::Circle { cx, cy, r, color } => {
+                            renderer.draw_circle(rect.x + cx, rect.y + cy, r, color);
+                        }
+                        DrawCommand::Text {
+                            text,
+                            x,
+                            y,
+                            size,
+                            color,
+                        } => {
+                            renderer.draw_text(&text, rect.x + x, rect.y + y, size, color);
+                        }
+                    }
+                }
+            }
+
+            // Use DataMap label override if set, otherwise use static title
             let display_title = data_map.label(widget_id).unwrap_or_else(|| title.clone());
             let title_ref: &str = &display_title;
             // Sub-elements of the Button:

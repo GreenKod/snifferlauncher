@@ -169,12 +169,15 @@ pub fn android_main(app: android_activity::AndroidApp) {
     let event_bus = EventBus::default();
     let style_map = StyleMap::default();
     let data_map = DataMap::default();
+    let action_queue = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
     let mut plugin_registry = PluginRegistry::default();
 
-    // In Android, we'd normally extract this to internal storage, but for now we read from local .plugins
-    let loader = crate::plugin::PluginLoader::new(".plugins");
-    loader.register_all(&mut plugin_registry);
+    // In Android, we read from bundled assets instead of the local filesystem.
+    crate::plugin::PluginLoader::register_all_from_assets(
+        &mut plugin_registry,
+        &app.asset_manager(),
+    );
 
     while running {
         app.poll_events(Some(Duration::from_millis(16)), |event| match event {
@@ -222,7 +225,14 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     );
 
                     // Dispatch any queued events to plugins BEFORE rendering
-                    plugin_registry.dispatch(&event_bus, &style_map, &data_map);
+                    plugin_registry.dispatch(&event_bus, &style_map, &data_map, &action_queue);
+
+                    // Process any actions emitted by plugins
+                    if let Ok(mut q) = action_queue.lock() {
+                        for action in q.drain(..) {
+                            let _ = launch_action(action);
+                        }
+                    }
 
                     renderer.begin_frame(width, height);
                     renderer.clear(BACKGROUND);
@@ -316,34 +326,43 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                 | MotionAction::Move
                                                 | MotionAction::PointerDown => {
                                                     let prev_hovered = state.hovered;
-                                                    let hovered_btn = find_hovered_button(
+                                                    let hovered_data = find_hovered_button(
                                                         &root_element,
                                                         &layout_tree,
                                                         point,
                                                     );
+                                                    let hovered_btn = hovered_data.map(|(id, _)| id);
                                                     let _ = LauncherApp::update(
                                                         &mut state,
                                                         LauncherMessage::ButtonHovered(hovered_btn),
                                                     );
-                                                    // Push hover events to the bus
-                                                    if let Some(btn) = hovered_btn {
-                                                        event_bus.push(UiEvent::Hover(
-                                                            crate::core::ui::widget::ids::from_button_id(btn),
-                                                        ));
-                                                    } else if let Some(prev) = prev_hovered {
+
+                                                    if prev_hovered != hovered_btn
+                                                        && let Some(prev) = prev_hovered
+                                                    {
                                                         event_bus.push(UiEvent::HoverEnd(
                                                             crate::core::ui::widget::ids::from_button_id(prev),
+                                                        ));
+                                                    }
+                                                    if let Some((btn, rect)) = hovered_data {
+                                                        event_bus.push(UiEvent::Hover(
+                                                            crate::core::ui::widget::ids::from_button_id(btn),
+                                                            rect.width,
+                                                            rect.height,
+                                                            point.x - rect.x,
+                                                            point.y - rect.y,
                                                         ));
                                                     }
                                                     InputStatus::Handled
                                                 }
                                                 MotionAction::Up | MotionAction::PointerUp => {
                                                     let prev_hovered = state.hovered;
-                                                    let hovered_btn = find_hovered_button(
+                                                    let hovered_data = find_hovered_button(
                                                         &root_element,
                                                         &layout_tree,
                                                         point,
                                                     );
+                                                    let hovered_btn = hovered_data.map(|(id, _)| id);
                                                     let _ = LauncherApp::update(
                                                         &mut state,
                                                         LauncherMessage::ButtonHovered(hovered_btn),
@@ -354,29 +373,31 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                         ));
                                                     }
 
-                                                    if let Some(clicked_btn) = find_clicked_button(
+                                                    if let Some((clicked_btn, rect)) = find_clicked_button(
                                                         &root_element,
                                                         &layout_tree,
                                                         point,
                                                     ) {
-                                                        // Push Click before updating state
+                                                        // Push Click event ONLY; let plugins decide actions
                                                         event_bus.push(UiEvent::Click(
                                                             crate::core::ui::widget::ids::from_button_id(clicked_btn),
+                                                            rect.width,
+                                                            rect.height,
                                                         ));
-                                                        if let Some(action) = LauncherApp::update(
-                                                            &mut state,
-                                                            LauncherMessage::ButtonClicked(clicked_btn),
-                                                        ) {
-                                                            let _ = launch_action(action);
-                                                        }
                                                     }
                                                     InputStatus::Handled
                                                 }
                                                 MotionAction::Cancel => {
+                                                    let prev_hovered = state.hovered;
                                                     let _ = LauncherApp::update(
                                                         &mut state,
                                                         LauncherMessage::ButtonHovered(None),
                                                     );
+                                                    if let Some(prev) = prev_hovered {
+                                                        event_bus.push(UiEvent::HoverEnd(
+                                                            crate::core::ui::widget::ids::from_button_id(prev),
+                                                        ));
+                                                    }
                                                     InputStatus::Handled
                                                 }
                                                 _ => InputStatus::Unhandled,

@@ -22,5 +22,11 @@ pub trait UiPlugin: Send + Sync {
     ///
     /// The plugin may update `StyleMap` or `DataMap` to change the appearance
     /// or content of widgets without touching `app.rs`.
-    fn on_event(&self, event: &UiEvent, styles: &StyleMap, data: &DataMap);
+    fn on_event(
+        &self,
+        event: &UiEvent,
+        styles: &StyleMap,
+        data: &DataMap,
+        actions: &std::sync::Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
+    );
 }
