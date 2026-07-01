@@ -26,8 +26,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::ui::event::{EventBus, UiEvent};
     use crate::core::ui::style_map::StyleMap;
     use crate::core::{
-        Application, GlowRenderer, Point, Renderer,
-        ScreenMetrics, Size, calculate_layout,
+        Application, GlowRenderer, Point, Renderer, ScreenMetrics, Size, calculate_layout,
     };
     use crate::plugin::registry::PluginRegistry;
     use android_activity::{
@@ -203,8 +202,10 @@ pub fn android_main(app: android_activity::AndroidApp) {
                         u16::try_from(window.height()).expect("window height fits in u16"),
                     );
 
-                    crate::core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
-                    crate::core::types::SCREEN_HEIGHT.store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                    crate::core::types::SCREEN_WIDTH
+                        .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                    crate::core::types::SCREEN_HEIGHT
+                        .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
                     let (safe_area_top, safe_area_bottom) =
                         crate::platform::android::jni::get_safe_area(&app)
@@ -249,7 +250,14 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     renderer.begin_frame(width, height);
                     renderer.clear(BACKGROUND);
 
-                    draw_ui(renderer, &root_element, &layout_tree, &metrics, &style_map, &data_map);
+                    draw_ui(
+                        renderer,
+                        &root_element,
+                        &layout_tree,
+                        &metrics,
+                        &style_map,
+                        &data_map,
+                    );
 
                     renderer.end_frame();
 
@@ -349,9 +357,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     if prev_hovered != hovered_btn
                                                         && let Some(prev) = prev_hovered
                                                     {
-                                                        event_bus.push(UiEvent::HoverEnd(
-                                                            prev,
-                                                        ));
+                                                        event_bus.push(UiEvent::HoverEnd(prev));
                                                     }
                                                     if let Some((btn, rect)) = hovered_data {
                                                         event_bus.push(UiEvent::Hover(
@@ -373,16 +379,16 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     );
                                                     hovered_btn = hovered_data.map(|(id, _)| id);
                                                     if let Some(prev) = prev_hovered {
-                                                        event_bus.push(UiEvent::HoverEnd(
-                                                            prev,
-                                                        ));
+                                                        event_bus.push(UiEvent::HoverEnd(prev));
                                                     }
 
-                                                    if let Some((clicked_btn, rect)) = find_clicked_button(
-                                                        &root_element,
-                                                        &layout_tree,
-                                                        point,
-                                                    ) {
+                                                    if let Some((clicked_btn, rect)) =
+                                                        find_clicked_button(
+                                                            &root_element,
+                                                            &layout_tree,
+                                                            point,
+                                                        )
+                                                    {
                                                         // Push Click event ONLY; let plugins decide actions
                                                         event_bus.push(UiEvent::Click(
                                                             clicked_btn,
@@ -396,9 +402,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     let prev_hovered = hovered_btn;
                                                     hovered_btn = None;
                                                     if let Some(prev) = prev_hovered {
-                                                        event_bus.push(UiEvent::HoverEnd(
-                                                            prev,
-                                                        ));
+                                                        event_bus.push(UiEvent::HoverEnd(prev));
                                                     }
                                                     InputStatus::Handled
                                                 }

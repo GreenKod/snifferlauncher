@@ -3,10 +3,7 @@ use crate::core::style::{BACKGROUND, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::core::ui::data_map::DataMap;
 use crate::core::ui::event::{EventBus, UiEvent};
 use crate::core::ui::style_map::StyleMap;
-use crate::core::{
-    Action, GlowRenderer, Point,
-    Renderer, ScreenMetrics, Size, calculate_layout,
-};
+use crate::core::{Action, GlowRenderer, Point, Renderer, ScreenMetrics, Size, calculate_layout};
 use crate::plugin::registry::PluginRegistry;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -90,13 +87,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut running = true;
     while running {
         // Fetch dynamic UI tree from plugins EVERY FRAME
-        let root_element = plugin_registry.build_ui().unwrap_or_else(|| {
-            crate::core::types::Element::Container {
-                id: None,
-                style: crate::core::style::Style::default(),
-                children: vec![],
-            }
-        });
+        let root_element =
+            plugin_registry
+                .build_ui()
+                .unwrap_or_else(|| crate::core::types::Element::Container {
+                    id: None,
+                    style: crate::core::style::Style::default(),
+                    children: vec![],
+                });
         let mut clicked_pos = None;
         let mut mouse_moved = false;
 
@@ -148,13 +146,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // 8. Query current drawable size each frame (handles resize and DPI changes)
         let (log_w, log_h) = window.size();
         let (phys_w, phys_h) = window.drawable_size();
-        
+
         let width = f32::from(u16::try_from(phys_w).expect("drawable width fits in u16"));
         let height = f32::from(u16::try_from(phys_h).expect("drawable height fits in u16"));
-        
-        crate::core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
-        crate::core::types::SCREEN_HEIGHT.store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
-        
+
+        crate::core::types::SCREEN_WIDTH
+            .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+        crate::core::types::SCREEN_HEIGHT
+            .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
+
         let scale_x = width / f32::from(u16::try_from(log_w).unwrap_or(1));
         let scale_y = height / f32::from(u16::try_from(log_h).unwrap_or(1));
 
@@ -164,7 +164,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             scaled_last_mouse_pos.x *= scale_x;
             scaled_last_mouse_pos.y *= scale_y;
         }
-        
+
         let scaled_clicked_pos = clicked_pos.map(|mut pos| {
             pos.x *= scale_x;
             pos.y *= scale_y;
@@ -180,7 +180,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // 10. Translate pointer events → UiEvent → EventBus
         if mouse_moved {
             let prev_hovered = hovered_btn;
-            let hovered_data = find_hovered_button(&root_element, &layout_tree, scaled_last_mouse_pos);
+            let hovered_data =
+                find_hovered_button(&root_element, &layout_tree, scaled_last_mouse_pos);
             hovered_btn = hovered_data.map(|(id, _)| id);
 
             match (prev_hovered, hovered_data) {

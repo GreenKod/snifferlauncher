@@ -114,15 +114,18 @@ pub fn build_font_atlas(
             }
         }
 
-        glyph_infos.insert(*character, GlyphInfo {
-            atlas_x: dst_x,
-            atlas_y: dst_y,
-            width: g.width,
-            height: g.height,
-            bearing_x: g.bearing_x,
-            bearing_y: g.bearing_y,
-            advance_width: g.advance_width,
-        });
+        glyph_infos.insert(
+            *character,
+            GlyphInfo {
+                atlas_x: dst_x,
+                atlas_y: dst_y,
+                width: g.width,
+                height: g.height,
+                bearing_x: g.bearing_x,
+                bearing_y: g.bearing_y,
+                advance_width: g.advance_width,
+            },
+        );
 
         x_cursor += g.width + PADDING * 2;
     }
@@ -148,7 +151,11 @@ pub fn build_font_atlas(
     })
 }
 
-fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec<(char, GlyphData)> {
+fn collect_glyph_data(
+    font: &FontRef,
+    pixel_size: f32,
+    scale_factor: f32,
+) -> Vec<(char, GlyphData)> {
     let mut context = ScaleContext::new();
     let mut scaler = context.builder(*font).size(pixel_size).hint(true).build();
 
@@ -210,7 +217,7 @@ fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec
                 // Generate SDF from the rasterized bitmap
                 let spread = 8;
                 let (sdf_bitmap, sdf_w, sdf_h) = generate_sdf(&data, w, h, spread);
-                
+
                 // Adjust bearings for the padded SDF size
                 let sdf_bx = bx - spread as f32;
                 let sdf_by = by + spread as f32;
@@ -243,11 +250,11 @@ fn generate_sdf(bitmap: &[u8], width: u32, height: u32, spread: u32) -> (Vec<u8>
     if width == 0 || height == 0 {
         return (Vec::new(), 0, 0);
     }
-    
+
     let p_width = width + 2 * spread;
     let p_height = height + 2 * spread;
     let mut padded = vec![0u8; (p_width * p_height) as usize];
-    
+
     // Copy bitmap to center of padded buffer
     for y in 0..height {
         for x in 0..width {
@@ -256,17 +263,17 @@ fn generate_sdf(bitmap: &[u8], width: u32, height: u32, spread: u32) -> (Vec<u8>
             padded[dst] = bitmap[src];
         }
     }
-    
+
     let mut sdf = vec![0u8; (p_width * p_height) as usize];
     let spread_f = spread as f32;
     let spread_i = spread as isize;
-    
+
     for y in 0..p_height as isize {
         for x in 0..p_width as isize {
             let idx = (y * p_width as isize + x) as usize;
             let inside = padded[idx] > 127;
             let mut min_dist_sq = spread_f * spread_f;
-            
+
             let start_dy = (-spread_i).max(-y);
             let end_dy = spread_i.min((p_height as isize) - 1 - y);
             let start_dx = (-spread_i).max(-x);
@@ -278,7 +285,7 @@ fn generate_sdf(bitmap: &[u8], width: u32, height: u32, spread: u32) -> (Vec<u8>
                     let nx = (x + dx) as usize;
                     let n_idx = ny * p_width as usize + nx;
                     let n_inside = padded[n_idx] > 127;
-                    
+
                     if inside != n_inside {
                         let dist_sq = (dx * dx + dy * dy) as f32;
                         if dist_sq < min_dist_sq {
@@ -287,19 +294,19 @@ fn generate_sdf(bitmap: &[u8], width: u32, height: u32, spread: u32) -> (Vec<u8>
                     }
                 }
             }
-            
+
             let min_dist = min_dist_sq.sqrt();
             let dist = if inside { min_dist } else { -min_dist };
-            
+
             // Map [-spread, spread] to [0, 255] where 127.5 is the exact edge
             let norm = 0.5 + 0.5 * (dist / spread_f);
-            
+
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let val = (norm * 255.0).clamp(0.0, 255.0) as u8;
             sdf[idx] = val;
         }
     }
-    
+
     (sdf, p_width, p_height)
 }
 

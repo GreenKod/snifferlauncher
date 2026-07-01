@@ -1,4 +1,4 @@
-// main.js - Declarative UI in Vanilla JS for SnifferLauncher
+// main.js - Declarative UI in Vanilla JS for SnifferLauncher"
 
 // Helper to convert #RRGGBB to Rust's u32 color
 function hexToColor(hex) {

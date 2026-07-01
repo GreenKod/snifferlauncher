@@ -20,12 +20,15 @@ impl PluginLoader {
     /// Instantiate and register all plugins.
     pub fn register_all(&self, registry: &mut PluginRegistry) {
         let main_js_path = self.assets_dir.join("main.js");
-        
+
         match fs::read_to_string(&main_js_path) {
             Ok(content) => match crate::plugin::JsPlugin::new(content) {
                 Ok(plugin) => {
                     registry.register(&(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>));
-                    println!("Successfully loaded JS plugin from {}", main_js_path.display());
+                    println!(
+                        "Successfully loaded JS plugin from {}",
+                        main_js_path.display()
+                    );
                 }
                 Err(e) => eprintln!("Failed to instantiate JS plugin: {e}"),
             },

@@ -454,7 +454,10 @@ impl Renderer for GlowRenderer {
                         continue;
                     }
 
-                    let glyph = atlas.glyphs.get(&c).unwrap_or_else(|| atlas.glyphs.get(&'?').unwrap());
+                    let glyph = atlas
+                        .glyphs
+                        .get(&c)
+                        .unwrap_or_else(|| atlas.glyphs.get(&'?').unwrap());
                     if glyph.width == 0 || glyph.height == 0 {
                         curr_x = glyph.advance_width.mul_add(scale, curr_x);
                         continue;

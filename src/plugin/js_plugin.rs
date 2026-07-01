@@ -24,26 +24,26 @@ unsafe impl Sync for JsPlugin {}
 
 impl JsPlugin {
     /// Initialize QuickJS runtime and context.
-    /// 
+    ///
     /// # Errors
     /// Returns a String error if QuickJS runtime or context creation fails.
     pub fn new(script_content: String) -> Result<Self, String> {
         let runtime = Runtime::new().map_err(|e| format!("QuickJS runtime error: {e}"))?;
         let context = Context::full(&runtime).map_err(|e| format!("QuickJS context error: {e}"))?;
-        
+
         let ui_tree = Arc::new(Mutex::new(None));
-        
+
         let plugin = Self {
             script_content,
             runtime,
             context,
-            subscriptions: vec![], // For now, we subscribe to everything (or nothing specifically), 
-                                   // but let's just make it a global event listener.
+            subscriptions: vec![], // For now, we subscribe to everything (or nothing specifically),
+            // but let's just make it a global event listener.
             ui_tree: ui_tree.clone(),
         };
-        
+
         plugin.init_js_env(ui_tree)?;
-        
+
         Ok(plugin)
     }
 
@@ -52,46 +52,59 @@ impl JsPlugin {
             let globals = ctx.globals();
 
             // host_set_ui
-            let set_ui_func = Function::new(ctx.clone(), move |json_str: String| {
-                match serde_json::from_str::<Element>(&json_str) {
-                    Ok(parsed) => {
-                        if let Ok(mut lock) = ui_tree.lock() {
-                            *lock = Some(parsed);
+            let set_ui_func =
+                Function::new(
+                    ctx.clone(),
+                    move |json_str: String| match serde_json::from_str::<Element>(&json_str) {
+                        Ok(parsed) => {
+                            if let Ok(mut lock) = ui_tree.lock() {
+                                *lock = Some(parsed);
+                            }
                         }
-                    }
-                    Err(e) => {
-                        println!("JS Error: Failed to parse host_set_ui JSON: {e}");
-                    }
-                }
-            }).unwrap();
+                        Err(e) => {
+                            println!("JS Error: Failed to parse host_set_ui JSON: {e}");
+                        }
+                    },
+                )
+                .unwrap();
             globals.set("host_set_ui", set_ui_func).unwrap();
 
             // host_log
             let log_func = Function::new(ctx.clone(), |msg: String| {
                 println!("JS Log: {msg}");
-            }).unwrap();
+            })
+            .unwrap();
             globals.set("host_log", log_func).unwrap();
 
             // host_hash (converts string to WidgetId hash as string)
             let hash_func = Function::new(ctx.clone(), |s: String| -> String {
                 crate::core::ui::widget::fnv1a(s.as_bytes()).to_string()
-            }).unwrap();
+            })
+            .unwrap();
             globals.set("host_hash", hash_func).unwrap();
 
             // host_screen_width
             let get_width_func = Function::new(ctx.clone(), || -> f32 {
-                f32::from_bits(crate::core::types::SCREEN_WIDTH.load(std::sync::atomic::Ordering::Relaxed))
-            }).unwrap();
+                f32::from_bits(
+                    crate::core::types::SCREEN_WIDTH.load(std::sync::atomic::Ordering::Relaxed),
+                )
+            })
+            .unwrap();
             globals.set("host_screen_width", get_width_func).unwrap();
 
             // host_screen_height
             let get_height_func = Function::new(ctx.clone(), || -> f32 {
-                f32::from_bits(crate::core::types::SCREEN_HEIGHT.load(std::sync::atomic::Ordering::Relaxed))
-            }).unwrap();
+                f32::from_bits(
+                    crate::core::types::SCREEN_HEIGHT.load(std::sync::atomic::Ordering::Relaxed),
+                )
+            })
+            .unwrap();
             globals.set("host_screen_height", get_height_func).unwrap();
 
             // evaluate script
-            let _ = ctx.eval::<Value, _>(self.script_content.as_bytes()).map_err(|e| e.to_string())?;
+            let _ = ctx
+                .eval::<Value, _>(self.script_content.as_bytes())
+                .map_err(|e| e.to_string())?;
             Ok::<(), String>(())
         })?;
 
@@ -130,11 +143,15 @@ impl UiPlugin for JsPlugin {
             let globals = ctx.globals();
             if let Ok(on_event_fn) = globals.get::<_, rquickjs::Function>("onEvent") {
                 let event_json = match event {
-                    UiEvent::Click(id, w, h) => format!(r#"{{"type":"Click","id":"{id}","w":{w},"h":{h}}}"#),
-                    UiEvent::Hover(id, w, h, x, y) => format!(r#"{{"type":"Hover","id":"{id}","w":{w},"h":{h},"x":{x},"y":{y}}}"#),
+                    UiEvent::Click(id, w, h) => {
+                        format!(r#"{{"type":"Click","id":"{id}","w":{w},"h":{h}}}"#)
+                    }
+                    UiEvent::Hover(id, w, h, x, y) => {
+                        format!(r#"{{"type":"Hover","id":"{id}","w":{w},"h":{h},"x":{x},"y":{y}}}"#)
+                    }
                     UiEvent::HoverEnd(id) => format!(r#"{{"type":"HoverEnd","id":"{id}"}}"#),
                 };
-                
+
                 let res: Result<String, _> = on_event_fn.call((event_json,));
                 if let Ok(_cmds_json) = res {
                     // Expect JS to return an array of DrawCommands or Actions in JSON
