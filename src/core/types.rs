@@ -1,6 +1,10 @@
 use crate::core::style::Style;
 
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::AtomicU32;
+
+pub static SCREEN_WIDTH: AtomicU32 = AtomicU32::new(0);
+pub static SCREEN_HEIGHT: AtomicU32 = AtomicU32::new(0);
 
 pub type ElementChildren = Vec<Element>;
 

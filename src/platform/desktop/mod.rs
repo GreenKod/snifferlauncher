@@ -152,6 +152,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let width = f32::from(u16::try_from(phys_w).expect("drawable width fits in u16"));
         let height = f32::from(u16::try_from(phys_h).expect("drawable height fits in u16"));
         
+        crate::core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+        crate::core::types::SCREEN_HEIGHT.store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
+        
         let scale_x = width / f32::from(u16::try_from(log_w).unwrap_or(1));
         let scale_y = height / f32::from(u16::try_from(log_h).unwrap_or(1));
 

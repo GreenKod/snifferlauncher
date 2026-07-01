@@ -203,6 +203,9 @@ pub fn android_main(app: android_activity::AndroidApp) {
                         u16::try_from(window.height()).expect("window height fits in u16"),
                     );
 
+                    crate::core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                    crate::core::types::SCREEN_HEIGHT.store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
+
                     let (safe_area_top, safe_area_bottom) =
                         crate::platform::android::jni::get_safe_area(&app)
                             .map(|(top, bottom)| {

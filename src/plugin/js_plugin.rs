@@ -71,6 +71,18 @@ impl JsPlugin {
             }).unwrap();
             globals.set("host_hash", hash_func).unwrap();
 
+            // host_screen_width
+            let get_width_func = Function::new(ctx.clone(), || -> f32 {
+                f32::from_bits(crate::core::types::SCREEN_WIDTH.load(std::sync::atomic::Ordering::Relaxed))
+            }).unwrap();
+            globals.set("host_screen_width", get_width_func).unwrap();
+
+            // host_screen_height
+            let get_height_func = Function::new(ctx.clone(), || -> f32 {
+                f32::from_bits(crate::core::types::SCREEN_HEIGHT.load(std::sync::atomic::Ordering::Relaxed))
+            }).unwrap();
+            globals.set("host_screen_height", get_height_func).unwrap();
+
             // evaluate script
             let _ = ctx.eval::<Value, _>(self.script_content.as_bytes()).map_err(|e| e.to_string())?;
             Ok::<(), String>(())

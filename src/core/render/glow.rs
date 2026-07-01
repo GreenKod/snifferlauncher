@@ -454,19 +454,7 @@ impl Renderer for GlowRenderer {
                         continue;
                     }
 
-                    let code = c as u32;
-                    let idx = if (32..=127).contains(&code) {
-                        usize::from(
-                            u16::try_from(code - 32).expect("ASCII glyph index fits in u16"),
-                        )
-                    } else {
-                        // fallback: '?' character
-                        usize::from(
-                            u16::try_from('?' as u32 - 32).expect("fallback glyph index fits"),
-                        )
-                    };
-
-                    let glyph = &atlas.glyphs[idx];
+                    let glyph = atlas.glyphs.get(&c).unwrap_or_else(|| atlas.glyphs.get(&'?').unwrap());
                     if glyph.width == 0 || glyph.height == 0 {
                         curr_x = glyph.advance_width.mul_add(scale, curr_x);
                         continue;

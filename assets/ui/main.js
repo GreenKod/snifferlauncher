@@ -7,6 +7,13 @@ function hexToColor(hex) {
     return parseInt(hex, 16);
 }
 
+function getScreenSize() {
+    return {
+        "width": host_screen_width(),
+        "height": host_screen_height()
+    };
+}
+
 const UI_TREE = {
     "Container": {
         "id": "root",
@@ -15,8 +22,8 @@ const UI_TREE = {
             "flex_direction": "Column",
             "justify_content": "Center",
             "align_items": "Center",
-            "width": "Auto",
-            "height": "Auto",
+            "width": { "Percent": 100.0 },
+            "height": { "Percent": 100.0 }, // Ekranın %100'ünü kaplar
             "background_color": hexToColor("#FFD700") // Yellow BG
         },
         "children": [
@@ -28,6 +35,17 @@ const UI_TREE = {
                         "text_color": hexToColor("#000000"), // Black Text
                         "text_size": 48.0,
                         "width": { "Pixels": 220.0 } // Fixed width so it centers correctly
+                    }
+                }
+            },
+            {
+                "Label": {
+                    "id": "btn-width",
+                    "text": "Genişliği Göster",
+                    "style": {
+                        "text_color": hexToColor("#000000"), // Black Text
+                        "text_size": 32.0,
+                        "width": { "Pixels": 300.0 }
                     }
                 }
             }
@@ -58,6 +76,11 @@ globalThis.onEvent = function (eventJsonString) {
         UI_TREE.style.background_color = hexToColor("#00FF00"); // Green
 
         // Send updated UI to Rust
+        host_set_ui(JSON.stringify(UI_TREE));
+    } else if (event.type === "Click" && event.id === host_hash("btn-width")) {
+        let w = host_screen_width();
+        let h = host_screen_height();
+        UI_TREE.children[1].Label.text = "Genişlik: " + w + "x" + h;
         host_set_ui(JSON.stringify(UI_TREE));
     }
 
