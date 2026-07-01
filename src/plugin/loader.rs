@@ -1,138 +1,35 @@
-use crate::plugin::HoverEffectPlugin;
 use crate::plugin::registry::PluginRegistry;
-use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// Plugin type: either a native (compiled-in) Rust plugin or a Wasm sandbox plugin.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PluginType {
-    Native,
-    Wasm,
-}
-
-/// Minimal location block — only used when `plugin_type` is `wasm`.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PluginLocation {
-    /// Relative path from `.plugins/` to the compiled `.wasm` file.
-    /// Example: `"com.greenkod.wasm-sample/wasm_sample.wasm"`
-    pub path: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PluginIdentifier {
-    pub id: String,
-    pub uuid: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PluginMetadata {
-    #[serde(rename = "isBuiltin", default)]
-    pub is_builtin: bool,
-    #[serde(rename = "publisherDisplayName")]
-    pub publisher_display_name: String,
-}
-
-/// A single entry in `plugins.json`.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PluginEntry {
-    pub identifier: PluginIdentifier,
-    pub version: String,
-    #[serde(rename = "type")]
-    pub plugin_type: PluginType,
-    /// True when the plugin source lives in `.plugins/<source_dir>/`.
-    /// The build script compiles it; the output `.wasm` lands in `location.path`.
-    pub has_source: bool,
-    /// Present only when `has_source` is true. Folder name inside `.plugins/`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_dir: Option<String>,
-    /// Present only for `type = "wasm"` plugins.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub location: Option<PluginLocation>,
-    pub metadata: PluginMetadata,
-}
-
-/// Loads and registers plugins declared in `.plugins/plugins.json`.
+/// Loads and registers JavaScript plugins from the assets directory.
 pub struct PluginLoader {
-    plugins_dir: PathBuf,
+    assets_dir: PathBuf,
 }
 
 impl PluginLoader {
-    /// Create a new loader pointing to the specified directory (e.g., `.plugins`).
+    /// Create a new loader pointing to the specified directory (e.g., `assets/ui`).
     #[must_use]
-    pub fn new(plugins_dir: impl AsRef<Path>) -> Self {
+    pub fn new(assets_dir: impl AsRef<Path>) -> Self {
         Self {
-            plugins_dir: plugins_dir.as_ref().to_path_buf(),
+            assets_dir: assets_dir.as_ref().to_path_buf(),
         }
     }
 
-    /// Read the `plugins.json` file and parse the entries.
-    ///
-    /// # Errors
-    /// Returns an empty list if the file doesn't exist or cannot be parsed.
-    #[must_use]
-    pub fn load_manifest(&self) -> Vec<PluginEntry> {
-        let json_path = self.plugins_dir.join("plugins.json");
-        match fs::read_to_string(&json_path) {
-            Ok(content) => match serde_json::from_str::<Vec<PluginEntry>>(&content) {
-                Ok(entries) => entries,
-                Err(e) => {
-                    eprintln!("Failed to parse plugins.json: {e}");
-                    Vec::new()
-                }
-            },
-            Err(e) => {
-                eprintln!(
-                    "Could not read plugins.json at {}: {e}",
-                    json_path.display()
-                );
-                Vec::new()
-            }
-        }
-    }
-
-    /// Instantiate and register all plugins declared in the manifest.
+    /// Instantiate and register all plugins.
     pub fn register_all(&self, registry: &mut PluginRegistry) {
-        for entry in self.load_manifest() {
-            println!("Loading plugin: {} v{}", entry.identifier.id, entry.version);
-
-            match entry.plugin_type {
-                PluginType::Wasm => {
-                    let Some(loc) = &entry.location else {
-                        eprintln!("Wasm plugin {} has no location field", entry.identifier.id);
-                        continue;
-                    };
-                    let wasm_path = self.plugins_dir.join(&loc.path);
-                    match fs::read(&wasm_path) {
-                        Ok(bytes) => match crate::plugin::WasmPlugin::new(&bytes) {
-                            Ok(plugin) => {
-                                registry.register(
-                                    &(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>),
-                                );
-                                println!(
-                                    "Successfully loaded Wasm plugin: {}",
-                                    entry.identifier.id
-                                );
-                            }
-                            Err(e) => eprintln!(
-                                "Failed to instantiate Wasm plugin {}: {e}",
-                                entry.identifier.id
-                            ),
-                        },
-                        Err(e) => eprintln!("Could not read .wasm at {}: {e}", wasm_path.display()),
-                    }
+        let main_js_path = self.assets_dir.join("main.js");
+        
+        match fs::read_to_string(&main_js_path) {
+            Ok(content) => match crate::plugin::JsPlugin::new(content) {
+                Ok(plugin) => {
+                    registry.register(&(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>));
+                    println!("Successfully loaded JS plugin from {}", main_js_path.display());
                 }
-                PluginType::Native => match entry.identifier.id.as_str() {
-                    "com.greenkod.hover-effect" => {
-                        registry.register(
-                            &(Arc::new(HoverEffectPlugin) as Arc<dyn crate::plugin::UiPlugin>),
-                        );
-                    }
-                    id => eprintln!("Unknown native plugin ID: {id}"),
-                },
-            }
+                Err(e) => eprintln!("Failed to instantiate JS plugin: {e}"),
+            },
+            Err(e) => eprintln!("Could not read main.js at {}: {e}", main_js_path.display()),
         }
     }
 }
@@ -140,89 +37,27 @@ impl PluginLoader {
 #[cfg(target_os = "android")]
 impl PluginLoader {
     /// Read plugins from Android Assets instead of the filesystem.
-    ///
-    /// # Panics
-    /// Panics if the hardcoded "plugins.json" string contains a null byte.
     pub fn register_all_from_assets(
         registry: &mut PluginRegistry,
         asset_manager: &ndk::asset::AssetManager,
     ) {
         use std::io::Read;
-
-        println!("Loading plugins from Android assets...");
-
-        // When assets = ".plugins" is used in Cargo.toml, the contents of .plugins
-        // are copied into the root of the assets.
-        let json_c_str = std::ffi::CString::new("plugins.json").unwrap();
-        let json_content = if let Some(mut asset) = asset_manager.open(&json_c_str) {
-            let mut buf = String::new();
-            if let Err(e) = asset.read_to_string(&mut buf) {
-                eprintln!("Failed to read plugins.json from assets: {e}");
-                return;
-            }
-            buf
-        } else {
-            eprintln!("plugins.json not found in assets");
-            return;
-        };
-
-        let entries = match serde_json::from_str::<Vec<PluginEntry>>(&json_content) {
-            Ok(e) => e,
-            Err(e) => {
-                eprintln!("Failed to parse plugins.json from assets: {e}");
-                return;
-            }
-        };
-
-        for entry in entries {
-            println!(
-                "Loading plugin from assets: {} v{}",
-                entry.identifier.id, entry.version
-            );
-
-            match entry.plugin_type {
-                PluginType::Wasm => {
-                    let Some(loc) = &entry.location else {
-                        eprintln!("Wasm plugin {} has no location", entry.identifier.id);
-                        continue;
-                    };
-
-                    let path_c_str = std::ffi::CString::new(loc.path.clone()).unwrap();
-                    match asset_manager.open(&path_c_str) {
-                        Some(mut asset) => {
-                            let mut bytes = Vec::new();
-                            if let Err(e) = asset.read_to_end(&mut bytes) {
-                                eprintln!("Failed to read wasm asset: {e}");
-                                continue;
-                            }
-                            match crate::plugin::WasmPlugin::new(&bytes) {
-                                Ok(plugin) => {
-                                    registry.register(
-                                        &(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>),
-                                    );
-                                    println!(
-                                        "Successfully loaded Wasm plugin from assets: {}",
-                                        entry.identifier.id
-                                    );
-                                }
-                                Err(e) => eprintln!(
-                                    "Failed to instantiate Wasm plugin {}: {e}",
-                                    entry.identifier.id
-                                ),
-                            }
-                        }
-                        None => eprintln!("Could not find wasm asset at {}", loc.path),
+        let cstr = std::ffi::CString::new("ui/main.js").unwrap();
+        if let Some(mut asset) = asset_manager.open(cstr.as_c_str()) {
+            let mut content = String::new();
+            if let Ok(_) = asset.read_to_string(&mut content) {
+                match crate::plugin::JsPlugin::new(content) {
+                    Ok(plugin) => {
+                        registry.register(&(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>));
+                        println!("Successfully loaded JS plugin from Android Assets");
                     }
+                    Err(e) => eprintln!("Failed to instantiate JS plugin on Android: {e}"),
                 }
-                PluginType::Native => match entry.identifier.id.as_str() {
-                    "com.greenkod.hover-effect" => {
-                        registry.register(
-                            &(Arc::new(HoverEffectPlugin) as Arc<dyn crate::plugin::UiPlugin>),
-                        );
-                    }
-                    id => eprintln!("Unknown native plugin ID: {id}"),
-                },
+            } else {
+                eprintln!("Failed to read content of ui/main.js from assets");
             }
+        } else {
+            eprintln!("Failed to open ui/main.js from Android Assets");
         }
     }
 }

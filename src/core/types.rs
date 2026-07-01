@@ -1,17 +1,11 @@
 use crate::core::style::Style;
 
+use serde::{Deserialize, Serialize};
+
 pub type ElementChildren = Vec<Element>;
 
-/// Identifies which button in the launcher was interacted with.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ButtonId {
-    Settings,
-    Contacts,
-    Camera,
-}
-
-/// High-level action dispatched when the user clicks a button.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// High-level action dispatched by the host or plugins.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Action {
     OpenSettings,
     OpenContacts,
@@ -19,24 +13,16 @@ pub enum Action {
 }
 
 /// Platform-agnostic UI tree node.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Element {
     Container {
+        id: Option<String>,
         style: Style,
         children: ElementChildren,
     },
-    Button {
-        id: ButtonId,
-        title: String,
-        style: Style,
-        hovered: bool,
-    },
     Label {
+        id: Option<String>,
         text: String,
-        style: Style,
-    },
-    Icon {
-        id: ButtonId,
         style: Style,
     },
 }
@@ -47,9 +33,15 @@ impl Element {
     pub const fn style(&self) -> &Style {
         match self {
             Self::Container { style, .. }
-            | Self::Button { style, .. }
-            | Self::Label { style, .. }
-            | Self::Icon { style, .. } => style,
+            | Self::Label { style, .. } => style,
+        }
+    }
+
+    /// Returns the ID of the element, if any.
+    #[must_use]
+    pub fn id(&self) -> Option<&str> {
+        match self {
+            Self::Container { id, .. } | Self::Label { id, .. } => id.as_deref(),
         }
     }
 }

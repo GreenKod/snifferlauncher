@@ -6,6 +6,7 @@ pub type LayoutChildren = Vec<LayoutNode>;
 
 #[derive(Clone, Debug)]
 pub struct LayoutNode {
+    pub element: Element,
     pub rect: Rect,
     pub children: LayoutChildren,
 }
@@ -27,8 +28,9 @@ fn estimate_text_size(text: &str, text_size: f32) -> Size {
 
 impl LayoutNode {
     #[must_use]
-    pub const fn new(rect: Rect) -> Self {
+    pub fn new(element: Element, rect: Rect) -> Self {
         Self {
+            element,
             rect,
             children: Vec::new(),
         }
@@ -68,8 +70,6 @@ pub fn calculate_layout(
         Dimension::Percent(p) => parent_size.height * (p / 100.0),
         Dimension::Auto => match element {
             Element::Label { text, .. } => estimate_text_size(text, style.text_size).height,
-            Element::Icon { .. } => 56.0,     // Standard icon size
-            Element::Button { .. } => 86.0,   // Standard button height
             Element::Container { .. } => 0.0, // Will be computed after children layout
         },
     };
@@ -102,8 +102,6 @@ pub fn calculate_layout(
                         Element::Label { text, .. } => {
                             estimate_text_size(text, child_style.text_size).height
                         }
-                        Element::Icon { .. } => 56.0,
-                        Element::Button { .. } => 86.0,
                         Element::Container { .. } => 0.0, // Temporary
                     },
                 };
@@ -231,13 +229,15 @@ pub fn calculate_layout(
             }
 
             LayoutNode {
+                element: element.clone(),
                 rect: self_rect,
                 children: final_child_nodes,
             }
         }
-        _ => {
-            // Leaf nodes (Button, Label, Icon)
+        Element::Label { .. } => {
+            // Leaf nodes
             LayoutNode {
+                element: element.clone(),
                 rect: Rect::new(x_offset, y_offset, self_size.width, self_size.height),
                 children: Vec::new(),
             }

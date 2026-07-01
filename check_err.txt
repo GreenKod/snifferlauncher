@@ -1,0 +1,88 @@
+   Compiling snifferlauncher v0.1.0 (/home/greenkod/Belgeler/snifferlauncher)
+error[E0432]: unresolved import `rquickjs::Func`
+ --> src/plugin/js_plugin.rs:7:25
+  |
+7 | use rquickjs::{Context, Func, Runtime, String as JsString, Value};
+  |                         ^^^^ no `Func` in the root
+
+error: unused imports: `DataValue` and `DrawCommand`
+ --> src/plugin/js_plugin.rs:2:42
+  |
+2 | use crate::core::ui::data_map::{DataMap, DataValue, DrawCommand};
+  |                                          ^^^^^^^^^  ^^^^^^^^^^^
+  |
+  = note: `-D unused-imports` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+error: unused import: `String as JsString`
+ --> src/plugin/js_plugin.rs:7:40
+  |
+7 | use rquickjs::{Context, Func, Runtime, String as JsString, Value};
+  |                                        ^^^^^^^^^^^^^^^^^^
+
+error[E0277]: the trait bound `Vec<u8>: std::convert::From<&std::string::String>` is not satisfied
+    --> src/plugin/js_plugin.rs:65:39
+     |
+  65 |             let _ = ctx.eval::<Value, _>(&self.script_content).map_err(|e| e.to_string())?;
+     |                         ----          ^ the trait `std::convert::From<&std::string::String>` is not implemented for `Vec<u8>`
+     |                         |
+     |                         required by a bound introduced by this call
+     |
+     = help: consider casting the `&std::string::String` value to `&str`
+help: `Vec<u8>` implements trait `std::convert::From<T>`
+    --> /nix/store/gx21sl5k2f7liyvlhgzm3n6c1yp2jvql-rust-default-1.96.1/lib/rustlib/src/rust/library/alloc/src/string.rs:3304:1
+     |
+3304 | impl From<String> for Vec<u8> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `std::convert::From<std::string::String>`
+     |
+    ::: /nix/store/gx21sl5k2f7liyvlhgzm3n6c1yp2jvql-rust-default-1.96.1/lib/rustlib/src/rust/library/alloc/src/bstr.rs:214:1
+     |
+ 214 | impl From<ByteString> for Vec<u8> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `std::convert::From<ByteString>`
+     |
+    ::: /nix/store/gx21sl5k2f7liyvlhgzm3n6c1yp2jvql-rust-default-1.96.1/lib/rustlib/src/rust/library/alloc/src/ffi/c_str.rs:731:1
+     |
+ 731 | impl From<CString> for Vec<u8> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `std::convert::From<CString>`
+     |
+    ::: /nix/store/gx21sl5k2f7liyvlhgzm3n6c1yp2jvql-rust-default-1.96.1/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:4449:1
+     |
+4449 | impl From<&str> for Vec<u8> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ `std::convert::From<&str>`
+     = note: required for `&std::string::String` to implement `Into<Vec<u8>>`
+note: required by a bound in `Ctx::<'js>::eval`
+    --> /home/greenkod/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rquickjs-core-0.7.0/src/context/ctx.rs:152:36
+     |
+ 152 |     pub fn eval<V: FromJs<'js>, S: Into<Vec<u8>>>(&self, source: S) -> Result<V> {
+     |                                    ^^^^^^^^^^^^^ required by this bound in `Ctx::<'js>::eval`
+
+error: unused variable: `cmds_json`
+   --> src/plugin/js_plugin.rs:110:27
+    |
+110 |                 if let Ok(cmds_json) = res {
+    |                           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cmds_json`
+    |
+    = note: `-D unused-variables` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(unused_variables)]`
+
+error: unused variable: `styles`
+  --> src/plugin/js_plugin.rs:95:9
+   |
+95 |         styles: &StyleMap,
+   |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_styles`
+
+error: unused variable: `data`
+  --> src/plugin/js_plugin.rs:96:9
+   |
+96 |         data: &DataMap,
+   |         ^^^^ help: if this is intentional, prefix it with an underscore: `_data`
+
+error: unused variable: `actions`
+  --> src/plugin/js_plugin.rs:97:9
+   |
+97 |         actions: &Arc<Mutex<Vec<crate::core::types::Action>>>,
+   |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_actions`
+
+Some errors have detailed explanations: E0277, E0432.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `snifferlauncher` (lib) due to 8 previous errors

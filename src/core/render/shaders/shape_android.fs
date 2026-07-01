@@ -38,7 +38,7 @@ void main() {
         if (u_border_width > 0.0) {
             float border_dist = dist + u_border_width;
             float border_alpha = smoothstep(-1.0, 1.0, border_dist);
-            col = mix(u_border_color, u_color, border_alpha);
+            col = mix(u_color, u_border_color, border_alpha);
         }
         FragColor = vec4(col.rgb, col.a * alpha);
     }
