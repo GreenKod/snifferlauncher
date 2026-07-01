@@ -26,13 +26,19 @@ pub fn find_clicked_button(
                 }
             }
             if let Some(id_str) = id {
-                return Some((crate::core::ui::widget::fnv1a(id_str.as_bytes()), layout.rect));
+                return Some((
+                    crate::core::ui::widget::fnv1a(id_str.as_bytes()),
+                    layout.rect,
+                ));
             }
             None
         }
         Element::Label { id, .. } => {
             if let Some(id_str) = id {
-                return Some((crate::core::ui::widget::fnv1a(id_str.as_bytes()), layout.rect));
+                return Some((
+                    crate::core::ui::widget::fnv1a(id_str.as_bytes()),
+                    layout.rect,
+                ));
             }
             None
         }
@@ -63,9 +69,11 @@ pub fn draw_ui(
     use crate::core::ui::data_map::DataValue;
     use crate::core::ui::data_map::DrawCommand;
     let rect = layout.rect;
-    
-    let widget_id = element.id().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
-    
+
+    let widget_id = element
+        .id()
+        .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+
     // Use plugin-provided style override if available, fallback to element's own style
     let style = if let Some(w_id) = widget_id {
         style_map.get(w_id).map_or_else(
@@ -97,38 +105,39 @@ pub fn draw_ui(
             style.border_color,
         );
     }
-    
+
     // 3. Draw custom Wasm plugin commands if this element has an ID
     if let Some(w_id) = widget_id
-        && let Some(DataValue::DrawList(cmds)) = data_map.get(w_id, "draw_list") {
-            for cmd in cmds {
-                match cmd {
-                    DrawCommand::Rect {
-                        x,
-                        y,
-                        w,
-                        h,
-                        color,
-                        radius,
-                    } => {
-                        let r = Rect::new(rect.x + x, rect.y + y, w, h);
-                        renderer.draw_rect(r, color, radius, 0.0, None);
-                    }
-                    DrawCommand::Circle { cx, cy, r, color } => {
-                        renderer.draw_circle(rect.x + cx, rect.y + cy, r, color);
-                    }
-                    DrawCommand::Text {
-                        text,
-                        x,
-                        y,
-                        size,
-                        color,
-                    } => {
-                        renderer.draw_text(&text, rect.x + x, rect.y + y, size, color);
-                    }
+        && let Some(DataValue::DrawList(cmds)) = data_map.get(w_id, "draw_list")
+    {
+        for cmd in cmds {
+            match cmd {
+                DrawCommand::Rect {
+                    x,
+                    y,
+                    w,
+                    h,
+                    color,
+                    radius,
+                } => {
+                    let r = Rect::new(rect.x + x, rect.y + y, w, h);
+                    renderer.draw_rect(r, color, radius, 0.0, None);
+                }
+                DrawCommand::Circle { cx, cy, r, color } => {
+                    renderer.draw_circle(rect.x + cx, rect.y + cy, r, color);
+                }
+                DrawCommand::Text {
+                    text,
+                    x,
+                    y,
+                    size,
+                    color,
+                } => {
+                    renderer.draw_text(&text, rect.x + x, rect.y + y, size, color);
                 }
             }
         }
+    }
 
     // 4. Draw contents
     match element {
@@ -144,10 +153,9 @@ pub fn draw_ui(
             } else {
                 text.clone()
             };
-            
+
             let color = style.text_color.unwrap_or(BUTTON_TEXT);
             renderer.draw_text(&display_text, rect.x, rect.y, style.text_size, color);
         }
     }
 }
-
