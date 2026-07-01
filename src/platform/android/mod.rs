@@ -327,7 +327,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                             // Build metrics for touch-path view, same as render path
                                             let (density, scaled_density) =
                                                 crate::platform::android::jni::get_density();
-                                            let metrics = ScreenMetrics::from_scale(
+                                            let _metrics = ScreenMetrics::from_scale(
                                                 width,
                                                 height - safe_area_top - safe_area_bottom,
                                                 density,
