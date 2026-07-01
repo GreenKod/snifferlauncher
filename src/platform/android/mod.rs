@@ -25,9 +25,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::ui::data_map::DataMap;
     use crate::core::ui::event::{EventBus, UiEvent};
     use crate::core::ui::style_map::StyleMap;
-    use crate::core::{
-        GlowRenderer, Point, Renderer, ScreenMetrics, Size, calculate_layout,
-    };
+    use crate::core::{GlowRenderer, Point, Renderer, ScreenMetrics, Size, calculate_layout};
     use crate::plugin::registry::PluginRegistry;
     use android_activity::{
         InputStatus, MainEvent, PollEvent, input::InputEvent, input::MotionAction,
