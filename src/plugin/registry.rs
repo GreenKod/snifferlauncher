@@ -53,6 +53,7 @@ impl PluginRegistry {
 
     /// Ask registered plugins for a UI layout.
     /// Returns the first layout provided by any plugin.
+    #[must_use]
     pub fn build_ui(&self) -> Option<crate::core::types::Element> {
         for plugin in &self.plugins {
             if let Some(ui) = plugin.build_ui() {

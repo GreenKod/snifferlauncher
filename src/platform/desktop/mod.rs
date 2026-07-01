@@ -160,7 +160,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         // Scale mouse inputs to physical layout space
         let mut scaled_last_mouse_pos = last_mouse_pos;
-        if scaled_last_mouse_pos.x != -9999.0 {
+        if (scaled_last_mouse_pos.x - -9999.0).abs() > f32::EPSILON {
             scaled_last_mouse_pos.x *= scale_x;
             scaled_last_mouse_pos.y *= scale_y;
         }

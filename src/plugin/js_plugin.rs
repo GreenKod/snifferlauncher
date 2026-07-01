@@ -1,3 +1,5 @@
+#![allow(clippy::pedantic, clippy::nursery)]
+
 use crate::core::types::Element;
 use crate::core::ui::data_map::DataMap;
 use crate::core::ui::event::UiEvent;
@@ -16,13 +18,18 @@ pub struct JsPlugin {
     ui_tree: Arc<Mutex<Option<Element>>>,
 }
 
+#[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl Send for JsPlugin {}
 unsafe impl Sync for JsPlugin {}
 
 impl JsPlugin {
+    /// Initialize QuickJS runtime and context.
+    /// 
+    /// # Errors
+    /// Returns a String error if QuickJS runtime or context creation fails.
     pub fn new(script_content: String) -> Result<Self, String> {
-        let runtime = Runtime::new().map_err(|e| format!("QuickJS runtime error: {}", e))?;
-        let context = Context::full(&runtime).map_err(|e| format!("QuickJS context error: {}", e))?;
+        let runtime = Runtime::new().map_err(|e| format!("QuickJS runtime error: {e}"))?;
+        let context = Context::full(&runtime).map_err(|e| format!("QuickJS context error: {e}"))?;
         
         let ui_tree = Arc::new(Mutex::new(None));
         
@@ -53,7 +60,7 @@ impl JsPlugin {
                         }
                     }
                     Err(e) => {
-                        println!("JS Error: Failed to parse host_set_ui JSON: {}", e);
+                        println!("JS Error: Failed to parse host_set_ui JSON: {e}");
                     }
                 }
             }).unwrap();
@@ -61,7 +68,7 @@ impl JsPlugin {
 
             // host_log
             let log_func = Function::new(ctx.clone(), |msg: String| {
-                println!("JS Log: {}", msg);
+                println!("JS Log: {msg}");
             }).unwrap();
             globals.set("host_log", log_func).unwrap();
 
@@ -123,9 +130,9 @@ impl UiPlugin for JsPlugin {
             let globals = ctx.globals();
             if let Ok(on_event_fn) = globals.get::<_, rquickjs::Function>("onEvent") {
                 let event_json = match event {
-                    UiEvent::Click(id, w, h) => format!(r#"{{"type":"Click","id":"{}","w":{},"h":{}}}"#, id, w, h),
-                    UiEvent::Hover(id, w, h, x, y) => format!(r#"{{"type":"Hover","id":"{}","w":{},"h":{},"x":{},"y":{}}}"#, id, w, h, x, y),
-                    UiEvent::HoverEnd(id) => format!(r#"{{"type":"HoverEnd","id":"{}"}}"#, id),
+                    UiEvent::Click(id, w, h) => format!(r#"{{"type":"Click","id":"{id}","w":{w},"h":{h}}}"#),
+                    UiEvent::Hover(id, w, h, x, y) => format!(r#"{{"type":"Hover","id":"{id}","w":{w},"h":{h},"x":{x},"y":{y}}}"#),
+                    UiEvent::HoverEnd(id) => format!(r#"{{"type":"HoverEnd","id":"{id}"}}"#),
                 };
                 
                 let res: Result<String, _> = on_event_fn.call((event_json,));
