@@ -72,15 +72,15 @@ globalThis.onEvent = function (eventJsonString) {
     // host_hash converts the string "btn-merhaba" to its matching u64 Hash ID (as a string)
     if (event.type === "Click" && event.id === host_hash("btn-merhaba")) {
         // Change the text and background
-        UI_TREE.children[0].Label.text = "Tıklandı!";
-        UI_TREE.style.background_color = hexToColor("#00FF00"); // Green
+        UI_TREE.Container.children[0].Label.text = "Tıklandı!";
+        UI_TREE.Container.style.background_color = hexToColor("#00FF00"); // Green
 
         // Send updated UI to Rust
         host_set_ui(JSON.stringify(UI_TREE));
     } else if (event.type === "Click" && event.id === host_hash("btn-width")) {
         let w = host_screen_width();
         let h = host_screen_height();
-        UI_TREE.children[1].Label.text = "Genişlik: " + w + "x" + h;
+        UI_TREE.Container.children[1].Label.text = "Genişlik: " + w + "x" + h;
         host_set_ui(JSON.stringify(UI_TREE));
     }
 
