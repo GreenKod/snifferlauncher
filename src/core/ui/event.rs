@@ -1,17 +1,27 @@
+//! UI Event System and Dispatching
+//!
+//! This module defines the core event types used throughout the application to handle
+//! user interaction (clicks, hovers). Events are completely decoupled from the rendering
+//! and platform-specific input pipelines.
+//!
+//! The `EventBus` acts as a central queue where platform layers (like Android `MotionEvents`
+//! or Desktop Mouse events) push interactions, and the `PluginRegistry` drains them
+//! before each render frame to invoke plugin behaviors.
+
 use crate::core::ui::widget::WidgetId;
 use std::sync::{Arc, Mutex};
 
-/// Events emitted from the UI layer.
+/// Represents a distinct user interaction with a UI widget.
 ///
 /// Raw platform touch/mouse inputs are converted to this enum
 /// and pushed to the `EventBus`. `PluginRegistry` dispatches each event
 /// to the relevant plugins via `O(1)` `HashMap` lookup.
 #[derive(Clone, Debug)]
 pub enum UiEvent {
-    /// User tapped or clicked a widget.
-    Click(WidgetId),
-    /// Pointer entered a widget.
-    Hover(WidgetId),
+    /// User tapped or clicked a widget. Contains ID, width, height.
+    Click(WidgetId, f32, f32),
+    /// Pointer entered a widget. Contains ID, width, height.
+    Hover(WidgetId, f32, f32, f32, f32),
     /// Pointer left a widget.
     HoverEnd(WidgetId),
 }
@@ -21,7 +31,7 @@ impl UiEvent {
     #[must_use]
     pub const fn widget_id(&self) -> WidgetId {
         match self {
-            Self::Click(id) | Self::Hover(id) | Self::HoverEnd(id) => *id,
+            Self::Click(id, _, _) | Self::Hover(id, _, _, _, _) | Self::HoverEnd(id) => *id,
         }
     }
 }

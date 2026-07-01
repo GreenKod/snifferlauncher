@@ -136,3 +136,93 @@ impl PluginLoader {
         }
     }
 }
+
+#[cfg(target_os = "android")]
+impl PluginLoader {
+    /// Read plugins from Android Assets instead of the filesystem.
+    ///
+    /// # Panics
+    /// Panics if the hardcoded "plugins.json" string contains a null byte.
+    pub fn register_all_from_assets(
+        registry: &mut PluginRegistry,
+        asset_manager: &ndk::asset::AssetManager,
+    ) {
+        use std::io::Read;
+
+        println!("Loading plugins from Android assets...");
+
+        // When assets = ".plugins" is used in Cargo.toml, the contents of .plugins
+        // are copied into the root of the assets.
+        let json_c_str = std::ffi::CString::new("plugins.json").unwrap();
+        let json_content = if let Some(mut asset) = asset_manager.open(&json_c_str) {
+            let mut buf = String::new();
+            if let Err(e) = asset.read_to_string(&mut buf) {
+                eprintln!("Failed to read plugins.json from assets: {e}");
+                return;
+            }
+            buf
+        } else {
+            eprintln!("plugins.json not found in assets");
+            return;
+        };
+
+        let entries = match serde_json::from_str::<Vec<PluginEntry>>(&json_content) {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("Failed to parse plugins.json from assets: {e}");
+                return;
+            }
+        };
+
+        for entry in entries {
+            println!(
+                "Loading plugin from assets: {} v{}",
+                entry.identifier.id, entry.version
+            );
+
+            match entry.plugin_type {
+                PluginType::Wasm => {
+                    let Some(loc) = &entry.location else {
+                        eprintln!("Wasm plugin {} has no location", entry.identifier.id);
+                        continue;
+                    };
+
+                    let path_c_str = std::ffi::CString::new(loc.path.clone()).unwrap();
+                    match asset_manager.open(&path_c_str) {
+                        Some(mut asset) => {
+                            let mut bytes = Vec::new();
+                            if let Err(e) = asset.read_to_end(&mut bytes) {
+                                eprintln!("Failed to read wasm asset: {e}");
+                                continue;
+                            }
+                            match crate::plugin::WasmPlugin::new(&bytes) {
+                                Ok(plugin) => {
+                                    registry.register(
+                                        &(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>),
+                                    );
+                                    println!(
+                                        "Successfully loaded Wasm plugin from assets: {}",
+                                        entry.identifier.id
+                                    );
+                                }
+                                Err(e) => eprintln!(
+                                    "Failed to instantiate Wasm plugin {}: {e}",
+                                    entry.identifier.id
+                                ),
+                            }
+                        }
+                        None => eprintln!("Could not find wasm asset at {}", loc.path),
+                    }
+                }
+                PluginType::Native => match entry.identifier.id.as_str() {
+                    "com.greenkod.hover-effect" => {
+                        registry.register(
+                            &(Arc::new(HoverEffectPlugin) as Arc<dyn crate::plugin::UiPlugin>),
+                        );
+                    }
+                    id => eprintln!("Unknown native plugin ID: {id}"),
+                },
+            }
+        }
+    }
+}

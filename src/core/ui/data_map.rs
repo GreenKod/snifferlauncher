@@ -2,6 +2,31 @@ use crate::core::ui::widget::WidgetId;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+#[derive(Clone, Debug)]
+pub enum DrawCommand {
+    Rect {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        color: u32,
+        radius: f32,
+    },
+    Circle {
+        cx: f32,
+        cy: f32,
+        r: f32,
+        color: u32,
+    },
+    Text {
+        text: String,
+        x: f32,
+        y: f32,
+        size: f32,
+        color: u32,
+    },
+}
+
 /// A dynamic value that can be attached to any widget at runtime.
 ///
 /// Plugins use this enum to override widget content and visibility
@@ -16,6 +41,8 @@ pub enum DataValue {
     Counter(i64),
     /// Arbitrary JSON string for future plugin-specific payloads.
     Custom(String),
+    /// Custom rendering command list emitted by a plugin.
+    DrawList(Vec<DrawCommand>),
 }
 
 /// Runtime data map — sibling of `StyleMap`, for **content** and **behaviour** overrides.

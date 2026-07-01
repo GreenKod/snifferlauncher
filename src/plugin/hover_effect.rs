@@ -1,4 +1,3 @@
-use crate::core::style::Style;
 use crate::core::ui::data_map::{DataMap, DataValue};
 use crate::core::ui::event::UiEvent;
 use crate::core::ui::style_map::StyleMap;
@@ -21,17 +20,23 @@ impl UiPlugin for HoverEffectPlugin {
         &[ids::BTN_SETTINGS, ids::BTN_CONTACTS, ids::BTN_CAMERA]
     }
 
-    fn on_event(&self, event: &UiEvent, styles: &StyleMap, data: &DataMap) {
+    fn on_event(
+        &self,
+        event: &UiEvent,
+        styles: &StyleMap,
+        data: &DataMap,
+        _actions: &std::sync::Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
+    ) {
         match event {
-            UiEvent::Hover(id) => {
-                styles.set(*id, Style::builder().background_color(HOVER_BG).build());
+            UiEvent::Hover(id, _w, _h, _mx, _my) => {
+                styles.mutate(*id, |s| s.background_color = Some(HOVER_BG));
                 data.set(*id, "label", DataValue::Text("Opening...".into()));
             }
             UiEvent::HoverEnd(id) => {
                 styles.clear(*id);
                 data.clear(*id, "label");
             }
-            UiEvent::Click(id) => {
+            UiEvent::Click(id, _w, _h) => {
                 // Tap feedback — hide the button; platform layer should restore after ~300 ms
                 data.set(*id, "visible", DataValue::Visible(false));
             }

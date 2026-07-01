@@ -217,3 +217,32 @@ impl StyleBuilder {
         self.0
     }
 }
+
+// ── StyleOverride ─────────────────────────────────────────────────────────────
+
+/// A subset of Style properties used for runtime overrides by plugins.
+/// Instead of replacing the whole `Style` (which drops border radii and layouts),
+/// this allows modifying only specific visuals.
+#[derive(Clone, Default, Debug)]
+pub struct StyleOverride {
+    pub background_color: Option<u32>,
+    pub text_color: Option<u32>,
+    pub border_color: Option<u32>,
+}
+
+impl StyleOverride {
+    /// Applies this override onto the given base `Style`.
+    #[must_use]
+    pub const fn apply(&self, mut base: Style) -> Style {
+        if let Some(c) = self.background_color {
+            base.background_color = Some(c);
+        }
+        if let Some(c) = self.text_color {
+            base.text_color = Some(c);
+        }
+        if let Some(c) = self.border_color {
+            base.border_color = Some(c);
+        }
+        base
+    }
+}

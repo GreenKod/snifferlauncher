@@ -75,16 +75,16 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // 5. Initialize UI state
     let mut state = LauncherState::default();
-    let mut last_mouse_pos = Point::zero();
+    let mut last_mouse_pos = crate::core::Point::new(-9999.0, -9999.0);
 
-    // 6. Initialize the event-driven plugin system
     let event_bus = EventBus::default();
     let style_map = StyleMap::default();
     let data_map = DataMap::default();
+    let action_queue = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
     let mut plugin_registry = PluginRegistry::default();
 
-    // Instead of hardcoding, we load from .plugins/plugins.json
+    // Register WASM plugins from the .plugins directory
     let loader = crate::plugin::PluginLoader::new(".plugins");
     loader.register_all(&mut plugin_registry);
 
@@ -121,6 +121,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         f32::from(i16::try_from(y).expect("mouse y fits in i16")),
                     ));
                 }
+                Event::Window {
+                    win_event: sdl2::event::WindowEvent::Leave,
+                    ..
+                } => {
+                    let prev_hovered = state.hovered;
+                    let _ = LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(None));
+                    if let Some(prev) = prev_hovered {
+                        event_bus.push(crate::core::ui::event::UiEvent::HoverEnd(
+                            crate::core::ui::widget::ids::from_button_id(prev),
+                        ));
+                    }
+                    // Move the mouse out of the layout entirely to prevent re-triggering hover
+                    last_mouse_pos = crate::core::Point::new(-9999.0, -9999.0);
+                    mouse_moved = true; // Force layout re-check to clear it naturally too if needed
+                }
                 _ => {}
             }
         }
@@ -140,28 +155,43 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // 10. Translate pointer events → UiEvent → EventBus
         if mouse_moved {
             let prev_hovered = state.hovered;
-            let hovered_btn = find_hovered_button(&root_element, &layout_tree, last_mouse_pos);
+            let hovered_data = find_hovered_button(&root_element, &layout_tree, last_mouse_pos);
+            let hovered_btn = hovered_data.map(|(id, _)| id);
 
             let _ = LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
 
-            match (prev_hovered, hovered_btn) {
-                (Some(prev), Some(current)) if prev != current => {
-                    // Moved from one button to another
+            match (prev_hovered, hovered_data) {
+                (Some(prev), Some((current, rect))) if prev != current => {
                     event_bus.push(UiEvent::HoverEnd(
                         crate::core::ui::widget::ids::from_button_id(prev),
                     ));
                     event_bus.push(UiEvent::Hover(
                         crate::core::ui::widget::ids::from_button_id(current),
+                        rect.width,
+                        rect.height,
+                        last_mouse_pos.x - rect.x,
+                        last_mouse_pos.y - rect.y,
                     ));
                 }
-                (None, Some(current)) => {
-                    // Entered a button
+                (Some(prev), Some((current, rect))) if prev == current => {
                     event_bus.push(UiEvent::Hover(
                         crate::core::ui::widget::ids::from_button_id(current),
+                        rect.width,
+                        rect.height,
+                        last_mouse_pos.x - rect.x,
+                        last_mouse_pos.y - rect.y,
+                    ));
+                }
+                (None, Some((current, rect))) => {
+                    event_bus.push(UiEvent::Hover(
+                        crate::core::ui::widget::ids::from_button_id(current),
+                        rect.width,
+                        rect.height,
+                        last_mouse_pos.x - rect.x,
+                        last_mouse_pos.y - rect.y,
                     ));
                 }
                 (Some(prev), None) => {
-                    // Left all buttons
                     event_bus.push(UiEvent::HoverEnd(
                         crate::core::ui::widget::ids::from_button_id(prev),
                     ));
@@ -171,21 +201,23 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if let Some(clicked_pt) = clicked_pos
-            && let Some(clicked_btn) = find_clicked_button(&root_element, &layout_tree, clicked_pt)
+            && let Some((clicked_btn, rect)) =
+                find_clicked_button(&root_element, &layout_tree, clicked_pt)
         {
-            // Push Click to event bus before updating state
+            // Push Click to event bus ONLY; plugins will decide the action
             let id = crate::core::ui::widget::ids::from_button_id(clicked_btn);
-            event_bus.push(UiEvent::Click(id));
-
-            if let Some(action) =
-                LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn))
-            {
-                handle_action(action);
-            }
+            event_bus.push(UiEvent::Click(id, rect.width, rect.height));
         }
 
         // 11. Dispatch queued events to plugins (O(1) per event)
-        plugin_registry.dispatch(&event_bus, &style_map, &data_map);
+        plugin_registry.dispatch(&event_bus, &style_map, &data_map, &action_queue);
+
+        // Process any actions emitted by plugins
+        if let Ok(mut q) = action_queue.lock() {
+            for action in q.drain(..) {
+                handle_action(action);
+            }
+        }
 
         // 12. Render
         renderer.begin_frame(width, height);
