@@ -26,7 +26,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::ui::event::{EventBus, UiEvent};
     use crate::core::ui::style_map::StyleMap;
     use crate::core::{
-        Application, GlowRenderer, Point, Renderer, ScreenMetrics, Size, calculate_layout,
+        GlowRenderer, Point, Renderer, ScreenMetrics, Size, calculate_layout,
     };
     use crate::plugin::registry::PluginRegistry;
     use android_activity::{
@@ -178,7 +178,13 @@ pub fn android_main(app: android_activity::AndroidApp) {
         &app.asset_manager(),
     );
 
-    // Root element will be fetched every frame inside the render loop
+    // Root element will be fetched every frame inside the render loop,
+    // but initialized here so input event handlers can access the latest tree.
+    let mut root_element = crate::core::types::Element::Container {
+        id: None,
+        style: crate::core::style::Style::default(),
+        children: vec![],
+    };
 
     while running {
         app.poll_events(Some(Duration::from_millis(16)), |event| match event {
@@ -188,7 +194,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     && let Some(window) = app.native_window()
                 {
                     // Fetch dynamic UI tree from plugins EVERY FRAME
-                    let root_element = plugin_registry.build_ui().unwrap_or_else(|| {
+                    root_element = plugin_registry.build_ui().unwrap_or_else(|| {
                         crate::core::types::Element::Container {
                             id: None,
                             style: crate::core::style::Style::default(),
