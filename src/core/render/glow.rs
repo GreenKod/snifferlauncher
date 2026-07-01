@@ -93,7 +93,7 @@ impl GlowRenderer {
             // 3. Create font atlas texture
             let (font_texture, font_atlas, atlas_width, atlas_height) =
                 if let Some(font_bytes) = font_data {
-                    if let Ok(atlas) = font_atlas::build_font_atlas(&gl, font_bytes, 32.0) {
+                    if let Ok(atlas) = font_atlas::build_font_atlas(&gl, font_bytes, 64.0) {
                         eprintln!(
                             "[DEBUG] Using TTF font atlas ({}x{})",
                             atlas.atlas_width, atlas.atlas_height

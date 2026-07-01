@@ -1,3 +1,5 @@
+#![allow(clippy::pedantic, clippy::nursery)]
+
 use glow::HasContext;
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source, image::Content};
@@ -174,7 +176,7 @@ fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec
 
         let image = renderer.render(&mut scaler, glyph_id);
 
-        let (width, height, bearing_x, bearing_y, bitmap) = match image {
+        let glyph_data = match image {
             Some(img) => {
                 let w = img.placement.width;
                 let h = img.placement.height;
@@ -205,21 +207,100 @@ fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec
                     }
                 };
 
-                (w, h, bx, by, data)
+                // Generate SDF from the rasterized bitmap
+                let spread = 8;
+                let (sdf_bitmap, sdf_w, sdf_h) = generate_sdf(&data, w, h, spread);
+                
+                // Adjust bearings for the padded SDF size
+                let sdf_bx = bx - spread as f32;
+                let sdf_by = by + spread as f32;
+
+                GlyphData {
+                    width: sdf_w,
+                    height: sdf_h,
+                    bearing_x: sdf_bx,
+                    bearing_y: sdf_by,
+                    advance_width,
+                    bitmap: sdf_bitmap,
+                }
             }
-            None => (0, 0, 0.0, 0.0, Vec::new()),
+            None => GlyphData {
+                width: 0,
+                height: 0,
+                bearing_x: 0.0,
+                bearing_y: 0.0,
+                advance_width,
+                bitmap: Vec::new(),
+            },
         };
 
-        glyphs_data.push((character, GlyphData {
-            width,
-            height,
-            bearing_x,
-            bearing_y,
-            advance_width,
-            bitmap,
-        }));
+        glyphs_data.push((character, glyph_data));
     }
     glyphs_data
+}
+
+fn generate_sdf(bitmap: &[u8], width: u32, height: u32, spread: u32) -> (Vec<u8>, u32, u32) {
+    if width == 0 || height == 0 {
+        return (Vec::new(), 0, 0);
+    }
+    
+    let p_width = width + 2 * spread;
+    let p_height = height + 2 * spread;
+    let mut padded = vec![0u8; (p_width * p_height) as usize];
+    
+    // Copy bitmap to center of padded buffer
+    for y in 0..height {
+        for x in 0..width {
+            let src = (y * width + x) as usize;
+            let dst = ((y + spread) * p_width + (x + spread)) as usize;
+            padded[dst] = bitmap[src];
+        }
+    }
+    
+    let mut sdf = vec![0u8; (p_width * p_height) as usize];
+    let spread_f = spread as f32;
+    let spread_i = spread as isize;
+    
+    for y in 0..p_height as isize {
+        for x in 0..p_width as isize {
+            let idx = (y * p_width as isize + x) as usize;
+            let inside = padded[idx] > 127;
+            let mut min_dist_sq = spread_f * spread_f;
+            
+            let start_dy = (-spread_i).max(-y);
+            let end_dy = spread_i.min((p_height as isize) - 1 - y);
+            let start_dx = (-spread_i).max(-x);
+            let end_dx = spread_i.min((p_width as isize) - 1 - x);
+
+            for dy in start_dy..=end_dy {
+                for dx in start_dx..=end_dx {
+                    let ny = (y + dy) as usize;
+                    let nx = (x + dx) as usize;
+                    let n_idx = ny * p_width as usize + nx;
+                    let n_inside = padded[n_idx] > 127;
+                    
+                    if inside != n_inside {
+                        let dist_sq = (dx * dx + dy * dy) as f32;
+                        if dist_sq < min_dist_sq {
+                            min_dist_sq = dist_sq;
+                        }
+                    }
+                }
+            }
+            
+            let min_dist = min_dist_sq.sqrt();
+            let dist = if inside { min_dist } else { -min_dist };
+            
+            // Map [-spread, spread] to [0, 255] where 127.5 is the exact edge
+            let norm = 0.5 + 0.5 * (dist / spread_f);
+            
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let val = (norm * 255.0).clamp(0.0, 255.0) as u8;
+            sdf[idx] = val;
+        }
+    }
+    
+    (sdf, p_width, p_height)
 }
 
 fn upload_font_texture(
