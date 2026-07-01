@@ -33,6 +33,8 @@ use std::sync::Arc;
 /// ```
 #[derive(Default)]
 pub struct PluginRegistry {
+    /// All registered plugins.
+    plugins: Vec<Arc<dyn UiPlugin>>,
     /// Key: `WidgetId` (u64) | Value: plugins subscribed to that ID.
     subscriptions: HashMap<WidgetId, Vec<Arc<dyn UiPlugin>>>,
 }
@@ -40,12 +42,24 @@ pub struct PluginRegistry {
 impl PluginRegistry {
     /// Register a plugin — attaches it to every ID it declares in `subscriptions()`.
     pub fn register(&mut self, plugin: &Arc<dyn UiPlugin>) {
+        self.plugins.push(Arc::clone(plugin));
         for &id in plugin.subscriptions() {
             self.subscriptions
                 .entry(id)
                 .or_default()
                 .push(Arc::clone(plugin));
         }
+    }
+
+    /// Ask registered plugins for a UI layout.
+    /// Returns the first layout provided by any plugin.
+    pub fn build_ui(&self) -> Option<crate::core::types::Element> {
+        for plugin in &self.plugins {
+            if let Some(ui) = plugin.build_ui() {
+                return Some(ui);
+            }
+        }
+        None
     }
 
     /// Dispatch all queued events to their respective plugin listeners.
@@ -59,11 +73,8 @@ impl PluginRegistry {
         actions: &std::sync::Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
     ) {
         for event in bus.drain() {
-            let id = event.widget_id();
-            if let Some(listeners) = self.subscriptions.get(&id) {
-                for plugin in listeners {
-                    plugin.on_event(&event, styles, data, actions);
-                }
+            for plugin in &self.plugins {
+                plugin.on_event(&event, styles, data, actions);
             }
         }
     }

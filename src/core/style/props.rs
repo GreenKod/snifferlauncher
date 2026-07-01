@@ -1,7 +1,10 @@
 use super::layout::{AlignItems, Dimension, Display, FlexDirection, JustifyContent, RectOffset};
 
+use serde::{Deserialize, Serialize};
+
 /// All visual and layout properties of a single UI element.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Style {
     pub display: Display,
     pub flex_direction: FlexDirection,

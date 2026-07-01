@@ -26,7 +26,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::ui::event::{EventBus, UiEvent};
     use crate::core::ui::style_map::StyleMap;
     use crate::core::{
-        Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point, Renderer,
+        Application, GlowRenderer, Point, Renderer,
         ScreenMetrics, Size, calculate_layout,
     };
     use crate::plugin::registry::PluginRegistry;
@@ -161,9 +161,9 @@ pub fn android_main(app: android_activity::AndroidApp) {
     }
 
     let mut egl_state: Option<EglContextState> = None;
-    let mut state = LauncherState::default();
     let mut running = true;
     let mut last_touch_pos = Point::zero();
+    let mut hovered_btn: Option<u64> = None;
 
     // Initialize the event-driven plugin system
     let event_bus = EventBus::default();
@@ -179,6 +179,8 @@ pub fn android_main(app: android_activity::AndroidApp) {
         &app.asset_manager(),
     );
 
+    // Root element will be fetched every frame inside the render loop
+
     while running {
         app.poll_events(Some(Duration::from_millis(16)), |event| match event {
             PollEvent::Wake | PollEvent::Timeout => {
@@ -186,6 +188,15 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     && let Some(ref mut renderer) = egl.renderer
                     && let Some(window) = app.native_window()
                 {
+                    // Fetch dynamic UI tree from plugins EVERY FRAME
+                    let root_element = plugin_registry.build_ui().unwrap_or_else(|| {
+                        crate::core::types::Element::Container {
+                            id: None,
+                            style: crate::core::style::Style::default(),
+                            children: vec![],
+                        }
+                    });
+
                     let width =
                         f32::from(u16::try_from(window.width()).expect("window width fits in u16"));
                     let height = f32::from(
@@ -215,8 +226,6 @@ pub fn android_main(app: android_activity::AndroidApp) {
                         density,
                         scaled_density,
                     );
-
-                    let root_element = LauncherApp::view(&state, &metrics);
                     let layout_tree = calculate_layout(
                         &root_element,
                         Size::new(width, height - safe_area_top - safe_area_bottom),
@@ -310,7 +319,8 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                 scaled_density,
                                             );
 
-                                            let root_element = LauncherApp::view(&state, &metrics);
+                                            // The root element is built dynamically outside this loop, but ideally we'd re-poll it if needed.
+                                            // For now we reuse the existing `root_element`.
                                             let layout_tree = calculate_layout(
                                                 &root_element,
                                                 Size::new(
@@ -325,28 +335,24 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                 MotionAction::Down
                                                 | MotionAction::Move
                                                 | MotionAction::PointerDown => {
-                                                    let prev_hovered = state.hovered;
+                                                    let prev_hovered = hovered_btn;
                                                     let hovered_data = find_hovered_button(
                                                         &root_element,
                                                         &layout_tree,
                                                         point,
                                                     );
-                                                    let hovered_btn = hovered_data.map(|(id, _)| id);
-                                                    let _ = LauncherApp::update(
-                                                        &mut state,
-                                                        LauncherMessage::ButtonHovered(hovered_btn),
-                                                    );
+                                                    hovered_btn = hovered_data.map(|(id, _)| id);
 
                                                     if prev_hovered != hovered_btn
                                                         && let Some(prev) = prev_hovered
                                                     {
                                                         event_bus.push(UiEvent::HoverEnd(
-                                                            crate::core::ui::widget::ids::from_button_id(prev),
+                                                            prev,
                                                         ));
                                                     }
                                                     if let Some((btn, rect)) = hovered_data {
                                                         event_bus.push(UiEvent::Hover(
-                                                            crate::core::ui::widget::ids::from_button_id(btn),
+                                                            btn,
                                                             rect.width,
                                                             rect.height,
                                                             point.x - rect.x,
@@ -356,20 +362,16 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     InputStatus::Handled
                                                 }
                                                 MotionAction::Up | MotionAction::PointerUp => {
-                                                    let prev_hovered = state.hovered;
+                                                    let prev_hovered = hovered_btn;
                                                     let hovered_data = find_hovered_button(
                                                         &root_element,
                                                         &layout_tree,
                                                         point,
                                                     );
-                                                    let hovered_btn = hovered_data.map(|(id, _)| id);
-                                                    let _ = LauncherApp::update(
-                                                        &mut state,
-                                                        LauncherMessage::ButtonHovered(hovered_btn),
-                                                    );
+                                                    hovered_btn = hovered_data.map(|(id, _)| id);
                                                     if let Some(prev) = prev_hovered {
                                                         event_bus.push(UiEvent::HoverEnd(
-                                                            crate::core::ui::widget::ids::from_button_id(prev),
+                                                            prev,
                                                         ));
                                                     }
 
@@ -380,7 +382,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     ) {
                                                         // Push Click event ONLY; let plugins decide actions
                                                         event_bus.push(UiEvent::Click(
-                                                            crate::core::ui::widget::ids::from_button_id(clicked_btn),
+                                                            clicked_btn,
                                                             rect.width,
                                                             rect.height,
                                                         ));
@@ -388,14 +390,11 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     InputStatus::Handled
                                                 }
                                                 MotionAction::Cancel => {
-                                                    let prev_hovered = state.hovered;
-                                                    let _ = LauncherApp::update(
-                                                        &mut state,
-                                                        LauncherMessage::ButtonHovered(None),
-                                                    );
+                                                    let prev_hovered = hovered_btn;
+                                                    hovered_btn = None;
                                                     if let Some(prev) = prev_hovered {
                                                         event_bus.push(UiEvent::HoverEnd(
-                                                            crate::core::ui::widget::ids::from_button_id(prev),
+                                                            prev,
                                                         ));
                                                     }
                                                     InputStatus::Handled

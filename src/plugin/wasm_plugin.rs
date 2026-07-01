@@ -256,6 +256,44 @@ impl UiPlugin for WasmPlugin {
         &self.subscriptions
     }
 
+    fn build_ui(&self) -> Option<crate::core::types::Element> {
+        let Ok(mut store) = self.store.lock() else {
+            return None;
+        };
+
+        let func = self
+            .instance
+            .get_export(&*store, "plugin_build_ui")
+            .and_then(wasmi::Extern::into_func)?;
+
+        // Call plugin_build_ui() -> *const u8
+        let ptr_val = func
+            .typed::<(), i32>(&*store)
+            .and_then(|f| f.call(&mut *store, ()))
+            .ok()?;
+
+        let memory = store.data().memory?;
+        
+        // Read null-terminated string from Wasm memory
+        let mut json_bytes = Vec::new();
+        #[allow(clippy::cast_sign_loss)]
+        let mut current_ptr = ptr_val as usize;
+        let mut byte = [0u8; 1];
+        loop {
+            if memory.read(&*store, current_ptr, &mut byte).is_err() || byte[0] == 0 {
+                break;
+            }
+            json_bytes.push(byte[0]);
+            current_ptr += 1;
+        }
+
+        let json_str = String::from_utf8(json_bytes).ok()?;
+        
+        serde_json::from_str(&json_str).map_err(|e| {
+            eprintln!("Failed to parse UI JSON from Wasm: {}", e);
+        }).ok()
+    }
+
     fn on_event(
         &self,
         event: &UiEvent,

@@ -29,4 +29,12 @@ pub trait UiPlugin: Send + Sync {
         data: &DataMap,
         actions: &std::sync::Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
     );
+
+    /// Ask the plugin to provide the initial UI layout tree.
+    ///
+    /// If multiple plugins provide a layout, the system may use the first one or merge them.
+    /// Default implementation returns `None`, indicating the plugin doesn't define layout.
+    fn build_ui(&self) -> Option<crate::core::types::Element> {
+        None
+    }
 }
