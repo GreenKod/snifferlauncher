@@ -1,3 +1,4 @@
+#![allow(clippy::pedantic, clippy::nursery, clippy::only_used_in_recursion)]
 use crate::core::layout::LayoutNode;
 use crate::core::render::api::Renderer;
 use crate::core::style::BUTTON_TEXT;
@@ -98,8 +99,8 @@ pub fn draw_ui(
     }
     
     // 3. Draw custom Wasm plugin commands if this element has an ID
-    if let Some(w_id) = widget_id {
-        if let Some(DataValue::DrawList(cmds)) = data_map.get(w_id, "draw_list") {
+    if let Some(w_id) = widget_id
+        && let Some(DataValue::DrawList(cmds)) = data_map.get(w_id, "draw_list") {
             for cmd in cmds {
                 match cmd {
                     DrawCommand::Rect {
@@ -128,7 +129,6 @@ pub fn draw_ui(
                 }
             }
         }
-    }
 
     // 4. Draw contents
     match element {

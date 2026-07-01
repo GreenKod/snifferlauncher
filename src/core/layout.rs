@@ -28,7 +28,7 @@ fn estimate_text_size(text: &str, text_size: f32) -> Size {
 
 impl LayoutNode {
     #[must_use]
-    pub fn new(element: Element, rect: Rect) -> Self {
+    pub const fn new(element: Element, rect: Rect) -> Self {
         Self {
             element,
             rect,
