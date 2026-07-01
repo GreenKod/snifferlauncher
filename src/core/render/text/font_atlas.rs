@@ -31,7 +31,7 @@ pub struct GlyphInfo {
 
 pub struct FontAtlas {
     pub texture: glow::Texture,
-    pub glyphs: Vec<GlyphInfo>,
+    pub glyphs: std::collections::HashMap<char, GlyphInfo>,
     pub atlas_width: i32,
     pub atlas_height: i32,
     /// The pixel size used when rasterizing glyphs
@@ -77,14 +77,14 @@ pub fn build_font_atlas(
 
     let atlas_height = glyphs_data
         .iter()
-        .map(|g| g.height)
+        .map(|(_, g)| g.height)
         .max()
         .unwrap_or(1)
         .max(1)
         + PADDING * 2;
     let atlas_width = glyphs_data
         .iter()
-        .map(|g| g.width + PADDING * 2)
+        .map(|(_, g)| g.width + PADDING * 2)
         .sum::<u32>()
         .max(1);
 
@@ -93,10 +93,10 @@ pub fn build_font_atlas(
         usize::try_from(atlas_width * atlas_height)
             .expect("atlas dimensions fit in usize")
     ];
-    let mut glyph_infos: Vec<GlyphInfo> = Vec::with_capacity(96);
+    let mut glyph_infos = std::collections::HashMap::with_capacity(128);
     let mut x_cursor: u32 = 0;
 
-    for g in &glyphs_data {
+    for (character, g) in &glyphs_data {
         let dst_x = x_cursor + PADDING;
         // Place every glyph at Y=PADDING (top of row); bearing_y already accounts for position
         let dst_y = PADDING;
@@ -112,7 +112,7 @@ pub fn build_font_atlas(
             }
         }
 
-        glyph_infos.push(GlyphInfo {
+        glyph_infos.insert(*character, GlyphInfo {
             atlas_x: dst_x,
             atlas_y: dst_y,
             width: g.width,
@@ -146,7 +146,7 @@ pub fn build_font_atlas(
     })
 }
 
-fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec<GlyphData> {
+fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec<(char, GlyphData)> {
     let mut context = ScaleContext::new();
     let mut scaler = context.builder(*font).size(pixel_size).hint(true).build();
 
@@ -158,9 +158,16 @@ fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec
     let charmap = font.charmap();
     let glyph_metrics = font.glyph_metrics(&[]);
 
-    let mut glyphs_data = Vec::with_capacity(96);
+    let mut chars_to_render = Vec::new();
     for c in 32u8..128u8 {
-        let character = char::from(c);
+        chars_to_render.push(char::from(c));
+    }
+    for &c in &['ç', 'Ç', 'ğ', 'Ğ', 'ı', 'İ', 'ö', 'Ö', 'ş', 'Ş', 'ü', 'Ü'] {
+        chars_to_render.push(c);
+    }
+
+    let mut glyphs_data = Vec::with_capacity(128);
+    for character in chars_to_render {
         let glyph_id = charmap.map(character);
 
         let advance_width = glyph_metrics.advance_width(glyph_id) * scale_factor;
@@ -203,14 +210,14 @@ fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec
             None => (0, 0, 0.0, 0.0, Vec::new()),
         };
 
-        glyphs_data.push(GlyphData {
+        glyphs_data.push((character, GlyphData {
             width,
             height,
             bearing_x,
             bearing_y,
             advance_width,
             bitmap,
-        });
+        }));
     }
     glyphs_data
 }
@@ -274,14 +281,8 @@ pub fn estimate_text_width(atlas: &FontAtlas, text: &str, text_size: f32) -> f32
     for c in text.chars() {
         if c == ' ' {
             width = atlas.space_advance.mul_add(scale, width);
-        } else {
-            let code = c as u32;
-            if (32..=127).contains(&code) {
-                let idx = (code - 32) as usize;
-                if idx < atlas.glyphs.len() {
-                    width = atlas.glyphs[idx].advance_width.mul_add(scale, width);
-                }
-            }
+        } else if let Some(glyph) = atlas.glyphs.get(&c).or_else(|| atlas.glyphs.get(&'?')) {
+            width = glyph.advance_width.mul_add(scale, width);
         }
     }
     width
