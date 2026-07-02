@@ -37,4 +37,8 @@ pub trait UiPlugin: Send + Sync {
     fn build_ui(&self) -> Option<crate::core::types::Element> {
         None
     }
+
+    /// Called once per render frame.
+    /// Useful for periodic tasks, animations, or garbage collection.
+    fn on_tick(&self) {}
 }
