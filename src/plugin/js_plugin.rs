@@ -142,7 +142,7 @@ impl JsPlugin {
                             .load(std::sync::atomic::Ordering::Relaxed),
                     ),
                 };
-                let bytes = bincode::serialize(&state).unwrap_or_default();
+                let bytes = postcard::to_allocvec(&state).unwrap_or_default();
                 rquickjs::ArrayBuffer::new(ctx, bytes)
             }
             let get_binary_state_func = Function::new(ctx.clone(), get_binary_state).unwrap();
@@ -155,7 +155,7 @@ impl JsPlugin {
                 Function::new(ctx.clone(), |buffer: rquickjs::ArrayBuffer<'_>| {
                     if let Some(bytes) = buffer.as_bytes() {
                         if let Ok(state) =
-                            bincode::deserialize::<crate::core::types::AppState>(bytes)
+                            postcard::from_bytes::<crate::core::types::AppState>(bytes)
                         {
                             println!("JS sent binary state via ArrayBuffer: {:?}", state);
                         } else {
