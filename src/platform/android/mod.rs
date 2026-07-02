@@ -191,6 +191,9 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     && let Some(ref mut renderer) = egl.renderer
                     && let Some(window) = app.native_window()
                 {
+                    // Trigger periodic tasks (like Garbage Collection) for plugins
+                    plugin_registry.tick();
+
                     // Fetch dynamic UI tree from plugins EVERY FRAME
                     root_element = plugin_registry.build_ui().unwrap_or_else(|| {
                         crate::core::types::Element::Container {

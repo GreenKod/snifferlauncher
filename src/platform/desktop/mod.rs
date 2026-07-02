@@ -86,6 +86,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut running = true;
     while running {
+        // Trigger periodic tasks (like Garbage Collection) for plugins
+        plugin_registry.tick();
+
         // Fetch dynamic UI tree from plugins EVERY FRAME
         let root_element =
             plugin_registry
