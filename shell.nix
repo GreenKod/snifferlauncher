@@ -60,6 +60,7 @@ in pkgs.mkShell {
     pkgs.clang
     pkgs.jq                              # used by .plugins/build_plugins.sh
     pkgs.llvmPackages.bintools          # lld, llvm-ar, llvm-objcopy, …
+    pkgs.llvmPackages.libclang.lib      # required by rust bindgen
     pkgs.lld
 
     # System libraries (Linux native targets)
@@ -94,4 +95,8 @@ in pkgs.mkShell {
     ndkVersion       = android.ndkVersion;
     vscodeExtensions = vscodeExts;
   };
+
+  # ── Environment variables ────────────────────────────────────────────────────
+  LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+  BINDGEN_EXTRA_CLANG_ARGS = "--target=armv7-linux-androideabi -isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.llvmPackages.libclang.version}/include -isystem ${pkgs.glibc.dev}/include";
 }

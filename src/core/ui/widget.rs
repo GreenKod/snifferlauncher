@@ -28,9 +28,7 @@ pub const fn fnv1a(s: &[u8]) -> u64 {
 /// ```
 #[macro_export]
 macro_rules! wid {
-    ($s:literal) => {{
-        $crate::core::ui::widget::fnv1a($s)
-    }};
+    ($s:literal) => {{ $crate::core::ui::widget::fnv1a($s) }};
 }
 
 /// All declared widget IDs — single source of truth.

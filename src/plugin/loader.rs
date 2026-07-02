@@ -20,12 +20,15 @@ impl PluginLoader {
     /// Instantiate and register all plugins.
     pub fn register_all(&self, registry: &mut PluginRegistry) {
         let main_js_path = self.assets_dir.join("main.js");
-        
+
         match fs::read_to_string(&main_js_path) {
             Ok(content) => match crate::plugin::JsPlugin::new(content) {
                 Ok(plugin) => {
                     registry.register(&(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>));
-                    println!("Successfully loaded JS plugin from {}", main_js_path.display());
+                    println!(
+                        "Successfully loaded JS plugin from {}",
+                        main_js_path.display()
+                    );
                 }
                 Err(e) => eprintln!("Failed to instantiate JS plugin: {e}"),
             },
@@ -37,6 +40,9 @@ impl PluginLoader {
 #[cfg(target_os = "android")]
 impl PluginLoader {
     /// Read plugins from Android Assets instead of the filesystem.
+    ///
+    /// # Panics
+    /// Panics if the internal asset path string contains a null byte.
     pub fn register_all_from_assets(
         registry: &mut PluginRegistry,
         asset_manager: &ndk::asset::AssetManager,
@@ -45,7 +51,7 @@ impl PluginLoader {
         let cstr = std::ffi::CString::new("ui/main.js").unwrap();
         if let Some(mut asset) = asset_manager.open(cstr.as_c_str()) {
             let mut content = String::new();
-            if let Ok(_) = asset.read_to_string(&mut content) {
+            if asset.read_to_string(&mut content).is_ok() {
                 match crate::plugin::JsPlugin::new(content) {
                     Ok(plugin) => {
                         registry.register(&(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>));

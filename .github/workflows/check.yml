@@ -320,32 +320,32 @@ jobs:
       # Performs checks using cargo-ndk.
       # ANDROID_NDK_HOME is automatically sourced from GITHUB_ENV.
       - name: Android (ARM64) Check
-        run: cargo ndk --target aarch64-linux-android check
+        run: BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android" cargo ndk --target aarch64-linux-android check
 
       - name: Android (ARMv7) Check
-        run: cargo ndk --target armv7-linux-androideabi check
+        run: BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--target=armv7-linux-androideabi" cargo ndk --target armv7-linux-androideabi check
 
       - name: Android Clippy Checks
         run: |
-          cargo ndk --target aarch64-linux-android clippy --workspace --all-targets --all-features -- \
+          BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android" cargo ndk --target aarch64-linux-android clippy --workspace --all-targets --all-features -- \
             -D warnings \
             -D clippy::pedantic \
             -D clippy::nursery \
             -D clippy::cargo \
             -A clippy::multiple-crate-versions
-          cargo ndk --target armv7-linux-androideabi clippy --workspace --all-targets --all-features -- \
+          BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--target=armv7-linux-androideabi" cargo ndk --target armv7-linux-androideabi clippy --workspace --all-targets --all-features -- \
             -D warnings \
             -D clippy::pedantic \
             -D clippy::nursery \
             -D clippy::cargo \
             -A clippy::multiple-crate-versions
-          cargo ndk --target x86_64-linux-android clippy --workspace --all-targets --all-features -- \
+          BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android clippy --workspace --all-targets --all-features -- \
             -D warnings \
             -D clippy::pedantic \
             -D clippy::nursery \
             -D clippy::cargo \
             -A clippy::multiple-crate-versions
-          cargo ndk --target i686-linux-android clippy --workspace --all-targets --all-features -- \
+          BINDGEN_EXTRA_CLANG_ARGS_i686_linux_android="--target=i686-linux-android" cargo ndk --target i686-linux-android clippy --workspace --all-targets --all-features -- \
             -D warnings \
             -D clippy::pedantic \
             -D clippy::nursery \
@@ -354,5 +354,5 @@ jobs:
 
       - name: Android (Emulator x86_64) Check and Build
         run: |
-          cargo ndk --target x86_64-linux-android check
-          cargo ndk --target x86_64-linux-android build --release
+          BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android check
+          BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android build --release

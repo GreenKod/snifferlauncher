@@ -36,8 +36,7 @@ impl Element {
     #[must_use]
     pub const fn style(&self) -> &Style {
         match self {
-            Self::Container { style, .. }
-            | Self::Label { style, .. } => style,
+            Self::Container { style, .. } | Self::Label { style, .. } => style,
         }
     }
 
