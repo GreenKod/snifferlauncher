@@ -82,12 +82,14 @@ pub fn get_safe_area(app: &AndroidApp) -> Option<(i32, i32)> {
 ///
 /// Returns an error if the Android JNI calls fail or if the requested action
 /// cannot be started by the system.
+#[allow(clippy::needless_pass_by_value)]
 pub fn launch_action(action: crate::core::types::Action) -> Result<(), String> {
     use crate::core::types::Action;
     match action {
         Action::OpenSettings => start_action("android.settings.SETTINGS"),
         Action::OpenContacts => start_view_uri("content://contacts/people"),
         Action::OpenCamera => start_action("android.media.action.STILL_IMAGE_CAMERA"),
+        Action::LoadImage { .. } | Action::FocusTextInput(_) | Action::BlurTextInput => Ok(()),
     }
 }
 

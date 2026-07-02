@@ -4,6 +4,19 @@ use crate::core::style::Style;
 /// Computed via FNV-1a hash of a `&[u8]` literal at compile time — zero runtime cost.
 pub type WidgetId = u64;
 
+/// Compute a `WidgetId` (u64) from a byte-string literal at runtime or compile time.
+#[must_use]
+pub const fn fnv1a(s: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325_u64;
+    let mut i = 0usize;
+    while i < s.len() {
+        hash ^= s[i] as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01B3_u64);
+        i += 1;
+    }
+    hash
+}
+
 /// Compute a `WidgetId` (u64) from a byte-string literal at compile time.
 ///
 /// Uses the FNV-1a hash algorithm; collisions are astronomically unlikely for
@@ -15,19 +28,7 @@ pub type WidgetId = u64;
 /// ```
 #[macro_export]
 macro_rules! wid {
-    ($s:literal) => {{
-        const fn fnv1a(s: &[u8]) -> u64 {
-            let mut hash: u64 = 0xcbf2_9ce4_8422_2325_u64;
-            let mut i = 0usize;
-            while i < s.len() {
-                hash ^= s[i] as u64;
-                hash = hash.wrapping_mul(0x0000_0100_0000_01B3_u64);
-                i += 1;
-            }
-            hash
-        }
-        fnv1a($s)
-    }};
+    ($s:literal) => {{ $crate::core::ui::widget::fnv1a($s) }};
 }
 
 /// All declared widget IDs — single source of truth.
@@ -43,20 +44,6 @@ pub mod ids {
     pub const BTN_SETTINGS: WidgetId = crate::wid!(b"btn-settings");
     pub const BTN_CONTACTS: WidgetId = crate::wid!(b"btn-contacts");
     pub const BTN_CAMERA: WidgetId = crate::wid!(b"btn-camera");
-
-    /// Map a legacy `ButtonId` to the equivalent `WidgetId` (u64 hash).
-    ///
-    /// Provides the bridge between the existing `find_clicked_button` /
-    /// `find_hovered_button` infrastructure (which still returns `ButtonId`)
-    /// and the new event-bus system (which works with `WidgetId`).
-    #[must_use]
-    pub const fn from_button_id(id: crate::core::types::ButtonId) -> WidgetId {
-        match id {
-            crate::core::types::ButtonId::Settings => BTN_SETTINGS,
-            crate::core::types::ButtonId::Contacts => BTN_CONTACTS,
-            crate::core::types::ButtonId::Camera => BTN_CAMERA,
-        }
-    }
 }
 
 /// Platform-agnostic UI tree node.
@@ -88,7 +75,6 @@ pub enum Widget {
     /// Stand-alone icon element.
     Icon {
         id: Option<WidgetId>,
-        /// Which button icon shape to draw.
         widget_id: WidgetId,
         style: Style,
     },

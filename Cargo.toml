@@ -23,6 +23,9 @@ sdl2 = "0.38.0"
 swash = { version = "0.2.9", features = ["scale"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+rquickjs = { version = "0.7", features = ["macro", "classes", "bindgen", "array-buffer"] }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
+image = { version = "0.25.1", default-features = false, features = ["png", "jpeg"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6.1", features = ["native-activity"] }
@@ -34,6 +37,7 @@ khronos-egl = { version = "6.0", features = ["dynamic"] }
 [package.metadata.android]
 package = "com.greenkod.snifferlauncher"
 build_targets = ["aarch64-linux-android"]
+assets = "assets"
 
 [package.metadata.android.sdk]
 min_sdk_version = 30
@@ -53,5 +57,25 @@ lto = "fat"          # 'true' yerine 'fat' daha agresif bir LTO sağlar
 codegen-units = 1    # Derleme süresini uzatır ama kodu çok daha fazla optimize eder
 panic = "abort"
 
+[workspace.lints.rust]
+warnings = "deny" # -D warnings karşılığı
+
+[workspace.lints.clippy]
+# Grupları aktif ediyoruz (priority = -1 vererek tekil izinlerin ezilmesini önlüyoruz)
+pedantic = { level = "deny", priority = -1 } # -D clippy::pedantic karşılığı
+nursery = { level = "deny", priority = -1 }  # -D clippy::nursery karşılığı
+cargo = { level = "deny", priority = -1 }    # -D clippy::cargo karşılığı
+
+# Spesifik olarak izin vermek (Açık bırakmak) istediğin kural
+multiple_crate_versions = "allow"            # -A clippy::multiple-crate-versions karşılığı
+
+[lints]
+workspace = true
+
 [[package.metadata.android.uses_permission]]
 name = "android.permission.QUERY_ALL_PACKAGES"
+
+# Keep .plugins/ crates independent — they are separate plugin packages,
+# not part of the main build graph.
+[workspace]
+exclude = [".plugins"]

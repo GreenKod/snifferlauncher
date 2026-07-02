@@ -15,6 +15,8 @@ pub struct GlowRenderer {
     font_atlas: Option<FontAtlas>,
     atlas_width: i32,
     atlas_height: i32,
+    image_program: glow::Program,
+    image_textures: std::collections::HashMap<String, (glow::Texture, f32, f32)>,
 }
 
 fn unpack_color(color: u32) -> [f32; 4] {
@@ -72,28 +74,47 @@ impl GlowRenderer {
 
             // 2. Compile shaders based on target OS
             #[cfg(target_os = "android")]
-            let (shape_vertex_src, shape_fragment_src, text_vertex_src, text_fragment_src) = (
+            let (
+                shape_vertex_src,
+                shape_fragment_src,
+                text_vertex_src,
+                text_fragment_src,
+                image_vertex_src,
+                image_fragment_src,
+            ) = (
                 include_str!("shaders/shape_android.vs"),
                 include_str!("shaders/shape_android.fs"),
                 include_str!("shaders/text_android.vs"),
                 include_str!("shaders/text_android.fs"),
+                include_str!("shaders/image_android.vs"),
+                include_str!("shaders/image_android.fs"),
             );
 
             #[cfg(not(target_os = "android"))]
-            let (shape_vertex_src, shape_fragment_src, text_vertex_src, text_fragment_src) = (
+            let (
+                shape_vertex_src,
+                shape_fragment_src,
+                text_vertex_src,
+                text_fragment_src,
+                image_vertex_src,
+                image_fragment_src,
+            ) = (
                 include_str!("shaders/shape_desktop.vs"),
                 include_str!("shaders/shape_desktop.fs"),
                 include_str!("shaders/text_desktop.vs"),
                 include_str!("shaders/text_desktop.fs"),
+                include_str!("shaders/image_desktop.vs"),
+                include_str!("shaders/image_desktop.fs"),
             );
 
             let shape_program = compile_program(&gl, shape_vertex_src, shape_fragment_src)?;
             let text_program = compile_program(&gl, text_vertex_src, text_fragment_src)?;
+            let image_program = compile_program(&gl, image_vertex_src, image_fragment_src)?;
 
             // 3. Create font atlas texture
             let (font_texture, font_atlas, atlas_width, atlas_height) =
                 if let Some(font_bytes) = font_data {
-                    if let Ok(atlas) = font_atlas::build_font_atlas(&gl, font_bytes, 32.0) {
+                    if let Ok(atlas) = font_atlas::build_font_atlas(&gl, font_bytes, 64.0) {
                         eprintln!(
                             "[DEBUG] Using TTF font atlas ({}x{})",
                             atlas.atlas_width, atlas.atlas_height
@@ -126,6 +147,8 @@ impl GlowRenderer {
                 font_atlas,
                 atlas_width,
                 atlas_height,
+                image_program,
+                image_textures: std::collections::HashMap::new(),
             })
         }
     }
@@ -454,19 +477,10 @@ impl Renderer for GlowRenderer {
                         continue;
                     }
 
-                    let code = c as u32;
-                    let idx = if (32..=127).contains(&code) {
-                        usize::from(
-                            u16::try_from(code - 32).expect("ASCII glyph index fits in u16"),
-                        )
-                    } else {
-                        // fallback: '?' character
-                        usize::from(
-                            u16::try_from('?' as u32 - 32).expect("fallback glyph index fits"),
-                        )
-                    };
-
-                    let glyph = &atlas.glyphs[idx];
+                    let glyph = atlas
+                        .glyphs
+                        .get(&c)
+                        .unwrap_or_else(|| atlas.glyphs.get(&'?').unwrap());
                     if glyph.width == 0 || glyph.height == 0 {
                         curr_x = glyph.advance_width.mul_add(scale, curr_x);
                         continue;
@@ -544,5 +558,149 @@ impl Renderer for GlowRenderer {
 
     fn end_frame(&mut self) {
         // Double buffering is handled by windowing wrapper (SDL2 SwapBuffers / EGL SwapBuffers)
+    }
+
+    fn set_clip_rect(&mut self, rect: Rect) {
+        unsafe {
+            self.gl.enable(glow::SCISSOR_TEST);
+            let y = self.resolution.1 - rect.y - rect.height;
+            self.gl.scissor(
+                f32_to_i32(rect.x),
+                f32_to_i32(y),
+                f32_to_i32(rect.width),
+                f32_to_i32(rect.height),
+            );
+        }
+    }
+
+    fn clear_clip_rect(&mut self) {
+        unsafe {
+            self.gl.disable(glow::SCISSOR_TEST);
+        }
+    }
+
+    fn load_image(&mut self, id: &str, rgba_pixels: &[u8], width: u32, height: u32) {
+        unsafe {
+            if !self.image_textures.contains_key(id) {
+                let tex = self.gl.create_texture().unwrap();
+                self.gl.bind_texture(glow::TEXTURE_2D, Some(tex));
+                self.gl.tex_image_2d(
+                    glow::TEXTURE_2D,
+                    0,
+                    i32::try_from(glow::RGBA).expect("RGBA fits in i32"),
+                    i32::try_from(width).expect("width fits in i32"),
+                    i32::try_from(height).expect("height fits in i32"),
+                    0,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelUnpackData::Slice(Some(rgba_pixels)),
+                );
+                self.gl.tex_parameter_i32(
+                    glow::TEXTURE_2D,
+                    glow::TEXTURE_MIN_FILTER,
+                    i32::try_from(glow::LINEAR).unwrap(),
+                );
+                self.gl.tex_parameter_i32(
+                    glow::TEXTURE_2D,
+                    glow::TEXTURE_MAG_FILTER,
+                    i32::try_from(glow::LINEAR).unwrap(),
+                );
+                self.gl.tex_parameter_i32(
+                    glow::TEXTURE_2D,
+                    glow::TEXTURE_WRAP_S,
+                    i32::try_from(glow::CLAMP_TO_EDGE).unwrap(),
+                );
+                self.gl.tex_parameter_i32(
+                    glow::TEXTURE_2D,
+                    glow::TEXTURE_WRAP_T,
+                    i32::try_from(glow::CLAMP_TO_EDGE).unwrap(),
+                );
+
+                #[allow(clippy::cast_precision_loss)]
+                self.image_textures
+                    .insert(id.to_string(), (tex, width as f32, height as f32));
+            }
+        }
+    }
+
+    fn draw_image(
+        &mut self,
+        id: &str,
+        rect: Rect,
+        radius: f32,
+        object_fit: crate::core::style::ObjectFit,
+    ) {
+        if let Some(&(tex, img_w, img_h)) = self.image_textures.get(id) {
+            let mut draw_rect = rect;
+            let mut uv_scale = (1.0_f32, 1.0_f32);
+            let mut uv_offset = (0.0_f32, 0.0_f32);
+
+            let img_aspect = img_w / img_h;
+            let rect_aspect = rect.width / rect.height;
+
+            match object_fit {
+                crate::core::style::ObjectFit::Fill => {}
+                crate::core::style::ObjectFit::Contain => {
+                    if img_aspect > rect_aspect {
+                        let target_h = rect.width / img_aspect;
+                        draw_rect.y = rect.y + (rect.height - target_h) / 2.0;
+                        draw_rect.height = target_h;
+                    } else {
+                        let target_w = rect.height * img_aspect;
+                        draw_rect.x = rect.x + (rect.width - target_w) / 2.0;
+                        draw_rect.width = target_w;
+                    }
+                }
+                crate::core::style::ObjectFit::Cover => {
+                    if img_aspect > rect_aspect {
+                        let scale_x = rect_aspect / img_aspect;
+                        uv_scale.0 = scale_x;
+                        uv_offset.0 = (1.0 - scale_x) / 2.0;
+                    } else {
+                        let scale_y = img_aspect / rect_aspect;
+                        uv_scale.1 = scale_y;
+                        uv_offset.1 = (1.0 - scale_y) / 2.0;
+                    }
+                }
+            }
+
+            unsafe {
+                self.gl.use_program(Some(self.image_program));
+                self.gl.bind_vertex_array(Some(self.quad_vertex_array));
+                self.gl.active_texture(glow::TEXTURE0);
+                self.gl.bind_texture(glow::TEXTURE_2D, Some(tex));
+
+                let loc_res = self
+                    .gl
+                    .get_uniform_location(self.image_program, "u_resolution");
+                let loc_pos = self
+                    .gl
+                    .get_uniform_location(self.image_program, "u_rect_pos");
+                let loc_size = self
+                    .gl
+                    .get_uniform_location(self.image_program, "u_rect_size");
+                let loc_uv_s = self
+                    .gl
+                    .get_uniform_location(self.image_program, "u_uv_scale");
+                let loc_uv_o = self
+                    .gl
+                    .get_uniform_location(self.image_program, "u_uv_offset");
+                let loc_radius = self.gl.get_uniform_location(self.image_program, "u_radius");
+
+                self.gl
+                    .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
+                self.gl
+                    .uniform_2_f32(loc_pos.as_ref(), draw_rect.x, draw_rect.y);
+                self.gl
+                    .uniform_2_f32(loc_size.as_ref(), draw_rect.width, draw_rect.height);
+                self.gl
+                    .uniform_2_f32(loc_uv_s.as_ref(), uv_scale.0, uv_scale.1);
+                self.gl
+                    .uniform_2_f32(loc_uv_o.as_ref(), uv_offset.0, uv_offset.1);
+                self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
+
+                self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+            }
+        }
     }
 }

@@ -29,5 +29,7 @@ pkgs.rust-bin.stable.latest.default.override {
     # Linux (native + static musl)
     "x86_64-unknown-linux-gnu"
     "x86_64-unknown-linux-musl"
+    # WebAssembly
+    "wasm32-unknown-unknown"
   ];
 }

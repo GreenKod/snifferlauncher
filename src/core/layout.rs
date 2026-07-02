@@ -6,6 +6,7 @@ pub type LayoutChildren = Vec<LayoutNode>;
 
 #[derive(Clone, Debug)]
 pub struct LayoutNode {
+    pub element: Element,
     pub rect: Rect,
     pub children: LayoutChildren,
 }
@@ -27,8 +28,9 @@ fn estimate_text_size(text: &str, text_size: f32) -> Size {
 
 impl LayoutNode {
     #[must_use]
-    pub const fn new(rect: Rect) -> Self {
+    pub const fn new(element: Element, rect: Rect) -> Self {
         Self {
+            element,
             rect,
             children: Vec::new(),
         }
@@ -68,8 +70,11 @@ pub fn calculate_layout(
         Dimension::Percent(p) => parent_size.height * (p / 100.0),
         Dimension::Auto => match element {
             Element::Label { text, .. } => estimate_text_size(text, style.text_size).height,
-            Element::Icon { .. } => 56.0,     // Standard icon size
-            Element::Button { .. } => 86.0,   // Standard button height
+            Element::TextInput {
+                style: element_style,
+                ..
+            } => element_style.text_size * 1.5,
+            Element::Image { .. } => 100.0,
             Element::Container { .. } => 0.0, // Will be computed after children layout
         },
     };
@@ -102,8 +107,10 @@ pub fn calculate_layout(
                         Element::Label { text, .. } => {
                             estimate_text_size(text, child_style.text_size).height
                         }
-                        Element::Icon { .. } => 56.0,
-                        Element::Button { .. } => 86.0,
+                        Element::TextInput {
+                            style: child_style, ..
+                        } => child_style.text_size * 1.5,
+                        Element::Image { .. } => 100.0,
                         Element::Container { .. } => 0.0, // Temporary
                     },
                 };
@@ -115,8 +122,10 @@ pub fn calculate_layout(
                     total_content_height += style.gap;
                     total_content_width += style.gap;
                 }
-                total_content_height += child_layout.rect.height;
-                total_content_width += child_layout.rect.width;
+                total_content_height +=
+                    child_layout.rect.height + child_style.margin.top + child_style.margin.bottom;
+                total_content_width +=
+                    child_layout.rect.width + child_style.margin.left + child_style.margin.right;
                 child_layouts.push((child, child_layout));
             }
 
@@ -156,19 +165,32 @@ pub fn calculate_layout(
                 };
 
                 for (child, mut layout) in child_layouts {
+                    let child_style = child.style();
                     let child_w = layout.rect.width;
 
                     let current_x = match style.align_items {
-                        AlignItems::Start => style.padding.left,
+                        AlignItems::Start => style.padding.left + child_style.margin.left,
                         AlignItems::Center => {
-                            0.5_f32.mul_add(inner_width - child_w, style.padding.left)
+                            0.5_f32.mul_add(
+                                inner_width
+                                    - child_w
+                                    - child_style.margin.left
+                                    - child_style.margin.right,
+                                style.padding.left,
+                            ) + child_style.margin.left
                         }
-                        AlignItems::End => style.padding.left + inner_width - child_w,
+                        AlignItems::End => {
+                            style.padding.left + inner_width - child_w - child_style.margin.right
+                        }
                         AlignItems::Stretch => {
-                            layout.rect.width = inner_width;
-                            style.padding.left
+                            layout.rect.width =
+                                (inner_width - child_style.margin.left - child_style.margin.right)
+                                    .max(0.0);
+                            style.padding.left + child_style.margin.left
                         }
                     };
+
+                    current_y += child_style.margin.top;
 
                     let final_child = calculate_layout(
                         child,
@@ -178,7 +200,8 @@ pub fn calculate_layout(
                     );
                     final_child_nodes.push(final_child);
 
-                    current_y += layout.rect.height + style.gap + spacing_factor;
+                    current_y +=
+                        layout.rect.height + child_style.margin.bottom + style.gap + spacing_factor;
                 }
             } else {
                 // Row layout
@@ -204,19 +227,32 @@ pub fn calculate_layout(
                 };
 
                 for (child, mut layout) in child_layouts {
+                    let child_style = child.style();
                     let child_h = layout.rect.height;
 
                     let current_y = match style.align_items {
-                        AlignItems::Start => style.padding.top,
+                        AlignItems::Start => style.padding.top + child_style.margin.top,
                         AlignItems::Center => {
-                            0.5_f32.mul_add(inner_height - child_h, style.padding.top)
+                            0.5_f32.mul_add(
+                                inner_height
+                                    - child_h
+                                    - child_style.margin.top
+                                    - child_style.margin.bottom,
+                                style.padding.top,
+                            ) + child_style.margin.top
                         }
-                        AlignItems::End => style.padding.top + inner_height - child_h,
+                        AlignItems::End => {
+                            style.padding.top + inner_height - child_h - child_style.margin.bottom
+                        }
                         AlignItems::Stretch => {
-                            layout.rect.height = inner_height;
-                            style.padding.top
+                            layout.rect.height =
+                                (inner_height - child_style.margin.top - child_style.margin.bottom)
+                                    .max(0.0);
+                            style.padding.top + child_style.margin.top
                         }
                     };
+
+                    current_x += child_style.margin.left;
 
                     let final_child = calculate_layout(
                         child,
@@ -226,18 +262,21 @@ pub fn calculate_layout(
                     );
                     final_child_nodes.push(final_child);
 
-                    current_x += layout.rect.width + style.gap + spacing_factor;
+                    current_x +=
+                        layout.rect.width + child_style.margin.right + style.gap + spacing_factor;
                 }
             }
 
             LayoutNode {
+                element: element.clone(),
                 rect: self_rect,
                 children: final_child_nodes,
             }
         }
-        _ => {
-            // Leaf nodes (Button, Label, Icon)
+        Element::Label { .. } | Element::Image { .. } | Element::TextInput { .. } => {
+            // Leaf nodes
             LayoutNode {
+                element: element.clone(),
                 rect: Rect::new(x_offset, y_offset, self_size.width, self_size.height),
                 children: Vec::new(),
             }

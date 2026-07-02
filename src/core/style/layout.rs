@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// Controls whether an element participates in layout.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Display {
     #[default]
     Flex,
@@ -7,7 +9,7 @@ pub enum Display {
 }
 
 /// Main axis direction for a flex container.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum FlexDirection {
     #[default]
     Column,
@@ -15,7 +17,7 @@ pub enum FlexDirection {
 }
 
 /// How children are distributed along the main axis.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum JustifyContent {
     #[default]
     Start,
@@ -25,7 +27,7 @@ pub enum JustifyContent {
 }
 
 /// How children are aligned along the cross axis.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum AlignItems {
     #[default]
     Stretch,
@@ -35,7 +37,7 @@ pub enum AlignItems {
 }
 
 /// A size value — either automatic, a fixed pixel count, or a percentage.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub enum Dimension {
     #[default]
     Auto,
@@ -43,8 +45,17 @@ pub enum Dimension {
     Percent(f32),
 }
 
+/// How an image should be resized to fit its container.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ObjectFit {
+    #[default]
+    Fill,
+    Contain,
+    Cover,
+}
+
 /// Uniform or per-side offsets used for padding and margin.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct RectOffset {
     pub left: f32,
     pub right: f32,

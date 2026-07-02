@@ -25,10 +25,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
     use crate::core::ui::data_map::DataMap;
     use crate::core::ui::event::{EventBus, UiEvent};
     use crate::core::ui::style_map::StyleMap;
-    use crate::core::{
-        Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point, Renderer,
-        ScreenMetrics, Size, calculate_layout,
-    };
+    use crate::core::{GlowRenderer, Point, Renderer, ScreenMetrics, Size, calculate_layout};
     use crate::plugin::registry::PluginRegistry;
     use android_activity::{
         InputStatus, MainEvent, PollEvent, input::InputEvent, input::MotionAction,
@@ -161,20 +158,32 @@ pub fn android_main(app: android_activity::AndroidApp) {
     }
 
     let mut egl_state: Option<EglContextState> = None;
-    let mut state = LauncherState::default();
     let mut running = true;
     let mut last_touch_pos = Point::zero();
+    let mut hovered_btn: Option<u64> = None;
 
     // Initialize the event-driven plugin system
     let event_bus = EventBus::default();
     let style_map = StyleMap::default();
     let data_map = DataMap::default();
+    let action_queue = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
     let mut plugin_registry = PluginRegistry::default();
 
-    // In Android, we'd normally extract this to internal storage, but for now we read from local .plugins
-    let loader = crate::plugin::PluginLoader::new(".plugins");
-    loader.register_all(&mut plugin_registry);
+    // In Android, we read from bundled assets instead of the local filesystem.
+    crate::plugin::PluginLoader::register_all_from_assets(
+        &mut plugin_registry,
+        &app.asset_manager(),
+        action_queue.clone(),
+    );
+
+    // Root element will be fetched every frame inside the render loop,
+    // but initialized here so input event handlers can access the latest tree.
+    let mut root_element = crate::core::types::Element::Container {
+        id: None,
+        style: crate::core::style::Style::default(),
+        children: vec![],
+    };
 
     while running {
         app.poll_events(Some(Duration::from_millis(16)), |event| match event {
@@ -183,11 +192,28 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     && let Some(ref mut renderer) = egl.renderer
                     && let Some(window) = app.native_window()
                 {
+                    // Trigger periodic tasks (like Garbage Collection) for plugins
+                    plugin_registry.tick();
+
+                    // Fetch dynamic UI tree from plugins EVERY FRAME
+                    root_element = plugin_registry.build_ui().unwrap_or_else(|| {
+                        crate::core::types::Element::Container {
+                            id: None,
+                            style: crate::core::style::Style::default(),
+                            children: vec![],
+                        }
+                    });
+
                     let width =
                         f32::from(u16::try_from(window.width()).expect("window width fits in u16"));
                     let height = f32::from(
                         u16::try_from(window.height()).expect("window height fits in u16"),
                     );
+
+                    crate::core::types::SCREEN_WIDTH
+                        .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                    crate::core::types::SCREEN_HEIGHT
+                        .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
                     let (safe_area_top, safe_area_bottom) =
                         crate::platform::android::jni::get_safe_area(&app)
@@ -212,8 +238,6 @@ pub fn android_main(app: android_activity::AndroidApp) {
                         density,
                         scaled_density,
                     );
-
-                    let root_element = LauncherApp::view(&state, &metrics);
                     let layout_tree = calculate_layout(
                         &root_element,
                         Size::new(width, height - safe_area_top - safe_area_bottom),
@@ -221,15 +245,47 @@ pub fn android_main(app: android_activity::AndroidApp) {
                         safe_area_top,
                     );
 
+                    // Dispatch any queued events to plugins BEFORE rendering
+                    plugin_registry.dispatch(&event_bus, &style_map, &data_map, &action_queue);
+
+                    // Process any actions emitted by plugins
+                    if let Ok(mut q) = action_queue.lock() {
+                        for action in q.drain(..) {
+                            match action {
+                                crate::core::Action::LoadImage { id, src } => {
+                                    // Try loading image (requires image crate)
+                                    if let Ok(img) = image::open(&src) {
+                                        let rgba = img.to_rgba8();
+                                        let (w, h) = rgba.dimensions();
+                                        renderer.load_image(&id, rgba.as_raw(), w, h);
+                                    }
+                                }
+                                crate::core::Action::FocusTextInput(_id) => {
+                                    app.show_soft_input(true);
+                                }
+                                crate::core::Action::BlurTextInput => {
+                                    app.hide_soft_input(true);
+                                }
+                                _ => {
+                                    let _ = launch_action(action);
+                                }
+                            }
+                        }
+                    }
+
                     renderer.begin_frame(width, height);
                     renderer.clear(BACKGROUND);
 
-                    draw_ui(renderer, &root_element, &layout_tree, &metrics);
+                    draw_ui(
+                        renderer,
+                        &root_element,
+                        &layout_tree,
+                        &metrics,
+                        &style_map,
+                        &data_map,
+                    );
 
                     renderer.end_frame();
-
-                    // Dispatch any queued events to plugins (O(1) per event)
-                    plugin_registry.dispatch(&event_bus, &style_map, &data_map);
 
                     egl.swap_buffers();
                 }
@@ -293,14 +349,15 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                             // Build metrics for touch-path view, same as render path
                                             let (density, scaled_density) =
                                                 crate::platform::android::jni::get_density();
-                                            let metrics = ScreenMetrics::from_scale(
+                                            let _metrics = ScreenMetrics::from_scale(
                                                 width,
                                                 height - safe_area_top - safe_area_bottom,
                                                 density,
                                                 scaled_density,
                                             );
 
-                                            let root_element = LauncherApp::view(&state, &metrics);
+                                            // The root element is built dynamically outside this loop, but ideally we'd re-poll it if needed.
+                                            // For now we reuse the existing `root_element`.
                                             let layout_tree = calculate_layout(
                                                 &root_element,
                                                 Size::new(
@@ -315,68 +372,64 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                 MotionAction::Down
                                                 | MotionAction::Move
                                                 | MotionAction::PointerDown => {
-                                                    let prev_hovered = state.hovered;
-                                                    let hovered_btn = find_hovered_button(
+                                                    let prev_hovered = hovered_btn;
+                                                    let hovered_data = find_hovered_button(
                                                         &root_element,
                                                         &layout_tree,
                                                         point,
                                                     );
-                                                    let _ = LauncherApp::update(
-                                                        &mut state,
-                                                        LauncherMessage::ButtonHovered(hovered_btn),
-                                                    );
-                                                    // Push hover events to the bus
-                                                    if let Some(btn) = hovered_btn {
+                                                    hovered_btn = hovered_data.map(|(id, _)| id);
+
+                                                    if prev_hovered != hovered_btn
+                                                        && let Some(prev) = prev_hovered
+                                                    {
+                                                        event_bus.push(UiEvent::HoverEnd(prev));
+                                                    }
+                                                    if let Some((btn, rect)) = hovered_data {
                                                         event_bus.push(UiEvent::Hover(
-                                                            crate::core::ui::widget::ids::from_button_id(btn),
-                                                        ));
-                                                    } else if let Some(prev) = prev_hovered {
-                                                        event_bus.push(UiEvent::HoverEnd(
-                                                            crate::core::ui::widget::ids::from_button_id(prev),
+                                                            btn,
+                                                            rect.width,
+                                                            rect.height,
+                                                            point.x - rect.x,
+                                                            point.y - rect.y,
                                                         ));
                                                     }
                                                     InputStatus::Handled
                                                 }
                                                 MotionAction::Up | MotionAction::PointerUp => {
-                                                    let prev_hovered = state.hovered;
-                                                    let hovered_btn = find_hovered_button(
+                                                    let prev_hovered = hovered_btn;
+                                                    let hovered_data = find_hovered_button(
                                                         &root_element,
                                                         &layout_tree,
                                                         point,
                                                     );
-                                                    let _ = LauncherApp::update(
-                                                        &mut state,
-                                                        LauncherMessage::ButtonHovered(hovered_btn),
-                                                    );
+                                                    hovered_btn = hovered_data.map(|(id, _)| id);
                                                     if let Some(prev) = prev_hovered {
-                                                        event_bus.push(UiEvent::HoverEnd(
-                                                            crate::core::ui::widget::ids::from_button_id(prev),
-                                                        ));
+                                                        event_bus.push(UiEvent::HoverEnd(prev));
                                                     }
 
-                                                    if let Some(clicked_btn) = find_clicked_button(
-                                                        &root_element,
-                                                        &layout_tree,
-                                                        point,
-                                                    ) {
-                                                        // Push Click before updating state
+                                                    if let Some((clicked_btn, rect)) =
+                                                        find_clicked_button(
+                                                            &root_element,
+                                                            &layout_tree,
+                                                            point,
+                                                        )
+                                                    {
+                                                        // Push Click event ONLY; let plugins decide actions
                                                         event_bus.push(UiEvent::Click(
-                                                            crate::core::ui::widget::ids::from_button_id(clicked_btn),
+                                                            clicked_btn,
+                                                            rect.width,
+                                                            rect.height,
                                                         ));
-                                                        if let Some(action) = LauncherApp::update(
-                                                            &mut state,
-                                                            LauncherMessage::ButtonClicked(clicked_btn),
-                                                        ) {
-                                                            let _ = launch_action(action);
-                                                        }
                                                     }
                                                     InputStatus::Handled
                                                 }
                                                 MotionAction::Cancel => {
-                                                    let _ = LauncherApp::update(
-                                                        &mut state,
-                                                        LauncherMessage::ButtonHovered(None),
-                                                    );
+                                                    let prev_hovered = hovered_btn;
+                                                    hovered_btn = None;
+                                                    if let Some(prev) = prev_hovered {
+                                                        event_bus.push(UiEvent::HoverEnd(prev));
+                                                    }
                                                     InputStatus::Handled
                                                 }
                                                 _ => InputStatus::Unhandled,

@@ -22,5 +22,23 @@ pub trait UiPlugin: Send + Sync {
     ///
     /// The plugin may update `StyleMap` or `DataMap` to change the appearance
     /// or content of widgets without touching `app.rs`.
-    fn on_event(&self, event: &UiEvent, styles: &StyleMap, data: &DataMap);
+    fn on_event(
+        &self,
+        event: &UiEvent,
+        styles: &StyleMap,
+        data: &DataMap,
+        actions: &std::sync::Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
+    );
+
+    /// Ask the plugin to provide the initial UI layout tree.
+    ///
+    /// If multiple plugins provide a layout, the system may use the first one or merge them.
+    /// Default implementation returns `None`, indicating the plugin doesn't define layout.
+    fn build_ui(&self) -> Option<crate::core::types::Element> {
+        None
+    }
+
+    /// Called once per render frame.
+    /// Useful for periodic tasks, animations, or garbage collection.
+    fn on_tick(&self) {}
 }

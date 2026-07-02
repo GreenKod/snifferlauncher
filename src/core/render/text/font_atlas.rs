@@ -1,3 +1,5 @@
+#![allow(clippy::pedantic, clippy::nursery)]
+
 use glow::HasContext;
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source, image::Content};
@@ -31,7 +33,7 @@ pub struct GlyphInfo {
 
 pub struct FontAtlas {
     pub texture: glow::Texture,
-    pub glyphs: Vec<GlyphInfo>,
+    pub glyphs: std::collections::HashMap<char, GlyphInfo>,
     pub atlas_width: i32,
     pub atlas_height: i32,
     /// The pixel size used when rasterizing glyphs
@@ -77,14 +79,14 @@ pub fn build_font_atlas(
 
     let atlas_height = glyphs_data
         .iter()
-        .map(|g| g.height)
+        .map(|(_, g)| g.height)
         .max()
         .unwrap_or(1)
         .max(1)
         + PADDING * 2;
     let atlas_width = glyphs_data
         .iter()
-        .map(|g| g.width + PADDING * 2)
+        .map(|(_, g)| g.width + PADDING * 2)
         .sum::<u32>()
         .max(1);
 
@@ -93,10 +95,10 @@ pub fn build_font_atlas(
         usize::try_from(atlas_width * atlas_height)
             .expect("atlas dimensions fit in usize")
     ];
-    let mut glyph_infos: Vec<GlyphInfo> = Vec::with_capacity(96);
+    let mut glyph_infos = std::collections::HashMap::with_capacity(128);
     let mut x_cursor: u32 = 0;
 
-    for g in &glyphs_data {
+    for (character, g) in &glyphs_data {
         let dst_x = x_cursor + PADDING;
         // Place every glyph at Y=PADDING (top of row); bearing_y already accounts for position
         let dst_y = PADDING;
@@ -112,15 +114,18 @@ pub fn build_font_atlas(
             }
         }
 
-        glyph_infos.push(GlyphInfo {
-            atlas_x: dst_x,
-            atlas_y: dst_y,
-            width: g.width,
-            height: g.height,
-            bearing_x: g.bearing_x,
-            bearing_y: g.bearing_y,
-            advance_width: g.advance_width,
-        });
+        glyph_infos.insert(
+            *character,
+            GlyphInfo {
+                atlas_x: dst_x,
+                atlas_y: dst_y,
+                width: g.width,
+                height: g.height,
+                bearing_x: g.bearing_x,
+                bearing_y: g.bearing_y,
+                advance_width: g.advance_width,
+            },
+        );
 
         x_cursor += g.width + PADDING * 2;
     }
@@ -146,7 +151,11 @@ pub fn build_font_atlas(
     })
 }
 
-fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec<GlyphData> {
+fn collect_glyph_data(
+    font: &FontRef,
+    pixel_size: f32,
+    scale_factor: f32,
+) -> Vec<(char, GlyphData)> {
     let mut context = ScaleContext::new();
     let mut scaler = context.builder(*font).size(pixel_size).hint(true).build();
 
@@ -158,16 +167,23 @@ fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec
     let charmap = font.charmap();
     let glyph_metrics = font.glyph_metrics(&[]);
 
-    let mut glyphs_data = Vec::with_capacity(96);
+    let mut chars_to_render = Vec::new();
     for c in 32u8..128u8 {
-        let character = char::from(c);
+        chars_to_render.push(char::from(c));
+    }
+    for &c in &['ç', 'Ç', 'ğ', 'Ğ', 'ı', 'İ', 'ö', 'Ö', 'ş', 'Ş', 'ü', 'Ü'] {
+        chars_to_render.push(c);
+    }
+
+    let mut glyphs_data = Vec::with_capacity(128);
+    for character in chars_to_render {
         let glyph_id = charmap.map(character);
 
         let advance_width = glyph_metrics.advance_width(glyph_id) * scale_factor;
 
         let image = renderer.render(&mut scaler, glyph_id);
 
-        let (width, height, bearing_x, bearing_y, bitmap) = match image {
+        let glyph_data = match image {
             Some(img) => {
                 let w = img.placement.width;
                 let h = img.placement.height;
@@ -198,21 +214,100 @@ fn collect_glyph_data(font: &FontRef, pixel_size: f32, scale_factor: f32) -> Vec
                     }
                 };
 
-                (w, h, bx, by, data)
+                // Generate SDF from the rasterized bitmap
+                let spread = 8;
+                let (sdf_bitmap, sdf_w, sdf_h) = generate_sdf(&data, w, h, spread);
+
+                // Adjust bearings for the padded SDF size
+                let sdf_bx = bx - spread as f32;
+                let sdf_by = by + spread as f32;
+
+                GlyphData {
+                    width: sdf_w,
+                    height: sdf_h,
+                    bearing_x: sdf_bx,
+                    bearing_y: sdf_by,
+                    advance_width,
+                    bitmap: sdf_bitmap,
+                }
             }
-            None => (0, 0, 0.0, 0.0, Vec::new()),
+            None => GlyphData {
+                width: 0,
+                height: 0,
+                bearing_x: 0.0,
+                bearing_y: 0.0,
+                advance_width,
+                bitmap: Vec::new(),
+            },
         };
 
-        glyphs_data.push(GlyphData {
-            width,
-            height,
-            bearing_x,
-            bearing_y,
-            advance_width,
-            bitmap,
-        });
+        glyphs_data.push((character, glyph_data));
     }
     glyphs_data
+}
+
+fn generate_sdf(bitmap: &[u8], width: u32, height: u32, spread: u32) -> (Vec<u8>, u32, u32) {
+    if width == 0 || height == 0 {
+        return (Vec::new(), 0, 0);
+    }
+
+    let p_width = width + 2 * spread;
+    let p_height = height + 2 * spread;
+    let mut padded = vec![0u8; (p_width * p_height) as usize];
+
+    // Copy bitmap to center of padded buffer
+    for y in 0..height {
+        for x in 0..width {
+            let src = (y * width + x) as usize;
+            let dst = ((y + spread) * p_width + (x + spread)) as usize;
+            padded[dst] = bitmap[src];
+        }
+    }
+
+    let mut sdf = vec![0u8; (p_width * p_height) as usize];
+    let spread_f = spread as f32;
+    let spread_i = spread as isize;
+
+    for y in 0..p_height as isize {
+        for x in 0..p_width as isize {
+            let idx = (y * p_width as isize + x) as usize;
+            let inside = padded[idx] > 127;
+            let mut min_dist_sq = spread_f * spread_f;
+
+            let start_dy = (-spread_i).max(-y);
+            let end_dy = spread_i.min((p_height as isize) - 1 - y);
+            let start_dx = (-spread_i).max(-x);
+            let end_dx = spread_i.min((p_width as isize) - 1 - x);
+
+            for dy in start_dy..=end_dy {
+                for dx in start_dx..=end_dx {
+                    let ny = (y + dy) as usize;
+                    let nx = (x + dx) as usize;
+                    let n_idx = ny * p_width as usize + nx;
+                    let n_inside = padded[n_idx] > 127;
+
+                    if inside != n_inside {
+                        let dist_sq = (dx * dx + dy * dy) as f32;
+                        if dist_sq < min_dist_sq {
+                            min_dist_sq = dist_sq;
+                        }
+                    }
+                }
+            }
+
+            let min_dist = min_dist_sq.sqrt();
+            let dist = if inside { min_dist } else { -min_dist };
+
+            // Map [-spread, spread] to [0, 255] where 127.5 is the exact edge
+            let norm = 0.5 + 0.5 * (dist / spread_f);
+
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let val = (norm * 255.0).clamp(0.0, 255.0) as u8;
+            sdf[idx] = val;
+        }
+    }
+
+    (sdf, p_width, p_height)
 }
 
 fn upload_font_texture(
@@ -274,14 +369,8 @@ pub fn estimate_text_width(atlas: &FontAtlas, text: &str, text_size: f32) -> f32
     for c in text.chars() {
         if c == ' ' {
             width = atlas.space_advance.mul_add(scale, width);
-        } else {
-            let code = c as u32;
-            if (32..=127).contains(&code) {
-                let idx = (code - 32) as usize;
-                if idx < atlas.glyphs.len() {
-                    width = atlas.glyphs[idx].advance_width.mul_add(scale, width);
-                }
-            }
+        } else if let Some(glyph) = atlas.glyphs.get(&c).or_else(|| atlas.glyphs.get(&'?')) {
+            width = glyph.advance_width.mul_add(scale, width);
         }
     }
     width

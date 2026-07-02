@@ -3,10 +3,7 @@ use crate::core::style::{BACKGROUND, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::core::ui::data_map::DataMap;
 use crate::core::ui::event::{EventBus, UiEvent};
 use crate::core::ui::style_map::StyleMap;
-use crate::core::{
-    Action, Application, GlowRenderer, LauncherApp, LauncherMessage, LauncherState, Point,
-    Renderer, ScreenMetrics, Size, calculate_layout,
-};
+use crate::core::{Action, GlowRenderer, Point, Renderer, ScreenMetrics, Size, calculate_layout};
 use crate::plugin::registry::PluginRegistry;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -73,23 +70,35 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut renderer = unsafe { GlowRenderer::with_font(gl, Some(font_bytes))? };
     let mut event_pump = sdl_context.event_pump()?;
 
-    // 5. Initialize UI state
-    let mut state = LauncherState::default();
-    let mut last_mouse_pos = Point::zero();
+    // 6. Application logic state
+    let mut last_mouse_pos = Point::new(-9999.0, -9999.0);
+    let mut hovered_btn: Option<u64> = None;
 
-    // 6. Initialize the event-driven plugin system
     let event_bus = EventBus::default();
     let style_map = StyleMap::default();
     let data_map = DataMap::default();
+    let action_queue = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
     let mut plugin_registry = PluginRegistry::default();
 
-    // Instead of hardcoding, we load from .plugins/plugins.json
-    let loader = crate::plugin::PluginLoader::new(".plugins");
-    loader.register_all(&mut plugin_registry);
+    // Register WASM plugins from assets/ui
+    crate::plugin::PluginLoader::new("assets/ui")
+        .register_all(&mut plugin_registry, action_queue.clone());
 
     let mut running = true;
     while running {
+        // Trigger periodic tasks (like Garbage Collection) for plugins
+        plugin_registry.tick();
+
+        // Fetch dynamic UI tree from plugins EVERY FRAME
+        let root_element =
+            plugin_registry
+                .build_ui()
+                .unwrap_or_else(|| crate::core::types::Element::Container {
+                    id: None,
+                    style: crate::core::style::Style::default(),
+                    children: vec![],
+                });
         let mut clicked_pos = None;
         let mut mouse_moved = false;
 
@@ -121,60 +130,154 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         f32::from(i16::try_from(y).expect("mouse y fits in i16")),
                     ));
                 }
+                Event::Window {
+                    win_event: sdl2::event::WindowEvent::Leave,
+                    ..
+                } => {
+                    let prev_hovered = hovered_btn;
+                    hovered_btn = None;
+                    if let Some(prev) = prev_hovered {
+                        event_bus.push(crate::core::ui::event::UiEvent::HoverEnd(prev));
+                    }
+                    // Move the mouse out of the layout entirely to prevent re-triggering hover
+                    last_mouse_pos = crate::core::Point::new(-9999.0, -9999.0);
+                    mouse_moved = true; // Force layout re-check to clear it naturally too if needed
+                }
+                Event::TextInput { text, .. } => {
+                    event_bus.push(UiEvent::TextInput(text));
+                }
                 _ => {}
             }
         }
 
         // 8. Query current drawable size each frame (handles resize and DPI changes)
-        let (w, h) = window.drawable_size();
-        let width = f32::from(u16::try_from(w).expect("drawable width fits in u16"));
-        let height = f32::from(u16::try_from(h).expect("drawable height fits in u16"));
+        let (log_w, log_h) = window.size();
+        let (phys_w, phys_h) = window.drawable_size();
+
+        let width = f32::from(u16::try_from(phys_w).expect("drawable width fits in u16"));
+        let height = f32::from(u16::try_from(phys_h).expect("drawable height fits in u16"));
+
+        crate::core::types::SCREEN_WIDTH
+            .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+        crate::core::types::SCREEN_HEIGHT
+            .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
+
+        let scale_x = width / f32::from(u16::try_from(log_w).unwrap_or(1));
+        let scale_y = height / f32::from(u16::try_from(log_h).unwrap_or(1));
+
+        // Scale mouse inputs to physical layout space
+        let mut scaled_last_mouse_pos = last_mouse_pos;
+        if (scaled_last_mouse_pos.x - -9999.0).abs() > f32::EPSILON {
+            scaled_last_mouse_pos.x *= scale_x;
+            scaled_last_mouse_pos.y *= scale_y;
+        }
+
+        let scaled_clicked_pos = clicked_pos.map(|mut pos| {
+            pos.x *= scale_x;
+            pos.y *= scale_y;
+            pos
+        });
 
         // Rebuild metrics every frame so window resizes and DPI changes are handled.
         let metrics = ScreenMetrics::from_dpi(width, height, dpi);
 
-        // 9. View & Layout pass
-        let root_element = LauncherApp::view(&state, &metrics);
+        // 9. Layout pass
         let layout_tree = calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
 
         // 10. Translate pointer events → UiEvent → EventBus
         if mouse_moved {
-            let prev_hovered = state.hovered;
-            let hovered_btn = find_hovered_button(&root_element, &layout_tree, last_mouse_pos);
+            let prev_hovered = hovered_btn;
+            let hovered_data =
+                find_hovered_button(&root_element, &layout_tree, scaled_last_mouse_pos);
+            hovered_btn = hovered_data.map(|(id, _)| id);
 
-            let _ = LauncherApp::update(&mut state, LauncherMessage::ButtonHovered(hovered_btn));
-
-            // Emit hover events for new / cleared hover
-            if let Some(btn) = hovered_btn {
-                let id = crate::core::ui::widget::ids::from_button_id(btn);
-                event_bus.push(UiEvent::Hover(id));
-            } else if let Some(prev) = prev_hovered {
-                let id = crate::core::ui::widget::ids::from_button_id(prev);
-                event_bus.push(UiEvent::HoverEnd(id));
+            match (prev_hovered, hovered_data) {
+                (Some(prev), Some((current, rect))) if prev != current => {
+                    event_bus.push(UiEvent::HoverEnd(prev));
+                    event_bus.push(UiEvent::Hover(
+                        current,
+                        rect.width,
+                        rect.height,
+                        scaled_last_mouse_pos.x - rect.x,
+                        scaled_last_mouse_pos.y - rect.y,
+                    ));
+                }
+                (Some(prev), Some((current, rect))) if prev == current => {
+                    event_bus.push(UiEvent::Hover(
+                        current,
+                        rect.width,
+                        rect.height,
+                        scaled_last_mouse_pos.x - rect.x,
+                        scaled_last_mouse_pos.y - rect.y,
+                    ));
+                }
+                (None, Some((current, rect))) => {
+                    event_bus.push(UiEvent::Hover(
+                        current,
+                        rect.width,
+                        rect.height,
+                        scaled_last_mouse_pos.x - rect.x,
+                        scaled_last_mouse_pos.y - rect.y,
+                    ));
+                }
+                (Some(prev), None) => {
+                    event_bus.push(UiEvent::HoverEnd(prev));
+                }
+                _ => {} // Same button, no change
             }
         }
 
-        if let Some(clicked_pt) = clicked_pos
-            && let Some(clicked_btn) = find_clicked_button(&root_element, &layout_tree, clicked_pt)
+        if let Some(clicked_pt) = scaled_clicked_pos
+            && let Some((clicked_btn, rect)) =
+                find_clicked_button(&root_element, &layout_tree, clicked_pt)
         {
-            // Push Click to event bus before updating state
-            let id = crate::core::ui::widget::ids::from_button_id(clicked_btn);
-            event_bus.push(UiEvent::Click(id));
-
-            if let Some(action) =
-                LauncherApp::update(&mut state, LauncherMessage::ButtonClicked(clicked_btn))
-            {
-                handle_action(action);
-            }
+            // Push Click to event bus ONLY; plugins will decide the action
+            event_bus.push(UiEvent::Click(clicked_btn, rect.width, rect.height));
         }
 
         // 11. Dispatch queued events to plugins (O(1) per event)
-        plugin_registry.dispatch(&event_bus, &style_map, &data_map);
+        plugin_registry.dispatch(&event_bus, &style_map, &data_map, &action_queue);
+
+        // Process any actions emitted by plugins
+        if let Ok(mut q) = action_queue.lock() {
+            for action in q.drain(..) {
+                match action {
+                    Action::OpenSettings => println!("Desktop Preview: Open Settings triggered"),
+                    Action::OpenContacts => println!("Desktop Preview: Open Contacts triggered"),
+                    Action::OpenCamera => println!("Desktop Preview: Open Camera triggered"),
+                    Action::LoadImage { id, src } => {
+                        // Load image with image crate
+                        let result = image::open(&src);
+                        match result {
+                            Ok(img) => {
+                                let rgba = img.to_rgba8();
+                                let (w, h) = rgba.dimensions();
+                                renderer.load_image(&id, rgba.as_raw(), w, h);
+                            }
+                            Err(e) => println!("Failed to load image {src}: {e}"),
+                        }
+                    }
+                    Action::FocusTextInput(_id) => {
+                        video_subsystem.text_input().start();
+                    }
+                    Action::BlurTextInput => {
+                        video_subsystem.text_input().stop();
+                    }
+                }
+            }
+        }
 
         // 12. Render
         renderer.begin_frame(width, height);
         renderer.clear(BACKGROUND);
-        draw_ui(&mut renderer, &root_element, &layout_tree, &metrics);
+        draw_ui(
+            &mut renderer,
+            &root_element,
+            &layout_tree,
+            &metrics,
+            &style_map,
+            &data_map,
+        );
         renderer.end_frame();
 
         window.gl_swap_window();
@@ -182,12 +285,4 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
-}
-
-fn handle_action(action: Action) {
-    match action {
-        Action::OpenSettings => println!("Desktop Preview: Open Settings triggered"),
-        Action::OpenContacts => println!("Desktop Preview: Open Contacts triggered"),
-        Action::OpenCamera => println!("Desktop Preview: Open Camera triggered"),
-    }
 }
