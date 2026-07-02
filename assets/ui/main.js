@@ -60,28 +60,75 @@ host_log("Hash of 'btn-merhaba': " + host_hash("btn-merhaba"));
 // Send UI to Rust Host
 host_set_ui(JSON.stringify(UI_TREE));
 
+// Phase 2: Binary ArrayBuffer Helpers (Postcard Format)
+function parseAppState(buffer) {
+    // AppState in Postcard:
+    // click_count: unsigned varint
+    // screen_width: f32 (4 bytes, Little-Endian)
+    // screen_height: f32 (4 bytes, Little-Endian)
+    const view = new DataView(buffer);
+    let offset = 0;
+    
+    // Read varint for u32
+    let click_count = 0;
+    let shift = 0;
+    while (true) {
+        let byte = view.getUint8(offset++);
+        click_count |= (byte & 0x7f) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+    }
+    
+    const screen_width = view.getFloat32(offset, true);
+    offset += 4;
+    const screen_height = view.getFloat32(offset, true);
+    
+    return { click_count, screen_width, screen_height };
+}
+
+function sendBinaryEvent() {
+    // 999 as varint is [0xE7, 0x07] (2 bytes)
+    // plus 8 bytes for two f32 = 10 bytes total
+    const buffer = new ArrayBuffer(10);
+    const view = new DataView(buffer);
+    
+    view.setUint8(0, 0xE7);
+    view.setUint8(1, 0x07);
+    
+    view.setFloat32(2, 1280.0, true);
+    view.setFloat32(6, 720.0, true);
+    
+    host_send_binary_event(buffer);
+}
+
 // Event Handler for UI Interactions
 globalThis.onEvent = function (eventJsonString) {
     const event = JSON.parse(eventJsonString);
 
-    // Only log Click events to avoid spamming the console with Hovers
     if (event.type === "Click") {
         host_log("JS received CLICK event for ID: " + event.id);
     }
 
-    // host_hash converts the string "btn-merhaba" to its matching u64 Hash ID (as a string)
     if (event.type === "Click" && event.id === host_hash("btn-merhaba")) {
-        // Change the text and background
+        // Phase 1 (Fine-Grained API) Test
+        host_set_text("btn-merhaba", "Tıklandı!");
+        host_update_style("root", "background_color", "FF00FF00"); // Green
+        
         UI_TREE.Container.children[0].Label.text = "Tıklandı!";
-        UI_TREE.Container.style.background_color = hexToColor("#00FF00"); // Green
+        UI_TREE.Container.style.background_color = hexToColor("#00FF00"); 
 
-        // Send updated UI to Rust
-        host_set_ui(JSON.stringify(UI_TREE));
     } else if (event.type === "Click" && event.id === host_hash("btn-width")) {
-        let w = host_screen_width();
-        let h = host_screen_height();
-        UI_TREE.Container.children[1].Label.text = "Genişlik: " + w + "x" + h;
-        host_set_ui(JSON.stringify(UI_TREE));
+        // Phase 2 (ArrayBuffer / Postcard) Test
+        let buffer = host_get_binary_state();
+        let state = parseAppState(buffer);
+        
+        let new_text = "Binary: " + state.screen_width + "x" + state.screen_height + " Clicks: " + state.click_count;
+        host_set_text("btn-width", new_text);
+        
+        // Also test sending binary back to Rust
+        sendBinaryEvent();
+        
+        UI_TREE.Container.children[1].Label.text = new_text;
     }
 
     return "[]";
