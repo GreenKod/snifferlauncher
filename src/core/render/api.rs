@@ -17,4 +17,14 @@ pub trait Renderer {
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: u32);
     fn begin_frame(&mut self, width: f32, height: f32);
     fn end_frame(&mut self);
+    fn set_clip_rect(&mut self, rect: Rect);
+    fn clear_clip_rect(&mut self);
+    fn load_image(&mut self, id: &str, rgba_pixels: &[u8], width: u32, height: u32);
+    fn draw_image(
+        &mut self,
+        id: &str,
+        rect: Rect,
+        radius: f32,
+        object_fit: crate::core::style::ObjectFit,
+    );
 }

@@ -45,6 +45,15 @@ pub enum Dimension {
     Percent(f32),
 }
 
+/// How an image should be resized to fit its container.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ObjectFit {
+    #[default]
+    Fill,
+    Contain,
+    Cover,
+}
+
 /// Uniform or per-side offsets used for padding and margin.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct RectOffset {

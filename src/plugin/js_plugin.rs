@@ -17,6 +17,7 @@ pub struct JsPlugin {
     subscriptions: Vec<WidgetId>,
     ui_tree: Arc<Mutex<Option<Element>>>,
     gc_counter: std::sync::Mutex<u32>,
+    action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
 }
 
 #[allow(clippy::non_send_fields_in_send_ty)]
@@ -28,7 +29,10 @@ impl JsPlugin {
     ///
     /// # Errors
     /// Returns a String error if QuickJS runtime or context creation fails.
-    pub fn new(script_content: String) -> Result<Self, String> {
+    pub fn new(
+        script_content: String,
+        action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
+    ) -> Result<Self, String> {
         let runtime = Runtime::new().map_err(|e| format!("QuickJS runtime error: {e}"))?;
         let context = Context::full(&runtime).map_err(|e| format!("QuickJS context error: {e}"))?;
 
@@ -42,6 +46,7 @@ impl JsPlugin {
             // but let's just make it a global event listener.
             ui_tree: ui_tree.clone(),
             gc_counter: std::sync::Mutex::new(0),
+            action_queue,
         };
 
         plugin.init_js_env(ui_tree)?;
@@ -200,6 +205,36 @@ impl JsPlugin {
             .unwrap();
             globals.set("host_screen_height", get_height_func).unwrap();
 
+            // host_create_image
+            let aq_img = self.action_queue.clone();
+            let create_image_func = Function::new(ctx.clone(), move |id: String, src: String| {
+                if let Ok(mut q) = aq_img.lock() {
+                    q.push(crate::core::types::Action::LoadImage { id, src });
+                }
+            })
+            .unwrap();
+            globals.set("host_create_image", create_image_func).unwrap();
+
+            // host_focus_input
+            let aq_focus = self.action_queue.clone();
+            let focus_input_func = Function::new(ctx.clone(), move |id: String| {
+                if let Ok(mut q) = aq_focus.lock() {
+                    q.push(crate::core::types::Action::FocusTextInput(id));
+                }
+            })
+            .unwrap();
+            globals.set("host_focus_input", focus_input_func).unwrap();
+
+            // host_blur_input
+            let aq_blur = self.action_queue.clone();
+            let blur_input_func = Function::new(ctx.clone(), move || {
+                if let Ok(mut q) = aq_blur.lock() {
+                    q.push(crate::core::types::Action::BlurTextInput);
+                }
+            })
+            .unwrap();
+            globals.set("host_blur_input", blur_input_func).unwrap();
+
             // evaluate script
             let _ = ctx
                 .eval::<Value, _>(self.script_content.as_bytes())
@@ -249,6 +284,10 @@ impl UiPlugin for JsPlugin {
                         format!(r#"{{"type":"Hover","id":"{id}","w":{w},"h":{h},"x":{x},"y":{y}}}"#)
                     }
                     UiEvent::HoverEnd(id) => format!(r#"{{"type":"HoverEnd","id":"{id}"}}"#),
+                    UiEvent::TextInput(text) => format!(
+                        r#"{{"type":"TextInput","text":{}}}"#,
+                        serde_json::to_string(text).unwrap_or_default()
+                    ),
                 };
 
                 let res: Result<String, _> = on_event_fn.call((event_json,));

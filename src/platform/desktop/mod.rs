@@ -82,7 +82,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut plugin_registry = PluginRegistry::default();
 
     // Register WASM plugins from assets/ui
-    crate::plugin::PluginLoader::new("assets/ui").register_all(&mut plugin_registry);
+    crate::plugin::PluginLoader::new("assets/ui")
+        .register_all(&mut plugin_registry, action_queue.clone());
 
     let mut running = true;
     while running {
@@ -141,6 +142,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     // Move the mouse out of the layout entirely to prevent re-triggering hover
                     last_mouse_pos = crate::core::Point::new(-9999.0, -9999.0);
                     mouse_moved = true; // Force layout re-check to clear it naturally too if needed
+                }
+                Event::TextInput { text, .. } => {
+                    event_bus.push(UiEvent::TextInput(text));
                 }
                 _ => {}
             }
@@ -237,7 +241,29 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // Process any actions emitted by plugins
         if let Ok(mut q) = action_queue.lock() {
             for action in q.drain(..) {
-                handle_action(action);
+                match action {
+                    Action::OpenSettings => println!("Desktop Preview: Open Settings triggered"),
+                    Action::OpenContacts => println!("Desktop Preview: Open Contacts triggered"),
+                    Action::OpenCamera => println!("Desktop Preview: Open Camera triggered"),
+                    Action::LoadImage { id, src } => {
+                        // Load image with image crate
+                        let result = image::open(&src);
+                        match result {
+                            Ok(img) => {
+                                let rgba = img.to_rgba8();
+                                let (w, h) = rgba.dimensions();
+                                renderer.load_image(&id, rgba.as_raw(), w, h);
+                            }
+                            Err(e) => println!("Failed to load image {src}: {e}"),
+                        }
+                    }
+                    Action::FocusTextInput(_id) => {
+                        video_subsystem.text_input().start();
+                    }
+                    Action::BlurTextInput => {
+                        video_subsystem.text_input().stop();
+                    }
+                }
             }
         }
 
@@ -259,12 +285,4 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
-}
-
-fn handle_action(action: Action) {
-    match action {
-        Action::OpenSettings => println!("Desktop Preview: Open Settings triggered"),
-        Action::OpenContacts => println!("Desktop Preview: Open Contacts triggered"),
-        Action::OpenCamera => println!("Desktop Preview: Open Camera triggered"),
-    }
 }
