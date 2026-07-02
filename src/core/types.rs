@@ -16,6 +16,14 @@ pub enum Action {
     OpenCamera,
 }
 
+/// A sample state structure to demonstrate `Bincode` / `ArrayBuffer` passing.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AppState {
+    pub click_count: u32,
+    pub screen_width: f32,
+    pub screen_height: f32,
+}
+
 /// Platform-agnostic UI tree node.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Element {
