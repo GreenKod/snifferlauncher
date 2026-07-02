@@ -60,35 +60,53 @@ host_log("Hash of 'btn-merhaba': " + host_hash("btn-merhaba"));
 // Send UI to Rust Host
 host_set_ui(JSON.stringify(UI_TREE));
 
+// Phase 2: Binary ArrayBuffer Helpers
+function parseAppState(buffer) {
+    // AppState is 12 bytes (u32, f32, f32).
+    // Bincode default is Little-Endian.
+    const view = new DataView(buffer);
+    const click_count = view.getUint32(0, true);
+    const screen_width = view.getFloat32(4, true);
+    const screen_height = view.getFloat32(8, true);
+    return { click_count, screen_width, screen_height };
+}
+
+function sendBinaryEvent() {
+    const buffer = new ArrayBuffer(12);
+    const view = new DataView(buffer);
+    view.setUint32(0, 999, true); // send fake click_count
+    view.setFloat32(4, 1280.0, true);
+    view.setFloat32(8, 720.0, true);
+    host_send_binary_event(buffer);
+}
+
 // Event Handler for UI Interactions
 globalThis.onEvent = function (eventJsonString) {
     const event = JSON.parse(eventJsonString);
 
-    // Only log Click events to avoid spamming the console with Hovers
     if (event.type === "Click") {
         host_log("JS received CLICK event for ID: " + event.id);
     }
 
-    // host_hash converts the string "btn-merhaba" to its matching u64 Hash ID (as a string)
     if (event.type === "Click" && event.id === host_hash("btn-merhaba")) {
-        // Update specific elements using the Fine-Grained API
+        // Phase 1 (Fine-Grained API) Test
         host_set_text("btn-merhaba", "Tıklandı!");
-        
-        // Use ARGB hex format (FF for alpha, then RGB)
         host_update_style("root", "background_color", "FF00FF00"); // Green
         
-        // We also update the JS shadow tree to keep it in sync (optional, but good practice)
         UI_TREE.Container.children[0].Label.text = "Tıklandı!";
         UI_TREE.Container.style.background_color = hexToColor("#00FF00"); 
 
     } else if (event.type === "Click" && event.id === host_hash("btn-width")) {
-        let w = host_screen_width();
-        let h = host_screen_height();
-        let new_text = "Genişlik: " + w + "x" + h;
+        // Phase 2 (ArrayBuffer / Bincode) Test
+        let buffer = host_get_binary_state();
+        let state = parseAppState(buffer);
         
+        let new_text = "Binary: " + state.screen_width + "x" + state.screen_height + " Clicks: " + state.click_count;
         host_set_text("btn-width", new_text);
         
-        // Sync JS shadow tree
+        // Also test sending binary back to Rust
+        sendBinaryEvent();
+        
         UI_TREE.Container.children[1].Label.text = new_text;
     }
 

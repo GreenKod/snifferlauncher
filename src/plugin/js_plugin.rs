@@ -126,6 +126,32 @@ impl JsPlugin {
             .unwrap();
             globals.set("host_remove_node", remove_node_func).unwrap();
 
+            // host_get_binary_state (Phase 2)
+            fn get_binary_state<'js>(ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::ArrayBuffer<'js>> {
+                let state = crate::core::types::AppState {
+                    click_count: 42, // Dummy count for example
+                    screen_width: f32::from_bits(crate::core::types::SCREEN_WIDTH.load(std::sync::atomic::Ordering::Relaxed)),
+                    screen_height: f32::from_bits(crate::core::types::SCREEN_HEIGHT.load(std::sync::atomic::Ordering::Relaxed)),
+                };
+                let bytes = bincode::serialize(&state).unwrap_or_default();
+                rquickjs::ArrayBuffer::new(ctx, bytes)
+            }
+            let get_binary_state_func = Function::new(ctx.clone(), get_binary_state).unwrap();
+            globals.set("host_get_binary_state", get_binary_state_func).unwrap();
+
+            // host_send_binary_event (Phase 2)
+            let send_binary_event_func = Function::new(ctx.clone(), |buffer: rquickjs::ArrayBuffer<'_>| {
+                if let Some(bytes) = buffer.as_bytes() {
+                    if let Ok(state) = bincode::deserialize::<crate::core::types::AppState>(bytes) {
+                        println!("JS sent binary state via ArrayBuffer: {:?}", state);
+                    } else {
+                        println!("Failed to deserialize binary event from JS.");
+                    }
+                }
+            })
+            .unwrap();
+            globals.set("host_send_binary_event", send_binary_event_func).unwrap();
+
             // host_log
             let log_func = Function::new(ctx.clone(), |msg: String| {
                 println!("JS Log: {msg}");
