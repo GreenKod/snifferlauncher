@@ -52,12 +52,13 @@ impl JsPlugin {
             let globals = ctx.globals();
 
             // host_set_ui
+            let tree_set_ui = ui_tree.clone();
             let set_ui_func =
                 Function::new(
                     ctx.clone(),
                     move |json_str: String| match serde_json::from_str::<Element>(&json_str) {
                         Ok(parsed) => {
-                            if let Ok(mut lock) = ui_tree.lock() {
+                            if let Ok(mut lock) = tree_set_ui.lock() {
                                 *lock = Some(parsed);
                             }
                         }
@@ -68,6 +69,62 @@ impl JsPlugin {
                 )
                 .unwrap();
             globals.set("host_set_ui", set_ui_func).unwrap();
+
+            // host_update_style
+            let tree_update_style = ui_tree.clone();
+            let update_style_func = Function::new(
+                ctx.clone(),
+                move |id: String, property: String, value: String| {
+                    if let Ok(mut lock) = tree_update_style.lock()
+                        && let Some(ref mut root) = *lock
+                    {
+                        root.mutate_style(&id, &property, &value);
+                    }
+                },
+            )
+            .unwrap();
+            globals.set("host_update_style", update_style_func).unwrap();
+
+            // host_set_text
+            let tree_set_text = ui_tree.clone();
+            let set_text_func = Function::new(ctx.clone(), move |id: String, text: String| {
+                if let Ok(mut lock) = tree_set_text.lock()
+                    && let Some(ref mut root) = *lock
+                {
+                    root.mutate_text(&id, &text);
+                }
+            })
+            .unwrap();
+            globals.set("host_set_text", set_text_func).unwrap();
+
+            // host_insert_child
+            let tree_insert_child = ui_tree.clone();
+            let insert_child_func =
+                Function::new(ctx.clone(), move |parent_id: String, child_json: String| {
+                    if let Ok(parsed_child) = serde_json::from_str::<Element>(&child_json) {
+                        if let Ok(mut lock) = tree_insert_child.lock()
+                            && let Some(ref mut root) = *lock
+                        {
+                            root.insert_child(&parent_id, parsed_child);
+                        }
+                    } else {
+                        println!("JS Error: Failed to parse child JSON in host_insert_child");
+                    }
+                })
+                .unwrap();
+            globals.set("host_insert_child", insert_child_func).unwrap();
+
+            // host_remove_node
+            let tree_remove_node = ui_tree.clone();
+            let remove_node_func = Function::new(ctx.clone(), move |id: String| {
+                if let Ok(mut lock) = tree_remove_node.lock()
+                    && let Some(ref mut root) = *lock
+                {
+                    root.remove_node(&id);
+                }
+            })
+            .unwrap();
+            globals.set("host_remove_node", remove_node_func).unwrap();
 
             // host_log
             let log_func = Function::new(ctx.clone(), |msg: String| {

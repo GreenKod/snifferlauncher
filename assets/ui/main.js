@@ -71,17 +71,25 @@ globalThis.onEvent = function (eventJsonString) {
 
     // host_hash converts the string "btn-merhaba" to its matching u64 Hash ID (as a string)
     if (event.type === "Click" && event.id === host_hash("btn-merhaba")) {
-        // Change the text and background
+        // Update specific elements using the Fine-Grained API
+        host_set_text("btn-merhaba", "Tıklandı!");
+        
+        // Use ARGB hex format (FF for alpha, then RGB)
+        host_update_style("root", "background_color", "FF00FF00"); // Green
+        
+        // We also update the JS shadow tree to keep it in sync (optional, but good practice)
         UI_TREE.Container.children[0].Label.text = "Tıklandı!";
-        UI_TREE.Container.style.background_color = hexToColor("#00FF00"); // Green
+        UI_TREE.Container.style.background_color = hexToColor("#00FF00"); 
 
-        // Send updated UI to Rust
-        host_set_ui(JSON.stringify(UI_TREE));
     } else if (event.type === "Click" && event.id === host_hash("btn-width")) {
         let w = host_screen_width();
         let h = host_screen_height();
-        UI_TREE.Container.children[1].Label.text = "Genişlik: " + w + "x" + h;
-        host_set_ui(JSON.stringify(UI_TREE));
+        let new_text = "Genişlik: " + w + "x" + h;
+        
+        host_set_text("btn-width", new_text);
+        
+        // Sync JS shadow tree
+        UI_TREE.Container.children[1].Label.text = new_text;
     }
 
     return "[]";
