@@ -33,7 +33,7 @@ pub fn find_clicked_button(
             }
             None
         }
-        Element::Label { id, .. } => {
+        Element::Label { id, .. } | Element::Image { id, .. } | Element::TextInput { id, .. } => {
             if let Some(id_str) = id {
                 return Some((
                     crate::core::ui::widget::fnv1a(id_str.as_bytes()),
@@ -139,7 +139,12 @@ pub fn draw_ui(
         }
     }
 
-    // 4. Draw contents
+    // 4. Handle clipping
+    if style.overflow_hidden {
+        renderer.set_clip_rect(rect);
+    }
+
+    // 5. Draw contents
     match element {
         Element::Container { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
@@ -157,5 +162,23 @@ pub fn draw_ui(
             let color = style.text_color.unwrap_or(BUTTON_TEXT);
             renderer.draw_text(&display_text, rect.x, rect.y, style.text_size, color);
         }
+        Element::Image { id, src, .. } => {
+            let img_id = id.as_deref().unwrap_or(src.as_str());
+            renderer.draw_image(img_id, rect, style.border_radius, style.object_fit);
+        }
+        Element::TextInput { value, focused, .. } => {
+            // Draw text
+            let display_text = if *focused {
+                format!("{value}_")
+            } else {
+                value.clone()
+            };
+            let color = style.text_color.unwrap_or(BUTTON_TEXT);
+            renderer.draw_text(&display_text, rect.x, rect.y, style.text_size, color);
+        }
+    }
+
+    if style.overflow_hidden {
+        renderer.clear_clip_rect();
     }
 }

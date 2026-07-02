@@ -9,11 +9,14 @@ pub static SCREEN_HEIGHT: AtomicU32 = AtomicU32::new(0);
 pub type ElementChildren = Vec<Element>;
 
 /// High-level action dispatched by the host or plugins.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Action {
     OpenSettings,
     OpenContacts,
     OpenCamera,
+    LoadImage { id: String, src: String },
+    FocusTextInput(String),
+    BlurTextInput,
 }
 
 /// A sample state structure to demonstrate `Bincode` / `ArrayBuffer` passing.
@@ -37,6 +40,17 @@ pub enum Element {
         text: String,
         style: Style,
     },
+    Image {
+        id: Option<String>,
+        src: String,
+        style: Style,
+    },
+    TextInput {
+        id: Option<String>,
+        value: String,
+        focused: bool,
+        style: Style,
+    },
 }
 
 impl Element {
@@ -44,7 +58,10 @@ impl Element {
     #[must_use]
     pub const fn style(&self) -> &Style {
         match self {
-            Self::Container { style, .. } | Self::Label { style, .. } => style,
+            Self::Container { style, .. }
+            | Self::Label { style, .. }
+            | Self::Image { style, .. }
+            | Self::TextInput { style, .. } => style,
         }
     }
 
@@ -52,7 +69,10 @@ impl Element {
     #[must_use]
     pub fn id(&self) -> Option<&str> {
         match self {
-            Self::Container { id, .. } | Self::Label { id, .. } => id.as_deref(),
+            Self::Container { id, .. }
+            | Self::Label { id, .. }
+            | Self::Image { id, .. }
+            | Self::TextInput { id, .. } => id.as_deref(),
         }
     }
 
@@ -60,7 +80,10 @@ impl Element {
     pub fn mutate_style(&mut self, target_id: &str, property: &str, value: &str) -> bool {
         if self.id() == Some(target_id) {
             let style = match self {
-                Self::Container { style, .. } | Self::Label { style, .. } => style,
+                Self::Container { style, .. }
+                | Self::Label { style, .. }
+                | Self::Image { style, .. }
+                | Self::TextInput { style, .. } => style,
             };
 
             // Simple property mapping
@@ -120,11 +143,18 @@ impl Element {
 
     /// Mutates the text of a Label element with the matching ID.
     pub fn mutate_text(&mut self, target_id: &str, new_text: &str) -> bool {
-        if self.id() == Some(target_id)
-            && let Self::Label { text, .. } = self
-        {
-            *text = new_text.to_string();
-            return true;
+        if self.id() == Some(target_id) {
+            match self {
+                Self::Label { text, .. } => {
+                    *text = new_text.to_string();
+                    return true;
+                }
+                Self::TextInput { value, .. } => {
+                    *value = new_text.to_string();
+                    return true;
+                }
+                _ => {}
+            }
         }
 
         if let Self::Container { children, .. } = self {

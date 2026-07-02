@@ -174,6 +174,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
     crate::plugin::PluginLoader::register_all_from_assets(
         &mut plugin_registry,
         &app.asset_manager(),
+        action_queue.clone(),
     );
 
     // Root element will be fetched every frame inside the render loop,
@@ -250,7 +251,25 @@ pub fn android_main(app: android_activity::AndroidApp) {
                     // Process any actions emitted by plugins
                     if let Ok(mut q) = action_queue.lock() {
                         for action in q.drain(..) {
-                            let _ = launch_action(action);
+                            match action {
+                                crate::core::Action::LoadImage { id, src } => {
+                                    // Try loading image (requires image crate)
+                                    if let Ok(img) = image::open(&src) {
+                                        let rgba = img.to_rgba8();
+                                        let (w, h) = rgba.dimensions();
+                                        renderer.load_image(&id, rgba.as_raw(), w, h);
+                                    }
+                                }
+                                crate::core::Action::FocusTextInput(_id) => {
+                                    app.show_soft_input(true);
+                                }
+                                crate::core::Action::BlurTextInput => {
+                                    app.hide_soft_input(true);
+                                }
+                                _ => {
+                                    let _ = launch_action(action);
+                                }
+                            }
                         }
                     }
 
