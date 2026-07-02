@@ -4,9 +4,11 @@ use std::cell::RefCell;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum UiEvent {
     Click(u64, f32, f32),
+    ClickOutside,
     Hover(u64, f32, f32, f32, f32),
     HoverEnd(u64),
     TextInput(String),
+    Backspace,
 }
 
 #[derive(Default)]
