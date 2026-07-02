@@ -16,6 +16,7 @@ pub struct JsPlugin {
     context: Context,
     subscriptions: Vec<WidgetId>,
     ui_tree: Arc<Mutex<Option<Element>>>,
+    gc_counter: std::sync::Mutex<u32>,
 }
 
 #[allow(clippy::non_send_fields_in_send_ty)]
@@ -40,6 +41,7 @@ impl JsPlugin {
             subscriptions: vec![], // For now, we subscribe to everything (or nothing specifically),
             // but let's just make it a global event listener.
             ui_tree: ui_tree.clone(),
+            gc_counter: std::sync::Mutex::new(0),
         };
 
         plugin.init_js_env(ui_tree)?;
@@ -257,5 +259,15 @@ impl UiPlugin for JsPlugin {
                 }
             }
         });
+    }
+
+    fn on_tick(&self) {
+        if let Ok(mut count) = self.gc_counter.lock() {
+            *count += 1;
+            if *count >= 300 {
+                *count = 0;
+                self.runtime.run_gc();
+            }
+        }
     }
 }

@@ -63,6 +63,13 @@ impl PluginRegistry {
         None
     }
 
+    /// Trigger the periodic tick for all registered plugins.
+    pub fn tick(&self) {
+        for plugin in &self.plugins {
+            plugin.on_tick();
+        }
+    }
+
     /// Dispatch all queued events to their respective plugin listeners.
     ///
     /// Call once per render frame. IDs with no registered listeners cost O(1) miss.
