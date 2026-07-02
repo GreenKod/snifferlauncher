@@ -160,7 +160,13 @@ pub fn draw_ui(
             };
 
             let color = style.text_color.unwrap_or(BUTTON_TEXT);
-            renderer.draw_text(&display_text, rect.x, rect.y, style.text_size, color);
+            let text_w = renderer.measure_text(&display_text, style.text_size);
+            
+            // Center horizontally and vertically within the node bounds
+            let draw_x = rect.x + (rect.width - text_w) / 2.0;
+            let draw_y = rect.y + (rect.height - style.text_size) / 2.0;
+            
+            renderer.draw_text(&display_text, draw_x, draw_y, style.text_size, color);
         }
         Element::Image { id, src, .. } => {
             let img_id = id.as_deref().unwrap_or(src.as_str());
@@ -174,7 +180,12 @@ pub fn draw_ui(
                 value.clone()
             };
             let color = style.text_color.unwrap_or(BUTTON_TEXT);
-            renderer.draw_text(&display_text, rect.x, rect.y, style.text_size, color);
+            
+            // Left align with padding, center vertically
+            let draw_x = rect.x + style.padding.left;
+            let draw_y = rect.y + (rect.height - style.text_size) / 2.0;
+            
+            renderer.draw_text(&display_text, draw_x, draw_y, style.text_size, color);
         }
     }
 

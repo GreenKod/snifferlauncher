@@ -703,4 +703,19 @@ impl Renderer for GlowRenderer {
             }
         }
     }
+
+    fn measure_text(&self, text: &str, size: f32) -> f32 {
+        if let Some(ref atlas) = self.font_atlas {
+            font_atlas::estimate_text_width(atlas, text, size)
+        } else {
+            let char_width = size;
+            let gap = size * 0.1;
+            let count = text.chars().count() as f32;
+            if count > 0.0 {
+                (char_width + gap) * count - gap
+            } else {
+                0.0
+            }
+        }
+    }
 }
