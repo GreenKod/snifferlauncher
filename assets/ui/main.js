@@ -84,8 +84,8 @@ const UI_TREE = {
                     "style": {
                         "text_color": hexToColor("#0000FF"),
                         "text_size": 24.0,
-                        "width": { "Pixels": 300.0 },
-                        "height": { "Pixels": 50.0 },
+                        "width": "Auto",
+                        "height": "Auto",
                         "background_color": hexToColor("#E0E0E0"),
                         "border_radius": 8.0,
                         "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }
@@ -153,7 +153,7 @@ function sendBinaryState(clickCount, screenWidth, screenHeight) {
     for (let i = 0; i < varintBytes.length; i++) {
         view.setUint8(offset++, varintBytes[i]);
     }
-    
+
     view.setFloat32(offset, screenWidth, true); // Little-endian
     offset += 4;
     view.setFloat32(offset, screenHeight, true); // Little-endian
@@ -182,7 +182,7 @@ globalThis.onEvent = function (eventJsonString) {
 
     } else if (event.type === "Click" && event.id === host_hash("btn-width")) {
         click_counter += 1;
-        
+
         // Phase 2 (ArrayBuffer / Postcard) Test
         // Normalde Rust'tan da host_get_binary_state() ile çekebilirsiniz 
         // ancak biz burada kendi click_counter değerimizi kullanıyoruz:
@@ -194,7 +194,7 @@ globalThis.onEvent = function (eventJsonString) {
 
         UI_TREE.Container.children[1].Label.text = new_text;
         host_set_ui(JSON.stringify(UI_TREE));
-        
+
         // Rust'a binary formatında varint gönder
         sendBinaryState(click_counter, state.screen_width, state.screen_height);
     } else if (event.type === "Click" && event.id === host_hash("search_input")) {

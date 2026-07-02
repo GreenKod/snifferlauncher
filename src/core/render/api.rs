@@ -27,4 +27,5 @@ pub trait Renderer {
         radius: f32,
         object_fit: crate::core::style::ObjectFit,
     );
+    fn measure_text(&self, text: &str, size: f32) -> f32;
 }
