@@ -47,6 +47,122 @@ impl Element {
             Self::Container { id, .. } | Self::Label { id, .. } => id.as_deref(),
         }
     }
+
+    /// Mutates a style property of the element or its children with the matching ID.
+    pub fn mutate_style(&mut self, target_id: &str, property: &str, value: &str) -> bool {
+        if self.id() == Some(target_id) {
+            let style = match self {
+                Self::Container { style, .. } | Self::Label { style, .. } => style,
+            };
+
+            // Simple property mapping
+            match property {
+                "background_color" => {
+                    if let Ok(color) = u32::from_str_radix(value.trim_start_matches('#'), 16) {
+                        style.background_color = Some(color);
+                    }
+                }
+                "text_color" => {
+                    if let Ok(color) = u32::from_str_radix(value.trim_start_matches('#'), 16) {
+                        style.text_color = Some(color);
+                    }
+                }
+                "text_size" => {
+                    if let Ok(size) = value.parse::<f32>() {
+                        style.text_size = size;
+                    }
+                }
+                "width" => {
+                    if let Ok(w) = value.parse::<f32>() {
+                        style.width = crate::core::style::Dimension::Pixels(w);
+                    } else if value == "auto" {
+                        style.width = crate::core::style::Dimension::Auto;
+                    } else if let Some(p) = value.strip_suffix('%')
+                        && let Ok(pct) = p.parse::<f32>()
+                    {
+                        style.width = crate::core::style::Dimension::Percent(pct);
+                    }
+                }
+                "height" => {
+                    if let Ok(h) = value.parse::<f32>() {
+                        style.height = crate::core::style::Dimension::Pixels(h);
+                    } else if value == "auto" {
+                        style.height = crate::core::style::Dimension::Auto;
+                    } else if let Some(p) = value.strip_suffix('%')
+                        && let Ok(pct) = p.parse::<f32>()
+                    {
+                        style.height = crate::core::style::Dimension::Percent(pct);
+                    }
+                }
+                // Add more properties as needed
+                _ => return false,
+            }
+            return true;
+        }
+
+        if let Self::Container { children, .. } = self {
+            for child in children {
+                if child.mutate_style(target_id, property, value) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Mutates the text of a Label element with the matching ID.
+    pub fn mutate_text(&mut self, target_id: &str, new_text: &str) -> bool {
+        if self.id() == Some(target_id)
+            && let Self::Label { text, .. } = self
+        {
+            *text = new_text.to_string();
+            return true;
+        }
+
+        if let Self::Container { children, .. } = self {
+            for child in children {
+                if child.mutate_text(target_id, new_text) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Inserts a child element into a Container with the matching ID.
+    pub fn insert_child(&mut self, parent_id: &str, child: Self) -> bool {
+        if self.id() == Some(parent_id)
+            && let Self::Container { children, .. } = self
+        {
+            children.push(child);
+            return true;
+        }
+
+        if let Self::Container { children, .. } = self {
+            for c in children {
+                if c.insert_child(parent_id, child.clone()) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Removes a child node with the matching ID from the tree.
+    pub fn remove_node(&mut self, target_id: &str) -> bool {
+        if let Self::Container { children, .. } = self {
+            if let Some(pos) = children.iter().position(|c| c.id() == Some(target_id)) {
+                children.remove(pos);
+                return true;
+            }
+            for child in children {
+                if child.remove_node(target_id) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 /// Core application trait — implemented by platform-agnostic app logic.
