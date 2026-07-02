@@ -18,21 +18,21 @@ impl<'a> TextMeasurer<'a> {
         let metrics = self.font.metrics(&[]);
         let units_per_em = f32::from(metrics.units_per_em);
         let scale_factor = text_size / units_per_em;
-        
+
         let mut width = 0.0;
         let charmap = self.font.charmap();
         let glyph_metrics = self.font.glyph_metrics(&[]);
-        
+
         for c in text.chars() {
             let glyph_id = charmap.map(c);
             let advance = glyph_metrics.advance_width(glyph_id);
             width += advance * scale_factor;
         }
-        
+
         // Use text_size as a baseline, or use real ascent+descent.
         // For UI, usually text_size or slightly larger is preferred.
         let height = text_size * 1.2;
-        
+
         (width, height)
     }
 }

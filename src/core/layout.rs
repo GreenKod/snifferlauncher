@@ -1,4 +1,4 @@
-use crate::core::text_measure::{TextMeasurer, DEFAULT_FONT};
+use crate::core::text_measure::{DEFAULT_FONT, TextMeasurer};
 use crate::core::types::Element;
 use crate::core::{Point, Rect, Size};
 use taffy::prelude::*;
@@ -33,14 +33,10 @@ impl LayoutNode {
     }
 }
 
-fn build_taffy_tree(
-    taffy: &mut TaffyTree,
-    element: &Element,
-    measurer: &TextMeasurer,
-) -> NodeId {
+fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMeasurer) -> NodeId {
     let mut style: Style = Style::default();
     let el_style = element.style();
-    
+
     style.display = el_style.display.into();
     style.flex_direction = el_style.flex_direction.into();
     style.justify_content = Some(el_style.justify_content.into());
@@ -67,10 +63,12 @@ fn build_taffy_tree(
         Element::Label { text, .. } => {
             let (w, h) = measurer.measure(text, el_style.text_size);
             if let crate::core::style::Dimension::Auto = el_style.width {
-                style.size.width = Dimension::Length(w + el_style.padding.left + el_style.padding.right);
+                style.size.width =
+                    Dimension::Length(w + el_style.padding.left + el_style.padding.right);
             }
             if let crate::core::style::Dimension::Auto = el_style.height {
-                style.size.height = Dimension::Length(h + el_style.padding.top + el_style.padding.bottom);
+                style.size.height =
+                    Dimension::Length(h + el_style.padding.top + el_style.padding.bottom);
             }
             taffy.new_leaf(style).unwrap()
         }
@@ -82,11 +80,13 @@ fn build_taffy_tree(
             };
             let (w, h) = measurer.measure(&display_text, el_style.text_size);
             if let crate::core::style::Dimension::Auto = el_style.width {
-                style.size.width = Dimension::Length(w + el_style.padding.left + el_style.padding.right);
+                style.size.width =
+                    Dimension::Length(w + el_style.padding.left + el_style.padding.right);
             }
             if let crate::core::style::Dimension::Auto = el_style.height {
                 let h_clamped = h.max(el_style.text_size * 1.5);
-                style.size.height = Dimension::Length(h_clamped + el_style.padding.top + el_style.padding.bottom);
+                style.size.height =
+                    Dimension::Length(h_clamped + el_style.padding.top + el_style.padding.bottom);
             }
             taffy.new_leaf(style).unwrap()
         }
@@ -110,13 +110,17 @@ fn resolve_layout(
     parent_y: f32,
 ) -> LayoutNode {
     let layout = taffy.layout(node).unwrap();
-    
+
     let abs_x = parent_x + layout.location.x;
     let abs_y = parent_y + layout.location.y;
     let rect = Rect::new(abs_x, abs_y, layout.size.width, layout.size.height);
 
     let mut children = Vec::new();
-    if let Element::Container { children: el_children, .. } = element {
+    if let Element::Container {
+        children: el_children,
+        ..
+    } = element
+    {
         let child_nodes = taffy.children(node).unwrap();
         for (child_el, child_node) in el_children.iter().zip(child_nodes.iter()) {
             children.push(resolve_layout(taffy, *child_node, child_el, abs_x, abs_y));
@@ -138,10 +142,11 @@ pub fn calculate_layout(
     y_offset: f32,
 ) -> LayoutNode {
     let mut taffy = TaffyTree::new();
-    let measurer = TextMeasurer::new(DEFAULT_FONT).expect("Failed to load default font for measuring");
-    
+    let measurer =
+        TextMeasurer::new(DEFAULT_FONT).expect("Failed to load default font for measuring");
+
     let root = build_taffy_tree(&mut taffy, element, &measurer);
-    
+
     // Create an invisible root style to enforce parent size
     let root_style = Style {
         size: taffy::geometry::Size {
