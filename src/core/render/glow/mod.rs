@@ -1,23 +1,26 @@
 use crate::core::render::api::Renderer;
 use crate::core::render::math::geometry::Rect;
-use crate::core::render::text::font::{FONT_DATA, FONT_HEIGHT, FONT_WIDTH};
+
 use crate::core::render::text::font_atlas::{self, FontAtlas};
 use glow::HasContext;
 
+pub mod shaders;
+pub mod text;
+
 pub struct GlowRenderer {
-    gl: glow::Context,
-    quad_vertex_array: glow::VertexArray,
-    _quad_vertex_buffer: glow::Buffer,
-    shape_program: glow::Program,
-    text_program: glow::Program,
-    font_texture: glow::Texture,
-    resolution: (f32, f32),
-    font_atlas: Option<FontAtlas>,
-    atlas_width: i32,
-    atlas_height: i32,
-    image_program: glow::Program,
-    image_textures: std::collections::HashMap<String, (glow::Texture, f32, f32)>,
-    global_alpha: f32,
+    pub(crate) gl: glow::Context,
+    pub(crate) quad_vertex_array: glow::VertexArray,
+    pub(crate) _quad_vertex_buffer: glow::Buffer,
+    pub(crate) shape_program: glow::Program,
+    pub(crate) text_program: glow::Program,
+    pub(crate) font_texture: glow::Texture,
+    pub(crate) resolution: (f32, f32),
+    pub(crate) font_atlas: Option<FontAtlas>,
+    pub(crate) atlas_width: i32,
+    pub(crate) atlas_height: i32,
+    pub(crate) image_program: glow::Program,
+    pub(crate) image_textures: std::collections::HashMap<String, (glow::Texture, f32, f32)>,
+    pub(crate) global_alpha: f32,
 }
 
 fn unpack_color(color: u32) -> [f32; 4] {
@@ -83,12 +86,12 @@ impl GlowRenderer {
                 image_vertex_src,
                 image_fragment_src,
             ) = (
-                include_str!("shaders/shape_android.vs"),
-                include_str!("shaders/shape_android.fs"),
-                include_str!("shaders/text_android.vs"),
-                include_str!("shaders/text_android.fs"),
-                include_str!("shaders/image_android.vs"),
-                include_str!("shaders/image_android.fs"),
+                include_str!("../shaders/shape_android.vs"),
+                include_str!("../shaders/shape_android.fs"),
+                include_str!("../shaders/text_android.vs"),
+                include_str!("../shaders/text_android.fs"),
+                include_str!("../shaders/image_android.vs"),
+                include_str!("../shaders/image_android.fs"),
             );
 
             #[cfg(not(target_os = "android"))]
@@ -100,17 +103,19 @@ impl GlowRenderer {
                 image_vertex_src,
                 image_fragment_src,
             ) = (
-                include_str!("shaders/shape_desktop.vs"),
-                include_str!("shaders/shape_desktop.fs"),
-                include_str!("shaders/text_desktop.vs"),
-                include_str!("shaders/text_desktop.fs"),
-                include_str!("shaders/image_desktop.vs"),
-                include_str!("shaders/image_desktop.fs"),
+                include_str!("../shaders/shape_desktop.vs"),
+                include_str!("../shaders/shape_desktop.fs"),
+                include_str!("../shaders/text_desktop.vs"),
+                include_str!("../shaders/text_desktop.fs"),
+                include_str!("../shaders/image_desktop.vs"),
+                include_str!("../shaders/image_desktop.fs"),
             );
 
-            let shape_program = compile_program(&gl, shape_vertex_src, shape_fragment_src)?;
-            let text_program = compile_program(&gl, text_vertex_src, text_fragment_src)?;
-            let image_program = compile_program(&gl, image_vertex_src, image_fragment_src)?;
+            let shape_program =
+                shaders::compile_program(&gl, shape_vertex_src, shape_fragment_src)?;
+            let text_program = shaders::compile_program(&gl, text_vertex_src, text_fragment_src)?;
+            let image_program =
+                shaders::compile_program(&gl, image_vertex_src, image_fragment_src)?;
 
             // 3. Create font atlas texture
             let (font_texture, font_atlas, atlas_width, atlas_height) =
@@ -126,11 +131,11 @@ impl GlowRenderer {
                         (tex, Some(atlas), w, h)
                     } else {
                         eprintln!("[DEBUG] TTF build failed, falling back to bitmap");
-                        create_bitmap_font_atlas(&gl)?
+                        text::create_bitmap_font_atlas(&gl)?
                     }
                 } else {
                     eprintln!("[DEBUG] No font data, using bitmap fallback");
-                    create_bitmap_font_atlas(&gl)?
+                    text::create_bitmap_font_atlas(&gl)?
                 };
 
             // Enable alpha blending
@@ -153,103 +158,6 @@ impl GlowRenderer {
                 global_alpha: 1.0,
             })
         }
-    }
-}
-
-unsafe fn create_bitmap_font_atlas(
-    gl: &glow::Context,
-) -> Result<(glow::Texture, Option<FontAtlas>, i32, i32), String> {
-    unsafe {
-        let mut font_pixels = vec![0u8; 96 * FONT_WIDTH * FONT_HEIGHT];
-        for c in 0..96 {
-            for row in 0..FONT_HEIGHT {
-                let byte = FONT_DATA[c * FONT_HEIGHT + row];
-                for col in 0..FONT_WIDTH {
-                    let bit = (byte >> (7 - col)) & 1;
-                    let pixel_idx = row * (96 * FONT_WIDTH) + (c * FONT_WIDTH + col);
-                    font_pixels[pixel_idx] = if bit == 1 { 255 } else { 0 };
-                }
-            }
-        }
-
-        let tex = gl.create_texture()?;
-        gl.bind_texture(glow::TEXTURE_2D, Some(tex));
-        gl.tex_image_2d(
-            glow::TEXTURE_2D,
-            0,
-            i32::try_from(glow::R8).expect("R8 fits in i32"),
-            i32::try_from(96 * FONT_WIDTH).expect("bitmap atlas width fits in i32"),
-            i32::try_from(FONT_HEIGHT).expect("font height fits in i32"),
-            0,
-            glow::RED,
-            glow::UNSIGNED_BYTE,
-            glow::PixelUnpackData::Slice(Some(&font_pixels)),
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MIN_FILTER,
-            i32::try_from(glow::NEAREST).expect("NEAREST fits in i32"),
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_MAG_FILTER,
-            i32::try_from(glow::NEAREST).expect("NEAREST fits in i32"),
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_S,
-            i32::try_from(glow::CLAMP_TO_EDGE).expect("CLAMP_TO_EDGE fits in i32"),
-        );
-        gl.tex_parameter_i32(
-            glow::TEXTURE_2D,
-            glow::TEXTURE_WRAP_T,
-            i32::try_from(glow::CLAMP_TO_EDGE).expect("CLAMP_TO_EDGE fits in i32"),
-        );
-
-        Ok((
-            tex,
-            None,
-            i32::try_from(96 * FONT_WIDTH).expect("bitmap atlas width fits in i32"),
-            i32::try_from(FONT_HEIGHT).expect("font height fits in i32"),
-        ))
-    }
-}
-
-unsafe fn compile_program(
-    gl: &glow::Context,
-    vs_src: &str,
-    fs_src: &str,
-) -> Result<glow::Program, String> {
-    unsafe {
-        let vs = gl.create_shader(glow::VERTEX_SHADER)?;
-        gl.shader_source(vs, vs_src);
-        gl.compile_shader(vs);
-        if !gl.get_shader_compile_status(vs) {
-            return Err(format!("VS Compile Error: {}", gl.get_shader_info_log(vs)));
-        }
-
-        let fs = gl.create_shader(glow::FRAGMENT_SHADER)?;
-        gl.shader_source(fs, fs_src);
-        gl.compile_shader(fs);
-        if !gl.get_shader_compile_status(fs) {
-            return Err(format!("FS Compile Error: {}", gl.get_shader_info_log(fs)));
-        }
-
-        let program = gl.create_program()?;
-        gl.attach_shader(program, vs);
-        gl.attach_shader(program, fs);
-        gl.link_program(program);
-        if !gl.get_program_link_status(program) {
-            return Err(format!(
-                "Shader Link Error: {}",
-                gl.get_program_info_log(program)
-            ));
-        }
-
-        gl.delete_shader(vs);
-        gl.delete_shader(fs);
-
-        Ok(program)
     }
 }
 
