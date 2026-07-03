@@ -118,9 +118,7 @@ pub fn android_main(app: AndroidApp) {
                                             crate::platform::android::jni::get_safe_area(&app)
                                                 .map(|(top, bottom)| {
                                                     (
-                                                        f32::from(
-                                                            i16::try_from(top).unwrap_or(0),
-                                                        ),
+                                                        f32::from(i16::try_from(top).unwrap_or(0)),
                                                         f32::from(
                                                             i16::try_from(bottom).unwrap_or(0),
                                                         ),
@@ -172,120 +170,115 @@ pub fn android_main(app: AndroidApp) {
                 && let Some(ref mut renderer) = egl.renderer
                 && let Some(window) = app.native_window()
             {
-                    state.plugin_registry.tick();
+                state.plugin_registry.tick();
 
-                    root_element = state.plugin_registry.build_ui().unwrap_or_else(|| {
-                        crate::core::types::Element::Container {
-                            id: None,
-                            style: crate::core::style::Style::default(),
-                            children: vec![],
-                        }
-                    });
+                root_element = state.plugin_registry.build_ui().unwrap_or_else(|| {
+                    crate::core::types::Element::Container {
+                        id: None,
+                        style: crate::core::style::Style::default(),
+                        children: vec![],
+                    }
+                });
 
-                    let width =
-                        f32::from(u16::try_from(window.width()).expect("window width fits in u16"));
-                    let height = f32::from(
-                        u16::try_from(window.height()).expect("window height fits in u16"),
-                    );
+                let width =
+                    f32::from(u16::try_from(window.width()).expect("window width fits in u16"));
+                let height =
+                    f32::from(u16::try_from(window.height()).expect("window height fits in u16"));
 
-                    crate::core::types::SCREEN_WIDTH
-                        .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
-                    crate::core::types::SCREEN_HEIGHT
-                        .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                crate::core::types::SCREEN_WIDTH
+                    .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                crate::core::types::SCREEN_HEIGHT
+                    .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
-                    let (safe_area_top, safe_area_bottom) =
-                        crate::platform::android::jni::get_safe_area(&app)
-                            .map(|(top, bottom)| {
-                                (
-                                    f32::from(
-                                        i16::try_from(top).expect("safe-area top fits in i16"),
-                                    ),
-                                    f32::from(
-                                        i16::try_from(bottom)
-                                            .expect("safe-area bottom fits in i16"),
-                                    ),
-                                )
-                            })
-                            .unwrap_or((0.0, 0.0));
+                let (safe_area_top, safe_area_bottom) =
+                    crate::platform::android::jni::get_safe_area(&app)
+                        .map(|(top, bottom)| {
+                            (
+                                f32::from(i16::try_from(top).expect("safe-area top fits in i16")),
+                                f32::from(
+                                    i16::try_from(bottom).expect("safe-area bottom fits in i16"),
+                                ),
+                            )
+                        })
+                        .unwrap_or((0.0, 0.0));
 
-                    let (density, scaled_density) = crate::platform::android::jni::get_density();
-                    let metrics = ScreenMetrics::from_scale(
-                        width,
-                        height - safe_area_top - safe_area_bottom,
-                        density,
-                        scaled_density,
-                    );
+                let (density, scaled_density) = crate::platform::android::jni::get_density();
+                let metrics = ScreenMetrics::from_scale(
+                    width,
+                    height - safe_area_top - safe_area_bottom,
+                    density,
+                    scaled_density,
+                );
 
-                    let layout_tree = calculate_layout(
-                        &root_element,
-                        Size::new(width, height - safe_area_top - safe_area_bottom),
-                        0.0,
-                        safe_area_top,
-                    );
+                let layout_tree = calculate_layout(
+                    &root_element,
+                    Size::new(width, height - safe_area_top - safe_area_bottom),
+                    0.0,
+                    safe_area_top,
+                );
 
-                    state.kinetic_scrolls.retain_mut(|k| {
-                        if k.velocity_x.abs() > 0.1 || k.velocity_y.abs() > 0.1 {
-                            state.event_bus.push(UiEvent::Scroll(
-                                Some(k.sv_id),
-                                k.velocity_x,
-                                k.velocity_y,
-                            ));
-                            k.velocity_x *= 0.92;
-                            k.velocity_y *= 0.92;
-                            true
-                        } else {
-                            false
-                        }
-                    });
+                state.kinetic_scrolls.retain_mut(|k| {
+                    if k.velocity_x.abs() > 0.1 || k.velocity_y.abs() > 0.1 {
+                        state.event_bus.push(UiEvent::Scroll(
+                            Some(k.sv_id),
+                            k.velocity_x,
+                            k.velocity_y,
+                        ));
+                        k.velocity_x *= 0.92;
+                        k.velocity_y *= 0.92;
+                        true
+                    } else {
+                        false
+                    }
+                });
 
-                    state.plugin_registry.dispatch(
-                        &state.event_bus,
-                        &state.style_map,
-                        &state.data_map,
-                        &state.action_queue,
-                    );
+                state.plugin_registry.dispatch(
+                    &state.event_bus,
+                    &state.style_map,
+                    &state.data_map,
+                    &state.action_queue,
+                );
 
-                    if let Ok(mut q) = state.action_queue.lock() {
-                        for action in q.drain(..) {
-                            match action {
-                                crate::core::Action::LoadImage { id, src } => {
-                                    if let Ok(img) = image::open(&src) {
-                                        let rgba = img.to_rgba8();
-                                        let (w, h) = rgba.dimensions();
-                                        renderer.load_image(&id, rgba.as_raw(), w, h);
-                                    }
+                if let Ok(mut q) = state.action_queue.lock() {
+                    for action in q.drain(..) {
+                        match action {
+                            crate::core::Action::LoadImage { id, src } => {
+                                if let Ok(img) = image::open(&src) {
+                                    let rgba = img.to_rgba8();
+                                    let (w, h) = rgba.dimensions();
+                                    renderer.load_image(&id, rgba.as_raw(), w, h);
                                 }
-                                crate::core::Action::FocusTextInput(_id) => {
-                                    app.show_soft_input(true);
-                                }
-                                crate::core::Action::BlurTextInput => {
-                                    app.hide_soft_input(true);
-                                }
-                                _ => {
-                                    let _ = crate::platform::android::jni::intent::launch_action(
-                                        action,
-                                    );
-                                }
+                            }
+                            crate::core::Action::FocusTextInput(_id) => {
+                                app.show_soft_input(true);
+                            }
+                            crate::core::Action::BlurTextInput => {
+                                app.hide_soft_input(true);
+                            }
+                            _ => {
+                                let _ =
+                                    crate::platform::android::jni::intent::launch_action(action);
                             }
                         }
                     }
-
-                    renderer.begin_frame(width, height);
-                    renderer.clear(BACKGROUND);
-
-                    draw_ui(
-                        renderer,
-                        &root_element,
-                        &layout_tree,
-                        &metrics,
-                        &state.style_map,
-                        &state.data_map,
-                        1.0,
-                    );
-
-                    renderer.end_frame();
-                    egl.swap_buffers();
                 }
+
+                renderer.begin_frame(width, height);
+                renderer.clear(BACKGROUND);
+
+                draw_ui(
+                    renderer,
+                    &root_element,
+                    &layout_tree,
+                    &metrics,
+                    &state.style_map,
+                    &state.data_map,
+                    1.0,
+                );
+
+                renderer.end_frame();
+                egl.swap_buffers();
+            }
         });
     }
 }
