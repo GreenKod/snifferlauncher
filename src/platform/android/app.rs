@@ -76,12 +76,102 @@ pub fn android_main(app: AndroidApp) {
     };
 
     while state.running {
-        app.poll_events(Some(Duration::from_millis(16)), |event| match event {
-            PollEvent::Wake | PollEvent::Timeout => {
-                if let Some(ref mut egl) = egl_state
-                    && let Some(ref mut renderer) = egl.renderer
-                    && let Some(window) = app.native_window()
-                {
+        let mut needs_redraw = false;
+
+        app.poll_events(Some(Duration::from_millis(16)), |event| {
+            match event {
+                PollEvent::Wake | PollEvent::Timeout => {
+                    needs_redraw = true;
+                }
+                PollEvent::Main(main_event) => match main_event {
+                    MainEvent::InitWindow { .. } => {
+                        if egl_state.is_none() {
+                            egl_state = EglContextState::new().ok();
+                        }
+                        if let Some(ref mut egl) = egl_state
+                            && let Some(window) = app.native_window()
+                        {
+                            let _ = egl.bind_window(&window);
+                        }
+                    }
+                    MainEvent::WindowResized { .. }
+                    | MainEvent::ContentRectChanged { .. }
+                    | MainEvent::RedrawNeeded { .. } => {
+                        if let Some(ref mut egl) = egl_state
+                            && let Some(window) = app.native_window()
+                        {
+                            let _ = egl.bind_window(&window);
+                        }
+                        needs_redraw = true;
+                    }
+                    MainEvent::InputAvailable => {
+                        if let Ok(mut iter) = app.input_events_iter() {
+                            loop {
+                                let had_event = iter.next(|input_event| {
+                                    let window = app.native_window();
+                                    window.map_or(InputStatus::Unhandled, |win| {
+                                        let width =
+                                            f32::from(u16::try_from(win.width()).unwrap_or(0));
+                                        let height =
+                                            f32::from(u16::try_from(win.height()).unwrap_or(0));
+                                        let (safe_area_top, safe_area_bottom) =
+                                            crate::platform::android::jni::get_safe_area(&app)
+                                                .map(|(top, bottom)| {
+                                                    (
+                                                        f32::from(
+                                                            i16::try_from(top).unwrap_or(0),
+                                                        ),
+                                                        f32::from(
+                                                            i16::try_from(bottom).unwrap_or(0),
+                                                        ),
+                                                    )
+                                                })
+                                                .unwrap_or((0.0, 0.0));
+
+                                        let layout_tree = calculate_layout(
+                                            &root_element,
+                                            Size::new(
+                                                width,
+                                                height - safe_area_top - safe_area_bottom,
+                                            ),
+                                            0.0,
+                                            safe_area_top,
+                                        );
+                                        super::input::handle_input_event(
+                                            input_event,
+                                            &mut state,
+                                            &root_element,
+                                            &layout_tree,
+                                        )
+                                    })
+                                });
+
+                                if !had_event {
+                                    break;
+                                }
+                            }
+                        }
+                        needs_redraw = true;
+                    }
+                    MainEvent::TerminateWindow { .. } => {
+                        if let Some(ref mut egl) = egl_state {
+                            egl.unbind();
+                        }
+                    }
+                    MainEvent::Destroy => {
+                        egl_state = None;
+                        state.running = false;
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+
+            if needs_redraw
+                && let Some(ref mut egl) = egl_state
+                && let Some(ref mut renderer) = egl.renderer
+                && let Some(window) = app.native_window()
+            {
                     state.plugin_registry.tick();
 
                     root_element = state.plugin_registry.build_ui().unwrap_or_else(|| {
@@ -196,79 +286,6 @@ pub fn android_main(app: AndroidApp) {
                     renderer.end_frame();
                     egl.swap_buffers();
                 }
-            }
-            PollEvent::Main(main_event) => match main_event {
-                MainEvent::InitWindow { .. } => {
-                    if egl_state.is_none() {
-                        egl_state = EglContextState::new().ok();
-                    }
-                    if let Some(ref mut egl) = egl_state
-                        && let Some(window) = app.native_window()
-                    {
-                        let _ = egl.bind_window(&window);
-                    }
-                }
-                MainEvent::WindowResized { .. }
-                | MainEvent::ContentRectChanged { .. }
-                | MainEvent::RedrawNeeded { .. } => {
-                    if let Some(ref mut egl) = egl_state
-                        && let Some(window) = app.native_window()
-                    {
-                        let _ = egl.bind_window(&window);
-                    }
-                }
-                MainEvent::InputAvailable => {
-                    if let Ok(mut iter) = app.input_events_iter() {
-                        loop {
-                            let had_event = iter.next(|input_event| {
-                                let window = app.native_window();
-                                window.map_or(InputStatus::Unhandled, |win| {
-                                    let width = f32::from(u16::try_from(win.width()).unwrap_or(0));
-                                    let height =
-                                        f32::from(u16::try_from(win.height()).unwrap_or(0));
-                                    let (safe_area_top, safe_area_bottom) =
-                                        crate::platform::android::jni::get_safe_area(&app)
-                                            .map(|(top, bottom)| {
-                                                (
-                                                    f32::from(i16::try_from(top).unwrap_or(0)),
-                                                    f32::from(i16::try_from(bottom).unwrap_or(0)),
-                                                )
-                                            })
-                                            .unwrap_or((0.0, 0.0));
-
-                                    let layout_tree = calculate_layout(
-                                        &root_element,
-                                        Size::new(width, height - safe_area_top - safe_area_bottom),
-                                        0.0,
-                                        safe_area_top,
-                                    );
-                                    super::input::handle_input_event(
-                                        input_event,
-                                        &mut state,
-                                        &root_element,
-                                        &layout_tree,
-                                    )
-                                })
-                            });
-
-                            if !had_event {
-                                break;
-                            }
-                        }
-                    }
-                }
-                MainEvent::TerminateWindow { .. } => {
-                    if let Some(ref mut egl) = egl_state {
-                        egl.unbind();
-                    }
-                }
-                MainEvent::Destroy => {
-                    egl_state = None;
-                    state.running = false;
-                }
-                _ => {}
-            },
-            _ => {}
         });
     }
 }
