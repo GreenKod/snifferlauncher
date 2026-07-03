@@ -8,6 +8,7 @@ uniform sampler2D u_texture;
 uniform float u_radius;
 uniform vec2 u_rect_pos;
 uniform vec2 u_rect_size;
+uniform float u_global_alpha;
 
 float roundedBoxSDF(vec2 CenterPosition, vec2 Size, float Radius) {
     return length(max(abs(CenterPosition) - Size + Radius, 0.0)) - Radius;
@@ -24,8 +25,9 @@ void main() {
             discard;
         }
         vec4 tex_color = texture(u_texture, v_uv);
-        color = vec4(tex_color.rgb, tex_color.a * alpha);
+        color = vec4(tex_color.rgb, tex_color.a * alpha * u_global_alpha);
     } else {
-        color = texture(u_texture, v_uv);
+        vec4 tex_color = texture(u_texture, v_uv);
+        color = vec4(tex_color.rgb, tex_color.a * u_global_alpha);
     }
 }

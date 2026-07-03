@@ -33,17 +33,42 @@ impl LayoutNode {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMeasurer) -> NodeId {
     let mut style: Style = Style::default();
     let el_style = element.style();
 
     style.display = el_style.display.into();
+    style.position = el_style.position.into();
+    style.inset = taffy::geometry::Rect {
+        left: el_style.left.into(),
+        right: el_style.right.into(),
+        top: el_style.top.into(),
+        bottom: el_style.bottom.into(),
+    };
+
     style.flex_direction = el_style.flex_direction.into();
+    style.flex_wrap = el_style.flex_wrap.into();
     style.justify_content = Some(el_style.justify_content.into());
     style.align_items = Some(el_style.align_items.into());
+
+    style.flex_grow = el_style.flex_grow;
+    style.flex_shrink = el_style.flex_shrink;
+    style.flex_basis = el_style.flex_basis.into();
+
     style.size = taffy::geometry::Size {
         width: el_style.width.into(),
         height: el_style.height.into(),
+    };
+
+    style.min_size = taffy::geometry::Size {
+        width: el_style.min_width.into(),
+        height: el_style.min_height.into(),
+    };
+
+    style.max_size = taffy::geometry::Size {
+        width: el_style.max_width.into(),
+        height: el_style.max_height.into(),
     };
     style.padding = el_style.padding.into();
     style.margin = el_style.margin.into();
@@ -52,8 +77,25 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
         height: LengthPercentage::Length(el_style.gap),
     };
 
+    // Disable shrinking so items in ScrollView retain their specified height
+    // UNLESS the user explicitly sets flex_shrink (e.g. not 0.0)
+    // Wait, the default is 0.0 anyway. Let's just rely on the mapped flex_shrink above.
+
+    if let Element::ScrollView { .. } = element {
+        // Taffy'e bu konteynerin scroll edilebilir olduğunu (içeriği sınırlandırmaması gerektiğini) belirtelim
+        style.overflow = taffy::geometry::Point {
+            x: taffy::style::Overflow::Scroll,
+            y: taffy::style::Overflow::Scroll,
+        };
+    } else if el_style.overflow_hidden {
+        style.overflow = taffy::geometry::Point {
+            x: taffy::style::Overflow::Hidden,
+            y: taffy::style::Overflow::Hidden,
+        };
+    }
+
     match element {
-        Element::Container { children, .. } => {
+        Element::Container { children, .. } | Element::ScrollView { children, .. } => {
             let child_nodes: Vec<_> = children
                 .iter()
                 .map(|c| build_taffy_tree(taffy, c, measurer))
@@ -99,6 +141,24 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
             }
             taffy.new_leaf(style).unwrap()
         }
+        Element::Checkbox { .. } => {
+            if el_style.width == crate::core::style::Dimension::Auto {
+                style.size.width = Dimension::Length(24.0);
+            }
+            if el_style.height == crate::core::style::Dimension::Auto {
+                style.size.height = Dimension::Length(24.0);
+            }
+            taffy.new_leaf(style).unwrap()
+        }
+        Element::Slider { .. } | Element::ProgressBar { .. } => {
+            if el_style.width == crate::core::style::Dimension::Auto {
+                style.size.width = Dimension::Length(100.0);
+            }
+            if el_style.height == crate::core::style::Dimension::Auto {
+                style.size.height = Dimension::Length(24.0);
+            }
+            taffy.new_leaf(style).unwrap()
+        }
     }
 }
 
@@ -117,6 +177,10 @@ fn resolve_layout(
 
     let mut children = Vec::new();
     if let Element::Container {
+        children: el_children,
+        ..
+    }
+    | Element::ScrollView {
         children: el_children,
         ..
     } = element

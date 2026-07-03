@@ -24,7 +24,8 @@ const UI_TREE = {
             "align_items": "Center",
             "width": { "Percent": 100.0 },
             "height": { "Percent": 100.0 }, // Ekranın %100'ünü kaplar
-            "background_color": hexToColor("#FFD700") // Yellow BG
+            "background_color": hexToColor("#FFD700"), // Yellow BG
+            "gap": 20.0 // Flexbox Gap özelliği! Öğeler arasına 20 piksel boşluk koyar
         },
         "children": [
             {
@@ -50,15 +51,22 @@ const UI_TREE = {
                 }
             },
             {
-                "Container": {
-                    "id": "clip-container",
+                "ScrollView": {
+                    "id": "scroll-container",
+                    "scroll_x": 0.0,
+                    "scroll_y": 0.0,
+                    "scroll_sensitivity": 1.0,
+                    "dynamic_sensitivity": true,
+                    "momentum_scrolling": true,
+                    "capture_drag": true,
                     "style": {
                         "width": { "Pixels": 500.0 },
                         "height": { "Pixels": 300.0 },
                         "background_color": hexToColor("#FFFFFF"),
                         "overflow_hidden": true,
                         "border_radius": 12.0,
-                        "margin": { "top": 20.0, "bottom": 20.0, "left": 0.0, "right": 0.0 }
+                        "margin": { "top": 0.0, "bottom": 0.0, "left": 0.0, "right": 0.0 },
+                        "gap": 10.0 // ScrollView içindeki liste elemanları arasına 10px boşluk
                     },
                     "children": [
                         {
@@ -67,10 +75,52 @@ const UI_TREE = {
                                 "src": "assets/test.png", // TEST İÇİN: Buraya bir resim (PNG) koymalısınız
                                 "style": {
                                     "width": { "Percent": 100.0 },
-                                    "height": { "Percent": 100.0 },
+                                    "height": { "Pixels": 150.0 },
                                     "border_radius": 12.0,
                                     "object_fit": "Cover"
                                 }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-1",
+                                "text": "Kaydırılabilir Öğe 1",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-2",
+                                "text": "Kaydırılabilir Öğe 2",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-3",
+                                "text": "Kaydırılabilir Öğe 3",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-4",
+                                "text": "Kaydırılabilir Öğe 4",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-5",
+                                "text": "Kaydırılabilir Öğe 5",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-6",
+                                "text": "Kaydırılabilir Öğe 6",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
                             }
                         }
                     ]
@@ -91,6 +141,38 @@ const UI_TREE = {
                         "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }
                     }
                 }
+            },
+            {
+                "Container": {
+                    "id": "fab_button",
+                    "style": {
+                        "position": "Absolute",
+                        "bottom": { "Pixels": 30.0 },
+                        "right": { "Pixels": 30.0 },
+                        "width": { "Pixels": 60.0 },
+                        "height": { "Pixels": 60.0 },
+                        "border_radius": 30.0,
+                        "background_gradient": [hexToColor("#FF0055"), hexToColor("#FF00AA")],
+                        "shadow_color": hexToColor("#88000000"),
+                        "shadow_spread": 4.0,
+                        "shadow_offset_y": 4.0,
+                        "opacity": 0.9,
+                        "justify_content": "Center",
+                        "align_items": "Center"
+                    },
+                    "children": [
+                        {
+                            "Label": {
+                                "id": "fab_text",
+                                "text": "+",
+                                "style": {
+                                    "text_color": hexToColor("#FFFFFF"),
+                                    "text_size": 36.0
+                                }
+                            }
+                        }
+                    ]
+                }
             }
         ]
     }
@@ -99,6 +181,7 @@ const UI_TREE = {
 // Log hashes to console so we can debug which ID is which
 host_log("Hash of 'root': " + host_hash("root"));
 host_log("Hash of 'btn-merhaba': " + host_hash("btn-merhaba"));
+host_log("Hash of 'scroll-container': " + host_hash("scroll-container"));
 host_log("Hash of 'search_input': " + host_hash("search_input"));
 
 // Arka planda resmi GPU'ya yükle
@@ -207,11 +290,33 @@ globalThis.onEvent = function (eventJsonString) {
             UI_TREE.Container.children[3].TextInput.value = "";
         }
         host_set_ui(JSON.stringify(UI_TREE));
-    } else if (event.type === "ClickOutside" || event.type === "Click") {
-        // Başka bir yere tıklanırsa blur yap
-        UI_TREE.Container.children[3].TextInput.focused = false;
+    } else if (event.type === "PointerDown" && (String(event.id) === host_hash("fab_button") || String(event.id) === host_hash("fab_text"))) {
+        UI_TREE.Container.children[4].Container.style.opacity = 0.5;
         host_set_ui(JSON.stringify(UI_TREE));
-        host_blur_input();
+        return "[]";
+    } else if (event.type === "PointerUp" || event.type === "ClickOutside") {
+        if (UI_TREE.Container.children[4].Container.style.opacity === 0.5) {
+            UI_TREE.Container.children[4].Container.style.opacity = 0.9;
+            
+            // Eğer PointerUp event ise ve FAB butonuna/metnine aitse yeni öğe ekle
+            if (event.type === "PointerUp" && (String(event.id) === host_hash("fab_button") || String(event.id) === host_hash("fab_text"))) {
+                let scrollview = UI_TREE.Container.children[2].ScrollView;
+                let numItems = scrollview.children.length; // Resim dahil olduğu için +1 gibi
+                scrollview.children.push({
+                    "Label": {
+                        "id": "scroll-item-" + numItems,
+                        "text": "Kaydırılabilir Öğe " + numItems,
+                        "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                    }
+                });
+            }
+        }
+        // Başka bir yere tıklanırsa blur yap
+        if (event.type === "ClickOutside") {
+            UI_TREE.Container.children[3].TextInput.focused = false;
+            host_blur_input();
+        }
+        host_set_ui(JSON.stringify(UI_TREE));
     }
 
     if (event.type === "TextInput") {
@@ -224,6 +329,21 @@ globalThis.onEvent = function (eventJsonString) {
             UI_TREE.Container.children[3].TextInput.value = val.substring(0, val.length - 1);
             host_set_text("search_input", UI_TREE.Container.children[3].TextInput.value);
         }
+    }
+
+    if (event.type === "Scroll" && event.id === host_hash("scroll-container")) {
+        let scrollview = UI_TREE.Container.children[2].ScrollView;
+        scrollview.scroll_y += event.dy;
+        // Sınırlandırma dinamik olarak hesaplanıyor
+        let num_children = scrollview.children.length;
+        let num_labels = num_children - 1; // 1 tane resim var
+        let content_height = 150.0 + (num_labels * 100.0) + ((num_children - 1) * 10.0);
+        let max_scroll = Math.max(0.0, content_height - 300.0);
+        
+        if (scrollview.scroll_y < 0) scrollview.scroll_y = 0;
+        if (scrollview.scroll_y > max_scroll) scrollview.scroll_y = max_scroll;
+        
+        host_set_ui(JSON.stringify(UI_TREE));
     }
 
     return "[]";

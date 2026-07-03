@@ -51,6 +51,35 @@ pub enum Element {
         focused: bool,
         style: Style,
     },
+    ScrollView {
+        id: Option<String>,
+        style: Style,
+        children: ElementChildren,
+        scroll_x: f32,
+        scroll_y: f32,
+        scroll_sensitivity: Option<f32>,
+        dynamic_sensitivity: Option<bool>,
+        momentum_scrolling: Option<bool>,
+        capture_drag: Option<bool>,
+    },
+    Checkbox {
+        id: Option<String>,
+        checked: bool,
+        style: Style,
+    },
+    Slider {
+        id: Option<String>,
+        value: f32,
+        min: f32,
+        max: f32,
+        style: Style,
+    },
+    ProgressBar {
+        id: Option<String>,
+        value: f32,
+        max: f32,
+        style: Style,
+    },
 }
 
 impl Element {
@@ -61,7 +90,11 @@ impl Element {
             Self::Container { style, .. }
             | Self::Label { style, .. }
             | Self::Image { style, .. }
-            | Self::TextInput { style, .. } => style,
+            | Self::TextInput { style, .. }
+            | Self::ScrollView { style, .. }
+            | Self::Checkbox { style, .. }
+            | Self::Slider { style, .. }
+            | Self::ProgressBar { style, .. } => style,
         }
     }
 
@@ -72,7 +105,11 @@ impl Element {
             Self::Container { id, .. }
             | Self::Label { id, .. }
             | Self::Image { id, .. }
-            | Self::TextInput { id, .. } => id.as_deref(),
+            | Self::TextInput { id, .. }
+            | Self::ScrollView { id, .. }
+            | Self::Checkbox { id, .. }
+            | Self::Slider { id, .. }
+            | Self::ProgressBar { id, .. } => id.as_deref(),
         }
     }
 
@@ -83,7 +120,11 @@ impl Element {
                 Self::Container { style, .. }
                 | Self::Label { style, .. }
                 | Self::Image { style, .. }
-                | Self::TextInput { style, .. } => style,
+                | Self::TextInput { style, .. }
+                | Self::ScrollView { style, .. }
+                | Self::Checkbox { style, .. }
+                | Self::Slider { style, .. }
+                | Self::ProgressBar { style, .. } => style,
             };
 
             // Simple property mapping
@@ -131,7 +172,7 @@ impl Element {
             return true;
         }
 
-        if let Self::Container { children, .. } = self {
+        if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
             for child in children {
                 if child.mutate_style(target_id, property, value) {
                     return true;
@@ -157,9 +198,48 @@ impl Element {
             }
         }
 
-        if let Self::Container { children, .. } = self {
+        if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
             for child in children {
                 if child.mutate_text(target_id, new_text) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Mutates the state (e.g. `scroll_offset`, checked, value) of an element with the matching ID.
+    pub fn mutate_state(&mut self, target_id: &str, property: &str, new_val: f32) -> bool {
+        if self.id() == Some(target_id) {
+            match self {
+                Self::ScrollView {
+                    scroll_x, scroll_y, ..
+                } => {
+                    if property == "scroll_x" {
+                        *scroll_x = new_val;
+                        return true;
+                    } else if property == "scroll_y" {
+                        *scroll_y = new_val;
+                        return true;
+                    }
+                }
+                Self::Checkbox { checked, .. } if property == "checked" => {
+                    *checked = new_val > 0.0;
+                    return true;
+                }
+                Self::Slider { value, .. } | Self::ProgressBar { value, .. }
+                    if property == "value" =>
+                {
+                    *value = new_val;
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
+        if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
+            for child in children {
+                if child.mutate_state(target_id, property, new_val) {
                     return true;
                 }
             }
@@ -170,13 +250,13 @@ impl Element {
     /// Inserts a child element into a Container with the matching ID.
     pub fn insert_child(&mut self, parent_id: &str, child: Self) -> bool {
         if self.id() == Some(parent_id)
-            && let Self::Container { children, .. } = self
+            && let Self::Container { children, .. } | Self::ScrollView { children, .. } = self
         {
             children.push(child);
             return true;
         }
 
-        if let Self::Container { children, .. } = self {
+        if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
             for c in children {
                 if c.insert_child(parent_id, child.clone()) {
                     return true;
@@ -188,7 +268,7 @@ impl Element {
 
     /// Removes a child node with the matching ID from the tree.
     pub fn remove_node(&mut self, target_id: &str) -> bool {
-        if let Self::Container { children, .. } = self {
+        if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
             if let Some(pos) = children.iter().position(|c| c.id() == Some(target_id)) {
                 children.remove(pos);
                 return true;
