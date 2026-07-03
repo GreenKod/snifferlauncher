@@ -17,6 +17,7 @@ pub struct GlowRenderer {
     atlas_height: i32,
     image_program: glow::Program,
     image_textures: std::collections::HashMap<String, (glow::Texture, f32, f32)>,
+    global_alpha: f32,
 }
 
 fn unpack_color(color: u32) -> [f32; 4] {
@@ -149,6 +150,7 @@ impl GlowRenderer {
                 atlas_height,
                 image_program,
                 image_textures: std::collections::HashMap::new(),
+                global_alpha: 1.0,
             })
         }
     }
@@ -268,12 +270,30 @@ impl Renderer for GlowRenderer {
         border_width: f32,
         border_color: Option<u32>,
     ) {
-        let col = unpack_color(color);
-        let b_col = unpack_color(border_color.unwrap_or(0));
-        let _has_border = if border_color.is_some() && border_width > 0.0 {
-            1.0f32
-        } else {
+        self.draw_rect_gradient(rect, color, color, radius, border_width, border_color);
+    }
+
+    fn draw_rect_gradient(
+        &mut self,
+        rect: Rect,
+        color_top: u32,
+        color_bottom: u32,
+        radius: f32,
+        border_width: f32,
+        border_color: Option<u32>,
+    ) {
+        let mut col_top = unpack_color(color_top);
+        let mut col_bot = unpack_color(color_bottom);
+        col_top[3] *= self.global_alpha;
+        col_bot[3] *= self.global_alpha;
+
+        let mut b_col = unpack_color(border_color.unwrap_or(0));
+        b_col[3] *= self.global_alpha;
+
+        let is_gradient = if color_top == color_bottom {
             0.0f32
+        } else {
+            1.0f32
         };
 
         unsafe {
@@ -304,6 +324,15 @@ impl Renderer for GlowRenderer {
             let loc_is_shadow = self
                 .gl
                 .get_uniform_location(self.shape_program, "u_is_shadow");
+            let loc_is_gradient = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_is_gradient");
+            let loc_color_bot = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_color_bottom");
+            let loc_shape_size = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_shape_size");
 
             self.gl
                 .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
@@ -311,7 +340,14 @@ impl Renderer for GlowRenderer {
             self.gl
                 .uniform_2_f32(loc_rect_size.as_ref(), rect.width, rect.height);
             self.gl
-                .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
+                .uniform_2_f32(loc_shape_size.as_ref(), rect.width, rect.height);
+            self.gl.uniform_4_f32(
+                loc_color.as_ref(),
+                col_top[0],
+                col_top[1],
+                col_top[2],
+                col_top[3],
+            );
             self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
             self.gl.uniform_1_f32(loc_border_w.as_ref(), border_width);
             self.gl.uniform_4_f32(
@@ -323,13 +359,22 @@ impl Renderer for GlowRenderer {
             );
             self.gl.uniform_1_f32(loc_is_circle.as_ref(), 0.0);
             self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 0.0);
+            self.gl.uniform_1_f32(loc_is_gradient.as_ref(), is_gradient);
+            self.gl.uniform_4_f32(
+                loc_color_bot.as_ref(),
+                col_bot[0],
+                col_bot[1],
+                col_bot[2],
+                col_bot[3],
+            );
 
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
 
     fn draw_shadow(&mut self, rect: Rect, radius: f32, offset_y: f32, spread: f32, color: u32) {
-        let col = unpack_color(color);
+        let mut col = unpack_color(color);
+        col[3] *= self.global_alpha;
         unsafe {
             self.gl.use_program(Some(self.shape_program));
             self.gl.bind_vertex_array(Some(self.quad_vertex_array));
@@ -354,14 +399,22 @@ impl Renderer for GlowRenderer {
             let loc_shadow_blur = self
                 .gl
                 .get_uniform_location(self.shape_program, "u_shadow_blur");
+            let loc_shape_size = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_shape_size");
 
-            // Shadow is slightly larger and offset down
+            let blur = spread * 1.5;
+            let padding = blur * 2.0; // Extend quad to fit the blurred shadow
+
             let shadow_rect = Rect {
-                x: rect.x - spread,
-                y: rect.y + offset_y - spread,
-                width: spread.mul_add(2.0, rect.width),
-                height: spread.mul_add(2.0, rect.height),
+                x: rect.x - spread - padding,
+                y: rect.y + offset_y - spread - padding,
+                width: spread.mul_add(2.0, rect.width) + padding * 2.0,
+                height: spread.mul_add(2.0, rect.height) + padding * 2.0,
             };
+
+            let shape_size_x = spread.mul_add(2.0, rect.width);
+            let shape_size_y = spread.mul_add(2.0, rect.height);
 
             self.gl
                 .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
@@ -373,19 +426,21 @@ impl Renderer for GlowRenderer {
                 shadow_rect.height,
             );
             self.gl
+                .uniform_2_f32(loc_shape_size.as_ref(), shape_size_x, shape_size_y);
+            self.gl
                 .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
             self.gl.uniform_1_f32(loc_radius.as_ref(), radius + spread);
             self.gl.uniform_1_f32(loc_is_circle.as_ref(), 0.0);
             self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 1.0);
-            self.gl
-                .uniform_1_f32(loc_shadow_blur.as_ref(), spread * 1.5);
+            self.gl.uniform_1_f32(loc_shadow_blur.as_ref(), blur);
 
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
 
     fn draw_circle(&mut self, cx: f32, cy: f32, radius: f32, color: u32) {
-        let col = unpack_color(color);
+        let mut col = unpack_color(color);
+        col[3] *= self.global_alpha;
         unsafe {
             self.gl.use_program(Some(self.shape_program));
             self.gl.bind_vertex_array(Some(self.quad_vertex_array));
@@ -407,6 +462,9 @@ impl Renderer for GlowRenderer {
             let loc_is_shadow = self
                 .gl
                 .get_uniform_location(self.shape_program, "u_is_shadow");
+            let loc_shape_size = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_shape_size");
 
             let rect = Rect {
                 x: cx - radius,
@@ -421,6 +479,8 @@ impl Renderer for GlowRenderer {
             self.gl
                 .uniform_2_f32(loc_rect_size.as_ref(), rect.width, rect.height);
             self.gl
+                .uniform_2_f32(loc_shape_size.as_ref(), rect.width, rect.height);
+            self.gl
                 .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
             self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
             self.gl.uniform_1_f32(loc_is_circle.as_ref(), 1.0);
@@ -432,7 +492,8 @@ impl Renderer for GlowRenderer {
 
     #[allow(clippy::too_many_lines)]
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: u32) {
-        let col = unpack_color(color);
+        let mut col = unpack_color(color);
+        col[3] *= self.global_alpha;
         unsafe {
             self.gl.use_program(Some(self.text_program));
             self.gl.bind_vertex_array(Some(self.quad_vertex_array));
@@ -579,6 +640,10 @@ impl Renderer for GlowRenderer {
         }
     }
 
+    fn set_global_alpha(&mut self, alpha: f32) {
+        self.global_alpha = alpha;
+    }
+
     fn load_image(&mut self, id: &str, rgba_pixels: &[u8], width: u32, height: u32) {
         unsafe {
             if !self.image_textures.contains_key(id) {
@@ -686,6 +751,9 @@ impl Renderer for GlowRenderer {
                     .gl
                     .get_uniform_location(self.image_program, "u_uv_offset");
                 let loc_radius = self.gl.get_uniform_location(self.image_program, "u_radius");
+                let loc_alpha = self
+                    .gl
+                    .get_uniform_location(self.image_program, "u_global_alpha");
 
                 self.gl
                     .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
@@ -698,6 +766,7 @@ impl Renderer for GlowRenderer {
                 self.gl
                     .uniform_2_f32(loc_uv_o.as_ref(), uv_offset.0, uv_offset.1);
                 self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
+                self.gl.uniform_1_f32(loc_alpha.as_ref(), self.global_alpha);
 
                 self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
             }
