@@ -112,6 +112,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 } => {
                     running = false;
                 }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Backspace),
+                    ..
+                } => {
+                    event_bus.push(UiEvent::Backspace);
+                }
                 Event::MouseMotion { x, y, .. } => {
                     last_mouse_pos = Point::new(
                         f32::from(i16::try_from(x).expect("mouse x fits in i16")),
@@ -227,12 +233,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        if let Some(clicked_pt) = scaled_clicked_pos
-            && let Some((clicked_btn, rect)) =
+        if let Some(clicked_pt) = scaled_clicked_pos {
+            if let Some((clicked_btn, rect)) =
                 find_clicked_button(&root_element, &layout_tree, clicked_pt)
-        {
-            // Push Click to event bus ONLY; plugins will decide the action
-            event_bus.push(UiEvent::Click(clicked_btn, rect.width, rect.height));
+            {
+                // Push Click to event bus ONLY; plugins will decide the action
+                event_bus.push(UiEvent::Click(clicked_btn, rect.width, rect.height));
+            } else {
+                event_bus.push(UiEvent::ClickOutside);
+            }
         }
 
         // 11. Dispatch queued events to plugins (O(1) per event)

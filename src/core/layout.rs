@@ -62,11 +62,11 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
         }
         Element::Label { text, .. } => {
             let (w, h) = measurer.measure(text, el_style.text_size);
-            if let crate::core::style::Dimension::Auto = el_style.width {
+            if el_style.width == crate::core::style::Dimension::Auto {
                 style.size.width =
                     Dimension::Length(w + el_style.padding.left + el_style.padding.right);
             }
-            if let crate::core::style::Dimension::Auto = el_style.height {
+            if el_style.height == crate::core::style::Dimension::Auto {
                 style.size.height =
                     Dimension::Length(h + el_style.padding.top + el_style.padding.bottom);
             }
@@ -79,11 +79,11 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
                 value.clone()
             };
             let (w, h) = measurer.measure(&display_text, el_style.text_size);
-            if let crate::core::style::Dimension::Auto = el_style.width {
+            if el_style.width == crate::core::style::Dimension::Auto {
                 style.size.width =
                     Dimension::Length(w + el_style.padding.left + el_style.padding.right);
             }
-            if let crate::core::style::Dimension::Auto = el_style.height {
+            if el_style.height == crate::core::style::Dimension::Auto {
                 let h_clamped = h.max(el_style.text_size * 1.5);
                 style.size.height =
                     Dimension::Length(h_clamped + el_style.padding.top + el_style.padding.bottom);
@@ -91,10 +91,10 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
             taffy.new_leaf(style).unwrap()
         }
         Element::Image { .. } => {
-            if let crate::core::style::Dimension::Auto = el_style.width {
+            if el_style.width == crate::core::style::Dimension::Auto {
                 style.size.width = Dimension::Length(100.0);
             }
-            if let crate::core::style::Dimension::Auto = el_style.height {
+            if el_style.height == crate::core::style::Dimension::Auto {
                 style.size.height = Dimension::Length(100.0);
             }
             taffy.new_leaf(style).unwrap()
@@ -134,6 +134,11 @@ fn resolve_layout(
     }
 }
 
+/// Calculates the layout for the entire UI tree.
+///
+/// # Panics
+///
+/// Panics if the default font cannot be loaded for measuring text.
 #[must_use]
 pub fn calculate_layout(
     element: &Element,

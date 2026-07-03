@@ -421,6 +421,8 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                             rect.width,
                                                             rect.height,
                                                         ));
+                                                    } else {
+                                                        event_bus.push(UiEvent::ClickOutside);
                                                     }
                                                     InputStatus::Handled
                                                 }
@@ -435,6 +437,65 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                 _ => InputStatus::Unhandled,
                                             }
                                         })
+                                }
+                                InputEvent::KeyEvent(key_event) => {
+                                    if key_event.action()
+                                        == android_activity::input::KeyAction::Down
+                                    {
+                                        use android_activity::input::Keycode;
+                                        let keycode = key_event.key_code();
+                                        if keycode == Keycode::Del {
+                                            event_bus.push(UiEvent::Backspace);
+                                        } else {
+                                            let ch = match keycode {
+                                                Keycode::A => Some('a'),
+                                                Keycode::B => Some('b'),
+                                                Keycode::C => Some('c'),
+                                                Keycode::D => Some('d'),
+                                                Keycode::E => Some('e'),
+                                                Keycode::F => Some('f'),
+                                                Keycode::G => Some('g'),
+                                                Keycode::H => Some('h'),
+                                                Keycode::I => Some('i'),
+                                                Keycode::J => Some('j'),
+                                                Keycode::K => Some('k'),
+                                                Keycode::L => Some('l'),
+                                                Keycode::M => Some('m'),
+                                                Keycode::N => Some('n'),
+                                                Keycode::O => Some('o'),
+                                                Keycode::P => Some('p'),
+                                                Keycode::Q => Some('q'),
+                                                Keycode::R => Some('r'),
+                                                Keycode::S => Some('s'),
+                                                Keycode::T => Some('t'),
+                                                Keycode::U => Some('u'),
+                                                Keycode::V => Some('v'),
+                                                Keycode::W => Some('w'),
+                                                Keycode::X => Some('x'),
+                                                Keycode::Y => Some('y'),
+                                                Keycode::Z => Some('z'),
+                                                Keycode::Keycode0 => Some('0'),
+                                                Keycode::Keycode1 => Some('1'),
+                                                Keycode::Keycode2 => Some('2'),
+                                                Keycode::Keycode3 => Some('3'),
+                                                Keycode::Keycode4 => Some('4'),
+                                                Keycode::Keycode5 => Some('5'),
+                                                Keycode::Keycode6 => Some('6'),
+                                                Keycode::Keycode7 => Some('7'),
+                                                Keycode::Keycode8 => Some('8'),
+                                                Keycode::Keycode9 => Some('9'),
+                                                Keycode::Space => Some(' '),
+                                                Keycode::Period => Some('.'),
+                                                Keycode::Comma => Some(','),
+                                                Keycode::Minus => Some('-'),
+                                                _ => None,
+                                            };
+                                            if let Some(c) = ch {
+                                                event_bus.push(UiEvent::TextInput(c.to_string()));
+                                            }
+                                        }
+                                    }
+                                    InputStatus::Handled
                                 }
                                 _ => InputStatus::Unhandled,
                             });
