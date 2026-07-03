@@ -200,14 +200,17 @@ globalThis.onEvent = function (eventJsonString) {
     } else if (event.type === "Click" && event.id === host_hash("search_input")) {
         // TextInput Focus Test
         host_focus_input("search_input");
+        UI_TREE.Container.children[3].TextInput.focused = true;
 
         // İlk tıklamada içeriği temizle
         if (UI_TREE.Container.children[3].TextInput.value === "Buraya tıkla ve yaz...") {
             UI_TREE.Container.children[3].TextInput.value = "";
-            host_set_text("search_input", "");
         }
-    } else if (event.type === "Click") {
+        host_set_ui(JSON.stringify(UI_TREE));
+    } else if (event.type === "ClickOutside" || event.type === "Click") {
         // Başka bir yere tıklanırsa blur yap
+        UI_TREE.Container.children[3].TextInput.focused = false;
+        host_set_ui(JSON.stringify(UI_TREE));
         host_blur_input();
     }
 
@@ -215,6 +218,12 @@ globalThis.onEvent = function (eventJsonString) {
         // Gelen karakterleri arama kutusuna ekle
         UI_TREE.Container.children[3].TextInput.value += event.text;
         host_set_text("search_input", UI_TREE.Container.children[3].TextInput.value);
+    } else if (event.type === "Backspace") {
+        let val = UI_TREE.Container.children[3].TextInput.value;
+        if (val.length > 0) {
+            UI_TREE.Container.children[3].TextInput.value = val.substring(0, val.length - 1);
+            host_set_text("search_input", UI_TREE.Container.children[3].TextInput.value);
+        }
     }
 
     return "[]";

@@ -88,8 +88,8 @@ impl RectOffset {
 impl From<Display> for taffy::style::Display {
     fn from(d: Display) -> Self {
         match d {
-            Display::Flex => taffy::style::Display::Flex,
-            Display::None => taffy::style::Display::None,
+            Display::Flex => Self::Flex,
+            Display::None => Self::None,
         }
     }
 }
@@ -97,8 +97,8 @@ impl From<Display> for taffy::style::Display {
 impl From<FlexDirection> for taffy::style::FlexDirection {
     fn from(fd: FlexDirection) -> Self {
         match fd {
-            FlexDirection::Column => taffy::style::FlexDirection::Column,
-            FlexDirection::Row => taffy::style::FlexDirection::Row,
+            FlexDirection::Column => Self::Column,
+            FlexDirection::Row => Self::Row,
         }
     }
 }
@@ -106,10 +106,10 @@ impl From<FlexDirection> for taffy::style::FlexDirection {
 impl From<JustifyContent> for taffy::style::JustifyContent {
     fn from(jc: JustifyContent) -> Self {
         match jc {
-            JustifyContent::Start => taffy::style::JustifyContent::FlexStart,
-            JustifyContent::Center => taffy::style::JustifyContent::Center,
-            JustifyContent::End => taffy::style::JustifyContent::FlexEnd,
-            JustifyContent::SpaceBetween => taffy::style::JustifyContent::SpaceBetween,
+            JustifyContent::Start => Self::FlexStart,
+            JustifyContent::Center => Self::Center,
+            JustifyContent::End => Self::FlexEnd,
+            JustifyContent::SpaceBetween => Self::SpaceBetween,
         }
     }
 }
@@ -117,10 +117,10 @@ impl From<JustifyContent> for taffy::style::JustifyContent {
 impl From<AlignItems> for taffy::style::AlignItems {
     fn from(ai: AlignItems) -> Self {
         match ai {
-            AlignItems::Stretch => taffy::style::AlignItems::Stretch,
-            AlignItems::Start => taffy::style::AlignItems::FlexStart,
-            AlignItems::Center => taffy::style::AlignItems::Center,
-            AlignItems::End => taffy::style::AlignItems::FlexEnd,
+            AlignItems::Stretch => Self::Stretch,
+            AlignItems::Start => Self::FlexStart,
+            AlignItems::Center => Self::Center,
+            AlignItems::End => Self::FlexEnd,
         }
     }
 }
@@ -128,9 +128,9 @@ impl From<AlignItems> for taffy::style::AlignItems {
 impl From<Dimension> for taffy::style::Dimension {
     fn from(d: Dimension) -> Self {
         match d {
-            Dimension::Auto => taffy::style::Dimension::Auto,
-            Dimension::Pixels(px) => taffy::style::Dimension::Length(px),
-            Dimension::Percent(pct) => taffy::style::Dimension::Percent(pct / 100.0),
+            Dimension::Auto => Self::Auto,
+            Dimension::Pixels(px) => Self::Length(px),
+            Dimension::Percent(pct) => Self::Percent(pct / 100.0),
         }
     }
 }
@@ -138,9 +138,9 @@ impl From<Dimension> for taffy::style::Dimension {
 impl From<Dimension> for taffy::style::LengthPercentageAuto {
     fn from(d: Dimension) -> Self {
         match d {
-            Dimension::Auto => taffy::style::LengthPercentageAuto::Auto,
-            Dimension::Pixels(px) => taffy::style::LengthPercentageAuto::Length(px),
-            Dimension::Percent(pct) => taffy::style::LengthPercentageAuto::Percent(pct / 100.0),
+            Dimension::Auto => Self::Auto,
+            Dimension::Pixels(px) => Self::Length(px),
+            Dimension::Percent(pct) => Self::Percent(pct / 100.0),
         }
     }
 }
@@ -148,9 +148,9 @@ impl From<Dimension> for taffy::style::LengthPercentageAuto {
 impl From<Dimension> for taffy::style::LengthPercentage {
     fn from(d: Dimension) -> Self {
         match d {
-            Dimension::Auto => taffy::style::LengthPercentage::Length(0.0), // Fallback
-            Dimension::Pixels(px) => taffy::style::LengthPercentage::Length(px),
-            Dimension::Percent(pct) => taffy::style::LengthPercentage::Percent(pct / 100.0),
+            Dimension::Auto => Self::Length(0.0), // Fallback
+            Dimension::Pixels(px) => Self::Length(px),
+            Dimension::Percent(pct) => Self::Percent(pct / 100.0),
         }
     }
 }

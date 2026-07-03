@@ -288,6 +288,8 @@ impl UiPlugin for JsPlugin {
                         r#"{{"type":"TextInput","text":{}}}"#,
                         serde_json::to_string(text).unwrap_or_default()
                     ),
+                    UiEvent::ClickOutside => r#"{"type":"ClickOutside"}"#.to_string(),
+                    UiEvent::Backspace => r#"{"type":"Backspace"}"#.to_string(),
                 };
 
                 let res: Result<String, _> = on_event_fn.call((event_json,));
