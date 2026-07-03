@@ -51,9 +51,19 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
         width: LengthPercentage::Length(el_style.gap),
         height: LengthPercentage::Length(el_style.gap),
     };
+    
+    // Disable shrinking so items in ScrollView retain their specified height
+    style.flex_shrink = 0.0;
+    
+    if let Element::ScrollView { .. } = element {
+        // Taffy'e bu konteynerin scroll edilebilir olduğunu (içeriği sınırlandırmaması gerektiğini) belirtelim
+        style.overflow = taffy::geometry::Point { x: taffy::style::Overflow::Scroll, y: taffy::style::Overflow::Scroll };
+    } else if el_style.overflow_hidden {
+        style.overflow = taffy::geometry::Point { x: taffy::style::Overflow::Hidden, y: taffy::style::Overflow::Hidden };
+    }
 
     match element {
-        Element::Container { children, .. } => {
+        Element::Container { children, .. } | Element::ScrollView { children, .. } => {
             let child_nodes: Vec<_> = children
                 .iter()
                 .map(|c| build_taffy_tree(taffy, c, measurer))
@@ -99,6 +109,24 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
             }
             taffy.new_leaf(style).unwrap()
         }
+        Element::Checkbox { .. } => {
+            if el_style.width == crate::core::style::Dimension::Auto {
+                style.size.width = Dimension::Length(24.0);
+            }
+            if el_style.height == crate::core::style::Dimension::Auto {
+                style.size.height = Dimension::Length(24.0);
+            }
+            taffy.new_leaf(style).unwrap()
+        }
+        Element::Slider { .. } | Element::ProgressBar { .. } => {
+            if el_style.width == crate::core::style::Dimension::Auto {
+                style.size.width = Dimension::Length(100.0);
+            }
+            if el_style.height == crate::core::style::Dimension::Auto {
+                style.size.height = Dimension::Length(24.0);
+            }
+            taffy.new_leaf(style).unwrap()
+        }
     }
 }
 
@@ -116,11 +144,7 @@ fn resolve_layout(
     let rect = Rect::new(abs_x, abs_y, layout.size.width, layout.size.height);
 
     let mut children = Vec::new();
-    if let Element::Container {
-        children: el_children,
-        ..
-    } = element
-    {
+    if let Element::Container { children: el_children, .. } | Element::ScrollView { children: el_children, .. } = element {
         let child_nodes = taffy.children(node).unwrap();
         for (child_el, child_node) in el_children.iter().zip(child_nodes.iter()) {
             children.push(resolve_layout(taffy, *child_node, child_el, abs_x, abs_y));
