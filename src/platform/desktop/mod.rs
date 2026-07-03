@@ -9,6 +9,12 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use std::time::Duration;
 
+struct KineticScroll {
+    sv_id: u64,
+    velocity_x: f32,
+    velocity_y: f32,
+}
+
 /// Run the desktop preview.
 ///
 /// # Errors
@@ -20,7 +26,7 @@ use std::time::Duration;
 /// Panics if mouse or drawable dimensions do not fit the narrow integer
 /// conversions used for clippy-clean float handling.
 #[allow(clippy::missing_panics_doc)]
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::similar_names)]
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Initialize SDL2
     let sdl_context = sdl2::init()?;
@@ -76,11 +82,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut active_scrollview_drag: Option<u64> = None;
     let mut last_drag_delta: (f32, f32) = (0.0, 0.0);
 
-    struct KineticScroll {
-        sv_id: u64,
-        velocity_x: f32,
-        velocity_y: f32,
-    }
     let mut kinetic_scrolls: Vec<KineticScroll> = Vec::new();
 
     let event_bus = EventBus::default();
@@ -130,7 +131,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 } => {
                     event_bus.push(UiEvent::Backspace);
                 }
-                Event::MouseMotion { x, y, xrel, yrel, mousestate, .. } => {
+                Event::MouseMotion {
+                    x,
+                    y,
+                    xrel,
+                    yrel,
+                    mousestate,
+                    ..
+                } => {
                     last_mouse_pos = Point::new(
                         f32::from(i16::try_from(x).expect("mouse x fits in i16")),
                         f32::from(i16::try_from(y).expect("mouse y fits in i16")),
@@ -259,11 +267,20 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         if let Some(clicked_pt) = scaled_clicked_pos {
             // Sürükleme başladığında hangi ScrollView üzerinde olduğumuzu "Capture" ediyoruz
-            if let Some((crate::core::types::Element::ScrollView { id, capture_drag, .. }, _)) = 
-                crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, clicked_pt) 
-            {
+            if let Some((
+                crate::core::types::Element::ScrollView {
+                    id, capture_drag, ..
+                },
+                _,
+            )) = crate::core::render::draw::find_hovered_scrollview(
+                &root_element,
+                &layout_tree,
+                clicked_pt,
+            ) {
                 if capture_drag.unwrap_or(true) {
-                    active_scrollview_drag = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                    active_scrollview_drag = id
+                        .as_deref()
+                        .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
                 }
                 // Mevcut ivmeli kaydırmaları temizle (dokunduğunda dursun)
                 kinetic_scrolls.clear();
@@ -286,11 +303,20 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // Eğer capture varsa, bırakıldığında ivmeyi aktarabiliriz
                 if last_drag_delta.0.abs() > 0.5 || last_drag_delta.1.abs() > 0.5 {
                     // Bulalım bakalım momentum açık mı
-                    // Hızlıca ağaçta bulmak için active_scrollview_drag kullanılamaz, o yüzden varsayılan true kabul ediyoruz 
+                    // Hızlıca ağaçta bulmak için active_scrollview_drag kullanılamaz, o yüzden varsayılan true kabul ediyoruz
                     // Ya da basite kaçıp hep true yapabiliriz. Gerçek bir implementasyonda ID ile ağacı taramak gerekir.
                     // Fakat find_hovered_scrollview ile son konumu tararsak bilebiliriz.
-                    let momentum_enabled = if let Some((crate::core::types::Element::ScrollView { momentum_scrolling, .. }, _)) = 
-                        crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, scaled_last_mouse_pos) {
+                    let momentum_enabled = if let Some((
+                        crate::core::types::Element::ScrollView {
+                            momentum_scrolling, ..
+                        },
+                        _,
+                    )) =
+                        crate::core::render::draw::find_hovered_scrollview(
+                            &root_element,
+                            &layout_tree,
+                            scaled_last_mouse_pos,
+                        ) {
                         momentum_scrolling.unwrap_or(true)
                     } else {
                         true // Varsayılan
@@ -305,34 +331,52 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
-            
-            let released_btn = find_hovered_button(&root_element, &layout_tree, scaled_last_mouse_pos).map(|(id, _)| id);
+
+            let released_btn =
+                find_hovered_button(&root_element, &layout_tree, scaled_last_mouse_pos)
+                    .map(|(id, _)| id);
             event_bus.push(UiEvent::PointerUp(released_btn));
-            
+
             active_scrollview_drag = None;
             last_drag_delta = (0.0, 0.0);
         }
 
         for (x, y) in scroll_events {
-            if let Some((crate::core::types::Element::ScrollView { id, scroll_sensitivity, dynamic_sensitivity, .. }, lay)) = 
-                crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, scaled_last_mouse_pos) 
-            {
+            if let Some((
+                crate::core::types::Element::ScrollView {
+                    id,
+                    scroll_sensitivity,
+                    dynamic_sensitivity,
+                    ..
+                },
+                lay,
+            )) = crate::core::render::draw::find_hovered_scrollview(
+                &root_element,
+                &layout_tree,
+                scaled_last_mouse_pos,
+            ) {
                 let mut factor = scroll_sensitivity.unwrap_or(1.0);
                 if dynamic_sensitivity.unwrap_or(false) && !lay.children.is_empty() {
                     let view_height = lay.rect.height;
                     let mut min_y = f32::MAX;
                     let mut max_y = f32::MIN;
                     for child in &lay.children {
-                        if child.rect.y < min_y { min_y = child.rect.y; }
-                        if child.rect.y + child.rect.height > max_y { max_y = child.rect.y + child.rect.height; }
+                        if child.rect.y < min_y {
+                            min_y = child.rect.y;
+                        }
+                        if child.rect.y + child.rect.height > max_y {
+                            max_y = child.rect.y + child.rect.height;
+                        }
                     }
                     let content_height = max_y - min_y;
                     if view_height > 0.0 && content_height > view_height {
                         factor *= content_height / view_height;
                     }
                 }
-                
-                let sv_id = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+
+                let sv_id = id
+                    .as_deref()
+                    .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
                 event_bus.push(UiEvent::Scroll(
                     sv_id,
                     f32::from(i16::try_from(x).unwrap_or(0)) * -20.0 * factor,
@@ -349,20 +393,31 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             let s_dy = f32::from(i16::try_from(dy).unwrap_or(0)) * scale_y;
             sum_dx += s_dx;
             sum_dy += s_dy;
-            
+
             if let Some(sv_id) = active_scrollview_drag {
                 event_bus.push(UiEvent::Scroll(Some(sv_id), s_dx, s_dy));
-            } else if let Some((crate::core::types::Element::ScrollView { id, capture_drag, .. }, _)) = 
-                crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, scaled_last_mouse_pos) 
-            {
+            } else if let Some((
+                crate::core::types::Element::ScrollView {
+                    id, capture_drag, ..
+                },
+                _,
+            )) = crate::core::render::draw::find_hovered_scrollview(
+                &root_element,
+                &layout_tree,
+                scaled_last_mouse_pos,
+            ) {
                 if capture_drag.unwrap_or(true) && active_scrollview_drag.is_none() {
-                    active_scrollview_drag = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                    active_scrollview_drag = id
+                        .as_deref()
+                        .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
                 }
-                let sv_id = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                let sv_id = id
+                    .as_deref()
+                    .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
                 event_bus.push(UiEvent::Scroll(sv_id, s_dx, s_dy));
             }
         }
-        
+
         if sum_dx != 0.0 || sum_dy != 0.0 {
             last_drag_delta = (sum_dx, sum_dy);
         }

@@ -208,11 +208,13 @@ impl Element {
         false
     }
 
-    /// Mutates the state (e.g. scroll_offset, checked, value) of an element with the matching ID.
+    /// Mutates the state (e.g. `scroll_offset`, checked, value) of an element with the matching ID.
     pub fn mutate_state(&mut self, target_id: &str, property: &str, new_val: f32) -> bool {
         if self.id() == Some(target_id) {
             match self {
-                Self::ScrollView { scroll_x, scroll_y, .. } => {
+                Self::ScrollView {
+                    scroll_x, scroll_y, ..
+                } => {
                     if property == "scroll_x" {
                         *scroll_x = new_val;
                         return true;
@@ -221,17 +223,15 @@ impl Element {
                         return true;
                     }
                 }
-                Self::Checkbox { checked, .. } => {
-                    if property == "checked" {
-                        *checked = new_val > 0.0;
-                        return true;
-                    }
+                Self::Checkbox { checked, .. } if property == "checked" => {
+                    *checked = new_val > 0.0;
+                    return true;
                 }
-                Self::Slider { value, .. } | Self::ProgressBar { value, .. } => {
-                    if property == "value" {
-                        *value = new_val;
-                        return true;
-                    }
+                Self::Slider { value, .. } | Self::ProgressBar { value, .. }
+                    if property == "value" =>
+                {
+                    *value = new_val;
+                    return true;
                 }
                 _ => {}
             }
@@ -249,11 +249,11 @@ impl Element {
 
     /// Inserts a child element into a Container with the matching ID.
     pub fn insert_child(&mut self, parent_id: &str, child: Self) -> bool {
-        if self.id() == Some(parent_id) {
-            if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
-                children.push(child);
-                return true;
-            }
+        if self.id() == Some(parent_id)
+            && let Self::Container { children, .. } | Self::ScrollView { children, .. } = self
+        {
+            children.push(child);
+            return true;
         }
 
         if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {

@@ -290,7 +290,11 @@ impl Renderer for GlowRenderer {
         let mut b_col = unpack_color(border_color.unwrap_or(0));
         b_col[3] *= self.global_alpha;
 
-        let is_gradient = if color_top != color_bottom { 1.0f32 } else { 0.0f32 };
+        let is_gradient = if color_top == color_bottom {
+            0.0f32
+        } else {
+            1.0f32
+        };
 
         unsafe {
             self.gl.use_program(Some(self.shape_program));
@@ -337,8 +341,13 @@ impl Renderer for GlowRenderer {
                 .uniform_2_f32(loc_rect_size.as_ref(), rect.width, rect.height);
             self.gl
                 .uniform_2_f32(loc_shape_size.as_ref(), rect.width, rect.height);
-            self.gl
-                .uniform_4_f32(loc_color.as_ref(), col_top[0], col_top[1], col_top[2], col_top[3]);
+            self.gl.uniform_4_f32(
+                loc_color.as_ref(),
+                col_top[0],
+                col_top[1],
+                col_top[2],
+                col_top[3],
+            );
             self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
             self.gl.uniform_1_f32(loc_border_w.as_ref(), border_width);
             self.gl.uniform_4_f32(
@@ -396,14 +405,14 @@ impl Renderer for GlowRenderer {
 
             let blur = spread * 1.5;
             let padding = blur * 2.0; // Extend quad to fit the blurred shadow
-            
+
             let shadow_rect = Rect {
                 x: rect.x - spread - padding,
                 y: rect.y + offset_y - spread - padding,
                 width: spread.mul_add(2.0, rect.width) + padding * 2.0,
                 height: spread.mul_add(2.0, rect.height) + padding * 2.0,
             };
-            
+
             let shape_size_x = spread.mul_add(2.0, rect.width);
             let shape_size_y = spread.mul_add(2.0, rect.height);
 
@@ -416,18 +425,14 @@ impl Renderer for GlowRenderer {
                 shadow_rect.width,
                 shadow_rect.height,
             );
-            self.gl.uniform_2_f32(
-                loc_shape_size.as_ref(),
-                shape_size_x,
-                shape_size_y,
-            );
+            self.gl
+                .uniform_2_f32(loc_shape_size.as_ref(), shape_size_x, shape_size_y);
             self.gl
                 .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
             self.gl.uniform_1_f32(loc_radius.as_ref(), radius + spread);
             self.gl.uniform_1_f32(loc_is_circle.as_ref(), 0.0);
             self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 1.0);
-            self.gl
-                .uniform_1_f32(loc_shadow_blur.as_ref(), blur);
+            self.gl.uniform_1_f32(loc_shadow_blur.as_ref(), blur);
 
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }

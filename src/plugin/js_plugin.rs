@@ -303,7 +303,10 @@ impl UiPlugin for JsPlugin {
                             Some(id) => format!(r#""{}""#, id),
                             None => "null".to_string(),
                         };
-                        format!(r#"{{"type":"Scroll","id":{},"dx":{},"dy":{}}}"#, id_str, dx, dy)
+                        format!(
+                            r#"{{"type":"Scroll","id":{},"dx":{},"dy":{}}}"#,
+                            id_str, dx, dy
+                        )
                     }
                 };
 
