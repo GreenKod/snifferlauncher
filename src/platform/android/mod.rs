@@ -296,7 +296,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
 
                     renderer.begin_frame(width, height);
                     renderer.clear(BACKGROUND);
-
+                    // 12. DRAW TO SCREEN
                     draw_ui(
                         renderer,
                         &root_element,
@@ -304,6 +304,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                         &metrics,
                         &style_map,
                         &data_map,
+                        1.0,
                     );
 
                     renderer.end_frame();
@@ -404,6 +405,13 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                             }
                                                         }
                                                         kinetic_scrolls.clear();
+                                                        
+                                                        // Emit PointerDown
+                                                        if let Some((clicked_btn, _)) = find_clicked_button(&root_element, &layout_tree, point) {
+                                                            event_bus.push(UiEvent::PointerDown(clicked_btn));
+                                                        } else {
+                                                            event_bus.push(UiEvent::PointerDown(0));
+                                                        }
                                                     }
 
                                                     let prev_hovered = hovered_btn;
@@ -479,6 +487,8 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     if let Some(prev) = prev_hovered {
                                                         event_bus.push(UiEvent::HoverEnd(prev));
                                                     }
+
+                                                    event_bus.push(UiEvent::PointerUp(hovered_btn));
 
                                                     if let Some((clicked_btn, rect)) =
                                                         find_clicked_button(

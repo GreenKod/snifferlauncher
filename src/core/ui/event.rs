@@ -9,6 +9,8 @@ pub enum UiEvent {
     HoverEnd(u64),
     TextInput(String),
     Backspace,
+    PointerDown(u64),
+    PointerUp(Option<u64>),
     Scroll(Option<u64>, f32, f32),
 }
 

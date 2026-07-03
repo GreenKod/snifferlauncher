@@ -290,6 +290,14 @@ impl UiPlugin for JsPlugin {
                     ),
                     UiEvent::ClickOutside => r#"{"type":"ClickOutside"}"#.to_string(),
                     UiEvent::Backspace => r#"{"type":"Backspace"}"#.to_string(),
+                    UiEvent::PointerDown(id) => format!(r#"{{"type":"PointerDown","id":"{id}"}}"#),
+                    UiEvent::PointerUp(id_opt) => {
+                        let id_str = match id_opt {
+                            Some(id) => format!(r#""{}""#, id),
+                            None => "null".to_string(),
+                        };
+                        format!(r#"{{"type":"PointerUp","id":{}}}"#, id_str)
+                    }
                     UiEvent::Scroll(id_opt, dx, dy) => {
                         let id_str = match id_opt {
                             Some(id) => format!(r#""{}""#, id),

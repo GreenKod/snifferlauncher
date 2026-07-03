@@ -272,9 +272,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             if let Some((clicked_btn, rect)) =
                 find_clicked_button(&root_element, &layout_tree, clicked_pt)
             {
+                event_bus.push(UiEvent::PointerDown(clicked_btn));
                 // Push Click to event bus ONLY; plugins will decide the action
                 event_bus.push(UiEvent::Click(clicked_btn, rect.width, rect.height));
             } else {
+                event_bus.push(UiEvent::PointerDown(0)); // 0 represents nothing
                 event_bus.push(UiEvent::ClickOutside);
             }
         }
@@ -303,6 +305,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+            
+            let released_btn = find_hovered_button(&root_element, &layout_tree, scaled_last_mouse_pos).map(|(id, _)| id);
+            event_bus.push(UiEvent::PointerUp(released_btn));
+            
             active_scrollview_drag = None;
             last_drag_delta = (0.0, 0.0);
         }
@@ -408,6 +414,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // 12. Render
         renderer.begin_frame(width, height);
         renderer.clear(BACKGROUND);
+        // Draw UI tree
         draw_ui(
             &mut renderer,
             &root_element,
@@ -415,6 +422,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             &metrics,
             &style_map,
             &data_map,
+            1.0,
         );
         renderer.end_frame();
 

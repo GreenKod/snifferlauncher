@@ -16,6 +16,23 @@ pub enum FlexDirection {
     Row,
 }
 
+/// Wrapping behavior for flex containers.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub enum FlexWrap {
+    #[default]
+    NoWrap,
+    Wrap,
+    WrapReverse,
+}
+
+/// Positioning strategy for an element.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub enum Position {
+    #[default]
+    Relative,
+    Absolute,
+}
+
 /// How children are distributed along the main axis.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum JustifyContent {
@@ -99,6 +116,25 @@ impl From<FlexDirection> for taffy::style::FlexDirection {
         match fd {
             FlexDirection::Column => Self::Column,
             FlexDirection::Row => Self::Row,
+        }
+    }
+}
+
+impl From<FlexWrap> for taffy::style::FlexWrap {
+    fn from(fw: FlexWrap) -> Self {
+        match fw {
+            FlexWrap::NoWrap => Self::NoWrap,
+            FlexWrap::Wrap => Self::Wrap,
+            FlexWrap::WrapReverse => Self::WrapReverse,
+        }
+    }
+}
+
+impl From<Position> for taffy::style::Position {
+    fn from(p: Position) -> Self {
+        match p {
+            Position::Relative => Self::Relative,
+            Position::Absolute => Self::Absolute,
         }
     }
 }

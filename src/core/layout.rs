@@ -38,12 +38,36 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
     let el_style = element.style();
 
     style.display = el_style.display.into();
+    style.position = el_style.position.into();
+    style.inset = taffy::geometry::Rect {
+        left: el_style.left.into(),
+        right: el_style.right.into(),
+        top: el_style.top.into(),
+        bottom: el_style.bottom.into(),
+    };
+
     style.flex_direction = el_style.flex_direction.into();
+    style.flex_wrap = el_style.flex_wrap.into();
     style.justify_content = Some(el_style.justify_content.into());
     style.align_items = Some(el_style.align_items.into());
+    
+    style.flex_grow = el_style.flex_grow;
+    style.flex_shrink = el_style.flex_shrink;
+    style.flex_basis = el_style.flex_basis.into();
+
     style.size = taffy::geometry::Size {
         width: el_style.width.into(),
         height: el_style.height.into(),
+    };
+    
+    style.min_size = taffy::geometry::Size {
+        width: el_style.min_width.into(),
+        height: el_style.min_height.into(),
+    };
+
+    style.max_size = taffy::geometry::Size {
+        width: el_style.max_width.into(),
+        height: el_style.max_height.into(),
     };
     style.padding = el_style.padding.into();
     style.margin = el_style.margin.into();
@@ -53,7 +77,8 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
     };
     
     // Disable shrinking so items in ScrollView retain their specified height
-    style.flex_shrink = 0.0;
+    // UNLESS the user explicitly sets flex_shrink (e.g. not 0.0)
+    // Wait, the default is 0.0 anyway. Let's just rely on the mapped flex_shrink above.
     
     if let Element::ScrollView { .. } = element {
         // Taffy'e bu konteynerin scroll edilebilir olduğunu (içeriği sınırlandırmaması gerektiğini) belirtelim
