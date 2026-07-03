@@ -24,7 +24,8 @@ const UI_TREE = {
             "align_items": "Center",
             "width": { "Percent": 100.0 },
             "height": { "Percent": 100.0 }, // Ekranın %100'ünü kaplar
-            "background_color": hexToColor("#FFD700") // Yellow BG
+            "background_color": hexToColor("#FFD700"), // Yellow BG
+            "gap": 20.0 // Flexbox Gap özelliği! Öğeler arasına 20 piksel boşluk koyar
         },
         "children": [
             {
@@ -50,15 +51,22 @@ const UI_TREE = {
                 }
             },
             {
-                "Container": {
-                    "id": "clip-container",
+                "ScrollView": {
+                    "id": "scroll-container",
+                    "scroll_x": 0.0,
+                    "scroll_y": 0.0,
+                    "scroll_sensitivity": 1.0,
+                    "dynamic_sensitivity": true,
+                    "momentum_scrolling": true,
+                    "capture_drag": true,
                     "style": {
                         "width": { "Pixels": 500.0 },
                         "height": { "Pixels": 300.0 },
                         "background_color": hexToColor("#FFFFFF"),
                         "overflow_hidden": true,
                         "border_radius": 12.0,
-                        "margin": { "top": 20.0, "bottom": 20.0, "left": 0.0, "right": 0.0 }
+                        "margin": { "top": 0.0, "bottom": 0.0, "left": 0.0, "right": 0.0 },
+                        "gap": 10.0 // ScrollView içindeki liste elemanları arasına 10px boşluk
                     },
                     "children": [
                         {
@@ -67,10 +75,52 @@ const UI_TREE = {
                                 "src": "assets/test.png", // TEST İÇİN: Buraya bir resim (PNG) koymalısınız
                                 "style": {
                                     "width": { "Percent": 100.0 },
-                                    "height": { "Percent": 100.0 },
+                                    "height": { "Pixels": 150.0 },
                                     "border_radius": 12.0,
                                     "object_fit": "Cover"
                                 }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-1",
+                                "text": "Kaydırılabilir Öğe 1",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-2",
+                                "text": "Kaydırılabilir Öğe 2",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-3",
+                                "text": "Kaydırılabilir Öğe 3",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-4",
+                                "text": "Kaydırılabilir Öğe 4",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-5",
+                                "text": "Kaydırılabilir Öğe 5",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                            }
+                        },
+                        {
+                            "Label": {
+                                "id": "scroll-item-6",
+                                "text": "Kaydırılabilir Öğe 6",
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
                             }
                         }
                     ]
@@ -99,6 +149,7 @@ const UI_TREE = {
 // Log hashes to console so we can debug which ID is which
 host_log("Hash of 'root': " + host_hash("root"));
 host_log("Hash of 'btn-merhaba': " + host_hash("btn-merhaba"));
+host_log("Hash of 'scroll-container': " + host_hash("scroll-container"));
 host_log("Hash of 'search_input': " + host_hash("search_input"));
 
 // Arka planda resmi GPU'ya yükle
@@ -224,6 +275,16 @@ globalThis.onEvent = function (eventJsonString) {
             UI_TREE.Container.children[3].TextInput.value = val.substring(0, val.length - 1);
             host_set_text("search_input", UI_TREE.Container.children[3].TextInput.value);
         }
+    }
+
+    if (event.type === "Scroll" && event.id === host_hash("scroll-container")) {
+        let scrollview = UI_TREE.Container.children[2].ScrollView;
+        scrollview.scroll_y += event.dy;
+        // Sınırlandırma (Toplam içerik ~1350px, görünür alan 300px -> max scroll ~1050px)
+        if (scrollview.scroll_y < 0) scrollview.scroll_y = 0;
+        if (scrollview.scroll_y > 1050) scrollview.scroll_y = 1050;
+        
+        host_set_ui(JSON.stringify(UI_TREE));
     }
 
     return "[]";

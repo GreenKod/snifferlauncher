@@ -33,7 +33,22 @@ pub fn find_clicked_button(
             }
             None
         }
-        Element::Label { id, .. } | Element::Image { id, .. } | Element::TextInput { id, .. } => {
+        Element::ScrollView { children, id, scroll_x, scroll_y, scroll_sensitivity: _, dynamic_sensitivity: _, momentum_scrolling: _, capture_drag: _, .. } => {
+            let offset_point = Point::new(point.x + scroll_x, point.y + scroll_y);
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+                if let Some(clicked_data) = find_clicked_button(child_el, child_lay, offset_point) {
+                    return Some(clicked_data);
+                }
+            }
+            if let Some(id_str) = id {
+                return Some((
+                    crate::core::ui::widget::fnv1a(id_str.as_bytes()),
+                    layout.rect,
+                ));
+            }
+            None
+        }
+        Element::Label { id, .. } | Element::Image { id, .. } | Element::TextInput { id, .. } | Element::Checkbox { id, .. } | Element::Slider { id, .. } | Element::ProgressBar { id, .. } => {
             if let Some(id_str) = id {
                 return Some((
                     crate::core::ui::widget::fnv1a(id_str.as_bytes()),
@@ -54,6 +69,38 @@ pub fn find_hovered_button(
 ) -> Option<(u64, Rect)> {
     // Exact same logic as click
     find_clicked_button(element, layout, point)
+}
+
+/// Recursively traverses the layout and element trees to find the deepest ScrollView containing the point.
+#[must_use]
+pub fn find_hovered_scrollview<'a>(
+    element: &'a Element,
+    layout: &'a LayoutNode,
+    point: Point,
+) -> Option<(&'a Element, &'a LayoutNode)> {
+    if !layout.rect.contains(point) {
+        return None;
+    }
+    match element {
+        Element::Container { children, .. } => {
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+                if let Some(scrollview_data) = find_hovered_scrollview(child_el, child_lay, point) {
+                    return Some(scrollview_data);
+                }
+            }
+            None
+        }
+        Element::ScrollView { children, scroll_x, scroll_y, scroll_sensitivity: _, dynamic_sensitivity: _, momentum_scrolling: _, capture_drag: _, .. } => {
+            let offset_point = Point::new(point.x + scroll_x, point.y + scroll_y);
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+                if let Some(scrollview_data) = find_hovered_scrollview(child_el, child_lay, offset_point) {
+                    return Some(scrollview_data);
+                }
+            }
+            Some((element, layout))
+        }
+        _ => None,
+    }
 }
 
 /// Platform-agnostic traversal to draw the UI elements using the Renderer interface.
@@ -151,6 +198,16 @@ pub fn draw_ui(
                 draw_ui(renderer, child_el, child_lay, metrics, style_map, data_map);
             }
         }
+        Element::ScrollView { children, scroll_x, scroll_y, scroll_sensitivity: _, dynamic_sensitivity: _, momentum_scrolling: _, capture_drag: _, .. } => {
+            renderer.set_clip_rect(rect);
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+                let mut offset_lay = child_lay.clone();
+                // Shift rects recursively so children draw with scroll offset
+                shift_layout(&mut offset_lay, -*scroll_x, -*scroll_y);
+                draw_ui(renderer, child_el, &offset_lay, metrics, style_map, data_map);
+            }
+            renderer.clear_clip_rect();
+        }
         Element::Label { text, .. } => {
             // Check if plugin overrides the label text
             let display_text = if let Some(w_id) = widget_id {
@@ -187,9 +244,38 @@ pub fn draw_ui(
 
             renderer.draw_text(&display_text, draw_x, draw_y, style.text_size, color);
         }
+        Element::Checkbox { checked, .. } => {
+            if *checked {
+                let inner_rect = Rect::new(rect.x + 4.0, rect.y + 4.0, rect.width - 8.0, rect.height - 8.0);
+                renderer.draw_rect(inner_rect, style.text_color.unwrap_or(0xFF00_0000), 2.0, 0.0, None);
+            }
+        }
+        Element::Slider { value, min, max, .. } => {
+            let track_rect = Rect::new(rect.x, rect.y + rect.height / 2.0 - 2.0, rect.width, 4.0);
+            renderer.draw_rect(track_rect, 0xFF88_8888, 2.0, 0.0, None);
+            
+            let range = (max - min).max(0.0001);
+            let pct = ((value - min) / range).clamp(0.0, 1.0);
+            let thumb_x = rect.x + (rect.width - 16.0) * pct;
+            let thumb_rect = Rect::new(thumb_x, rect.y + rect.height / 2.0 - 8.0, 16.0, 16.0);
+            renderer.draw_rect(thumb_rect, style.text_color.unwrap_or(0xFF00_0000), 8.0, 0.0, None);
+        }
+        Element::ProgressBar { value, max, .. } => {
+            let pct = (value / max.max(0.0001)).clamp(0.0, 1.0);
+            let fill_rect = Rect::new(rect.x, rect.y, rect.width * pct, rect.height);
+            renderer.draw_rect(fill_rect, style.text_color.unwrap_or(0xFF00_00FF), style.border_radius, 0.0, None);
+        }
     }
 
     if style.overflow_hidden {
         renderer.clear_clip_rect();
+    }
+}
+
+fn shift_layout(layout: &mut LayoutNode, dx: f32, dy: f32) {
+    layout.rect.x += dx;
+    layout.rect.y += dy;
+    for child in &mut layout.children {
+        shift_layout(child, dx, dy);
     }
 }

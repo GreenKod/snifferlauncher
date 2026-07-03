@@ -161,6 +161,15 @@ pub fn android_main(app: android_activity::AndroidApp) {
     let mut running = true;
     let mut last_touch_pos = Point::zero();
     let mut hovered_btn: Option<u64> = None;
+    let mut active_scrollview_drag: Option<u64> = None;
+    let mut last_drag_delta: (f32, f32) = (0.0, 0.0);
+
+    struct KineticScroll {
+        sv_id: u64,
+        velocity_x: f32,
+        velocity_y: f32,
+    }
+    let mut kinetic_scrolls: Vec<KineticScroll> = Vec::new();
 
     // Initialize the event-driven plugin system
     let event_bus = EventBus::default();
@@ -245,6 +254,18 @@ pub fn android_main(app: android_activity::AndroidApp) {
                         safe_area_top,
                     );
 
+                    // Dispatch kinetic scrolls
+                    kinetic_scrolls.retain_mut(|k| {
+                        if k.velocity_x.abs() > 0.1 || k.velocity_y.abs() > 0.1 {
+                            event_bus.push(UiEvent::Scroll(Some(k.sv_id), k.velocity_x, k.velocity_y));
+                            k.velocity_x *= 0.92;
+                            k.velocity_y *= 0.92;
+                            true
+                        } else {
+                            false
+                        }
+                    });
+
                     // Dispatch any queued events to plugins BEFORE rendering
                     plugin_registry.dispatch(&event_bus, &style_map, &data_map, &action_queue);
 
@@ -318,6 +339,8 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                     let pointer =
                                         motion_event.pointer_at_index(motion_event.pointer_index());
                                     let point = Point::new(pointer.raw_x(), pointer.raw_y());
+                                    let delta_x = point.x - last_touch_pos.x;
+                                    let delta_y = point.y - last_touch_pos.y;
                                     last_touch_pos = point;
 
                                     app.native_window()
@@ -372,6 +395,17 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                 MotionAction::Down
                                                 | MotionAction::Move
                                                 | MotionAction::PointerDown => {
+                                                    if motion_event.action() == MotionAction::Down || motion_event.action() == MotionAction::PointerDown {
+                                                        if let Some((crate::core::types::Element::ScrollView { id, capture_drag, .. }, _)) =
+                                                            crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, point)
+                                                        {
+                                                            if capture_drag.unwrap_or(true) {
+                                                                active_scrollview_drag = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                                                            }
+                                                        }
+                                                        kinetic_scrolls.clear();
+                                                    }
+
                                                     let prev_hovered = hovered_btn;
                                                     let hovered_data = find_hovered_button(
                                                         &root_element,
@@ -394,9 +428,47 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                             point.y - rect.y,
                                                         ));
                                                     }
+                                                    if motion_event.action() == MotionAction::Move {
+                                                        last_drag_delta = (delta_x, delta_y);
+                                                        // For touch panning, positive delta means content moves exactly that amount
+                                                        if let Some(sv_id) = active_scrollview_drag {
+                                                            event_bus.push(UiEvent::Scroll(Some(sv_id), delta_x, delta_y));
+                                                        } else if let Some((crate::core::types::Element::ScrollView { id, capture_drag, .. }, _)) =
+                                                            crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, point)
+                                                        {
+                                                            if capture_drag.unwrap_or(true) && active_scrollview_drag.is_none() {
+                                                                active_scrollview_drag = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                                                            }
+                                                            let sv_id = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                                                            event_bus.push(UiEvent::Scroll(sv_id, delta_x, delta_y));
+                                                        } else {
+                                                            event_bus.push(UiEvent::Scroll(hovered_btn, delta_x, delta_y));
+                                                        }
+                                                    }
                                                     InputStatus::Handled
                                                 }
                                                 MotionAction::Up | MotionAction::PointerUp => {
+                                                    if let Some(sv_id) = active_scrollview_drag {
+                                                        if last_drag_delta.0.abs() > 0.5 || last_drag_delta.1.abs() > 0.5 {
+                                                            let momentum_enabled = if let Some((crate::core::types::Element::ScrollView { momentum_scrolling, .. }, _)) = 
+                                                                crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, point) {
+                                                                momentum_scrolling.unwrap_or(true)
+                                                            } else {
+                                                                true
+                                                            };
+                                        
+                                                            if momentum_enabled {
+                                                                kinetic_scrolls.push(KineticScroll {
+                                                                    sv_id,
+                                                                    velocity_x: last_drag_delta.0,
+                                                                    velocity_y: last_drag_delta.1,
+                                                                });
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    active_scrollview_drag = None;
+                                                    last_drag_delta = (0.0, 0.0);
                                                     let prev_hovered = hovered_btn;
                                                     let hovered_data = find_hovered_button(
                                                         &root_element,
@@ -427,10 +499,42 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     InputStatus::Handled
                                                 }
                                                 MotionAction::Cancel => {
+                                                    active_scrollview_drag = None;
                                                     let prev_hovered = hovered_btn;
                                                     hovered_btn = None;
                                                     if let Some(prev) = prev_hovered {
                                                         event_bus.push(UiEvent::HoverEnd(prev));
+                                                    }
+                                                    InputStatus::Handled
+                                                }
+                                                MotionAction::Scroll => {
+                                                    let axis_v = motion_event.axis_value(android_activity::input::Axis::Vscroll, motion_event.pointer_index());
+                                                    let axis_h = motion_event.axis_value(android_activity::input::Axis::Hscroll, motion_event.pointer_index());
+                                                    
+                                                    if let Some((crate::core::types::Element::ScrollView { id, scroll_sensitivity, dynamic_sensitivity, .. }, lay)) =
+                                                        crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, point)
+                                                    {
+                                                        let mut factor = scroll_sensitivity.unwrap_or(1.0);
+                                                        if dynamic_sensitivity.unwrap_or(false) && !lay.children.is_empty() {
+                                                            let view_height = lay.rect.height;
+                                                            let mut min_y = f32::MAX;
+                                                            let mut max_y = f32::MIN;
+                                                            for child in &lay.children {
+                                                                if child.rect.y < min_y { min_y = child.rect.y; }
+                                                                if child.rect.y + child.rect.height > max_y { max_y = child.rect.y + child.rect.height; }
+                                                            }
+                                                            let content_height = max_y - min_y;
+                                                            if view_height > 0.0 && content_height > view_height {
+                                                                factor *= content_height / view_height;
+                                                            }
+                                                        }
+                                                        
+                                                        let sv_id = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                                                        event_bus.push(UiEvent::Scroll(
+                                                            sv_id,
+                                                            axis_h * -20.0 * factor,
+                                                            axis_v * -20.0 * factor,
+                                                        ));
                                                     }
                                                     InputStatus::Handled
                                                 }

@@ -290,6 +290,13 @@ impl UiPlugin for JsPlugin {
                     ),
                     UiEvent::ClickOutside => r#"{"type":"ClickOutside"}"#.to_string(),
                     UiEvent::Backspace => r#"{"type":"Backspace"}"#.to_string(),
+                    UiEvent::Scroll(id_opt, dx, dy) => {
+                        let id_str = match id_opt {
+                            Some(id) => format!(r#""{}""#, id),
+                            None => "null".to_string(),
+                        };
+                        format!(r#"{{"type":"Scroll","id":{},"dx":{},"dy":{}}}"#, id_str, dx, dy)
+                    }
                 };
 
                 let res: Result<String, _> = on_event_fn.call((event_json,));
