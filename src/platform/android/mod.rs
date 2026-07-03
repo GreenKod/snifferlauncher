@@ -399,13 +399,12 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     if motion_event.action() == MotionAction::Down || motion_event.action() == MotionAction::PointerDown {
                                                         if let Some((crate::core::types::Element::ScrollView { id, capture_drag, .. }, _)) =
                                                             crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, point)
+                                                            && capture_drag.unwrap_or(true)
                                                         {
-                                                            if capture_drag.unwrap_or(true) {
-                                                                active_scrollview_drag = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
-                                                            }
+                                                            active_scrollview_drag = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
                                                         }
                                                         kinetic_scrolls.clear();
-                                                        
+
                                                         // Emit PointerDown
                                                         if let Some((clicked_btn, _)) = find_clicked_button(&root_element, &layout_tree, point) {
                                                             event_bus.push(UiEvent::PointerDown(clicked_btn));
@@ -456,15 +455,16 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     InputStatus::Handled
                                                 }
                                                 MotionAction::Up | MotionAction::PointerUp => {
-                                                    if let Some(sv_id) = active_scrollview_drag {
-                                                        if last_drag_delta.0.abs() > 0.5 || last_drag_delta.1.abs() > 0.5 {
-                                                            let momentum_enabled = if let Some((crate::core::types::Element::ScrollView { momentum_scrolling, .. }, _)) = 
+                                                    if let Some(sv_id) = active_scrollview_drag
+                                                        && (last_drag_delta.0.abs() > 0.5 || last_drag_delta.1.abs() > 0.5)
+                                                    {
+                                                            let momentum_enabled = if let Some((crate::core::types::Element::ScrollView { momentum_scrolling, .. }, _)) =
                                                                 crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, point) {
                                                                 momentum_scrolling.unwrap_or(true)
                                                             } else {
                                                                 true
                                                             };
-                                        
+
                                                             if momentum_enabled {
                                                                 kinetic_scrolls.push(KineticScroll {
                                                                     sv_id,
@@ -472,9 +472,8 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                                     velocity_y: last_drag_delta.1,
                                                                 });
                                                             }
-                                                        }
                                                     }
-                                                    
+
                                                     active_scrollview_drag = None;
                                                     last_drag_delta = (0.0, 0.0);
                                                     let prev_hovered = hovered_btn;
@@ -518,9 +517,9 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                     InputStatus::Handled
                                                 }
                                                 MotionAction::Scroll => {
-                                                    let axis_v = motion_event.axis_value(android_activity::input::Axis::Vscroll, motion_event.pointer_index());
-                                                    let axis_h = motion_event.axis_value(android_activity::input::Axis::Hscroll, motion_event.pointer_index());
-                                                    
+                                                    let axis_v = pointer.axis_value(android_activity::input::Axis::Vscroll);
+                                                    let axis_h = pointer.axis_value(android_activity::input::Axis::Hscroll);
+
                                                     if let Some((crate::core::types::Element::ScrollView { id, scroll_sensitivity, dynamic_sensitivity, .. }, lay)) =
                                                         crate::core::render::draw::find_hovered_scrollview(&root_element, &layout_tree, point)
                                                     {
@@ -538,7 +537,7 @@ pub fn android_main(app: android_activity::AndroidApp) {
                                                                 factor *= content_height / view_height;
                                                             }
                                                         }
-                                                        
+
                                                         let sv_id = id.as_deref().map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
                                                         event_bus.push(UiEvent::Scroll(
                                                             sv_id,
