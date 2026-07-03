@@ -112,6 +112,7 @@ pub fn draw_ui(
     metrics: &ScreenMetrics,
     style_map: &StyleMap,
     data_map: &DataMap,
+    alpha_multiplier: f32,
 ) {
     use crate::core::ui::data_map::DataValue;
     use crate::core::ui::data_map::DrawCommand;
@@ -131,6 +132,10 @@ pub fn draw_ui(
         element.style().clone()
     };
 
+    // Combine parent opacity with this element's opacity
+    let current_alpha = alpha_multiplier * style.opacity;
+    renderer.set_global_alpha(current_alpha);
+
     // 1. Draw drop shadow
     if let Some(shadow_color) = style.shadow_color {
         renderer.draw_shadow(
@@ -142,8 +147,17 @@ pub fn draw_ui(
         );
     }
 
-    // 2. Draw background card
-    if let Some(bg_color) = style.background_color {
+    // 2. Draw background card / gradient
+    if let Some((color_top, color_bottom)) = style.background_gradient {
+        renderer.draw_rect_gradient(
+            rect,
+            color_top,
+            color_bottom,
+            style.border_radius,
+            style.border_width,
+            style.border_color,
+        );
+    } else if let Some(bg_color) = style.background_color {
         renderer.draw_rect(
             rect,
             bg_color,
@@ -195,18 +209,49 @@ pub fn draw_ui(
     match element {
         Element::Container { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                draw_ui(renderer, child_el, child_lay, metrics, style_map, data_map);
+                draw_ui(renderer, child_el, child_lay, metrics, style_map, data_map, current_alpha);
             }
         }
         Element::ScrollView { children, scroll_x, scroll_y, scroll_sensitivity: _, dynamic_sensitivity: _, momentum_scrolling: _, capture_drag: _, .. } => {
             renderer.set_clip_rect(rect);
+            let mut max_y = 0.0_f32;
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
                 let mut offset_lay = child_lay.clone();
+                
+                // Calculate max content height for the scrollbar
+                let child_bottom = child_lay.rect.y + child_lay.rect.height;
+                if child_bottom > max_y {
+                    max_y = child_bottom;
+                }
+
                 // Shift rects recursively so children draw with scroll offset
                 shift_layout(&mut offset_lay, -*scroll_x, -*scroll_y);
-                draw_ui(renderer, child_el, &offset_lay, metrics, style_map, data_map);
+                draw_ui(renderer, child_el, &offset_lay, metrics, style_map, data_map, current_alpha);
             }
             renderer.clear_clip_rect();
+
+            // Draw visual scrollbar if content exceeds container
+            let content_height = max_y - rect.y;
+            if content_height > rect.height {
+                renderer.set_global_alpha(current_alpha * 0.5); // Semi-transparent scrollbar
+                let ratio = rect.height / content_height;
+                let scrollbar_height = (rect.height * ratio).max(20.0);
+                
+                // Max scroll distance
+                let max_scroll = content_height - rect.height;
+                let scroll_pct = (scroll_y / max_scroll).clamp(0.0, 1.0);
+                
+                let scrollbar_y = rect.y + (rect.height - scrollbar_height) * scroll_pct;
+                let scrollbar_rect = Rect::new(
+                    rect.x + rect.width - 6.0,
+                    scrollbar_y,
+                    4.0,
+                    scrollbar_height
+                );
+                
+                renderer.draw_rect(scrollbar_rect, 0xFF00_0000, 2.0, 0.0, None);
+                renderer.set_global_alpha(current_alpha); // Restore
+            }
         }
         Element::Label { text, .. } => {
             // Check if plugin overrides the label text
@@ -270,6 +315,9 @@ pub fn draw_ui(
     if style.overflow_hidden {
         renderer.clear_clip_rect();
     }
+
+    // Restore parent alpha multiplier
+    renderer.set_global_alpha(alpha_multiplier);
 }
 
 fn shift_layout(layout: &mut LayoutNode, dx: f32, dy: f32) {

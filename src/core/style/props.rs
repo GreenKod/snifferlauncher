@@ -1,5 +1,5 @@
 use super::layout::{
-    AlignItems, Dimension, Display, FlexDirection, JustifyContent, ObjectFit, RectOffset,
+    AlignItems, Dimension, Display, FlexDirection, FlexWrap, JustifyContent, ObjectFit, Position, RectOffset,
 };
 use serde::{Deserialize, Serialize};
 
@@ -8,18 +8,34 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct Style {
     pub display: Display,
+    pub position: Position,
+    pub top: Dimension,
+    pub right: Dimension,
+    pub bottom: Dimension,
+    pub left: Dimension,
+
     pub flex_direction: FlexDirection,
+    pub flex_wrap: FlexWrap,
     pub justify_content: JustifyContent,
     pub align_items: AlignItems,
+    pub flex_grow: f32,
+    pub flex_shrink: f32,
+    pub flex_basis: Dimension,
 
     pub width: Dimension,
     pub height: Dimension,
+    pub min_width: Dimension,
+    pub max_width: Dimension,
+    pub min_height: Dimension,
+    pub max_height: Dimension,
 
     pub padding: RectOffset,
     pub margin: RectOffset,
     pub gap: f32,
 
+    pub opacity: f32,
     pub background_color: Option<u32>,
+    pub background_gradient: Option<(u32, u32)>,
     pub border_radius: f32,
     pub border_color: Option<u32>,
     pub border_width: f32,
@@ -39,15 +55,30 @@ impl Default for Style {
     fn default() -> Self {
         Self {
             display: Display::Flex,
+            position: Position::Relative,
+            top: Dimension::Auto,
+            right: Dimension::Auto,
+            bottom: Dimension::Auto,
+            left: Dimension::Auto,
             flex_direction: FlexDirection::Column,
+            flex_wrap: FlexWrap::NoWrap,
             justify_content: JustifyContent::Start,
             align_items: AlignItems::Stretch,
+            flex_grow: 0.0,
+            flex_shrink: 0.0,
+            flex_basis: Dimension::Auto,
             width: Dimension::Auto,
             height: Dimension::Auto,
+            min_width: Dimension::Auto,
+            max_width: Dimension::Auto,
+            min_height: Dimension::Auto,
+            max_height: Dimension::Auto,
             padding: RectOffset::zero(),
             margin: RectOffset::zero(),
             gap: 0.0,
+            opacity: 1.0,
             background_color: None,
+            background_gradient: None,
             border_radius: 0.0,
             border_color: None,
             border_width: 0.0,
