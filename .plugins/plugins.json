@@ -1,5 +1,6 @@
 {
   "active_plugins": [
-    "default_ui"
+    "default_ui",
+    "logger_plugin"
   ]
 }

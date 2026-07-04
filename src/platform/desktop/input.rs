@@ -73,6 +73,15 @@ pub fn handle_event(
             app.last_mouse_pos = Point::new(-9999.0, -9999.0);
             *mouse_moved = true;
         }
+        Event::Window {
+            win_event: sdl2::event::WindowEvent::Resized(w, h),
+            ..
+        } => {
+            let width = f32::from(u16::try_from(w).unwrap_or(0));
+            let height = f32::from(u16::try_from(h).unwrap_or(0));
+            app.event_bus.push(UiEvent::WindowResized(width, height));
+        }
+
         Event::TextInput { text, .. } => {
             app.event_bus.push(UiEvent::TextInput(text));
         }

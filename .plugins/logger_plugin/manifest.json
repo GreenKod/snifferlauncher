@@ -1,0 +1,6 @@
+{
+  "id": "com.sniffer.logger",
+  "name": "Logger Eklentisi",
+  "version": "1.0.0",
+  "main": "main.js"
+}

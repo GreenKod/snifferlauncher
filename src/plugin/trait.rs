@@ -41,4 +41,11 @@ pub trait UiPlugin: Send + Sync {
     /// Called once per render frame.
     /// Useful for periodic tasks, animations, or garbage collection.
     fn on_tick(&self) {}
+
+    /// Called when another plugin broadcasts a message to all plugins via `broadcastEvent`.
+    ///
+    /// # Arguments
+    /// * `channel` — The broadcast channel name (e.g. `"store.changed"`).
+    /// * `payload_json` — A JSON string containing the broadcast data.
+    fn on_broadcast(&self, _channel: &str, _payload_json: &str) {}
 }
