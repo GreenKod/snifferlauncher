@@ -96,7 +96,7 @@ impl EglContextState {
                         .map_or(std::ptr::null(), |f| f as *const _)
                 })
             };
-            // Audiowide font gömülü olarak binary'ye dahil edildi
+            // Audiowide font is embedded within the binary
             let glow_renderer = unsafe { GlowRenderer::with_font(gl, Some(FONT_BYTES))? };
             self.renderer = Some(glow_renderer);
         }

@@ -1,0 +1,6 @@
+{
+  "id": "com.sniffer.defaultui",
+  "name": "Varsayılan Arayüz",
+  "version": "1.0.0",
+  "main": "main.js"
+}
