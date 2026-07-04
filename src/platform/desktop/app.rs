@@ -50,7 +50,7 @@ impl AppState {
         }
 
         crate::plugin::PluginLoader::new(&plugins_dir)
-            .register_all(&mut plugin_registry, action_queue.clone());
+            .register_all(&mut plugin_registry, &action_queue);
 
         Self {
             running: true,
