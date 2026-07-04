@@ -16,6 +16,8 @@ pub struct PluginManifest {
     pub name: String,
     pub version: String,
     pub main: String,
+    #[serde(default)]
+    pub preload: Vec<String>,
 }
 
 /// Loads and registers JavaScript plugins from the assets directory.
@@ -32,7 +34,8 @@ impl PluginLoader {
         }
     }
 
-    /// Instantiate and register all plugins defined in plugins.json.
+    /// Instantiate and register all plugins defined in `plugins.json`.
+    #[allow(clippy::too_many_lines)]
     pub fn register_all(
         &self,
         registry: &mut PluginRegistry,
@@ -68,6 +71,9 @@ impl PluginLoader {
             }
         };
 
+        let api_map = registry.api_registry();
+        let broadcast_queue = registry.broadcast_queue();
+
         for plugin_folder in config.active_plugins {
             let plugin_dir = self.assets_dir.join(&plugin_folder);
             let manifest_path = plugin_dir.join("manifest.json");
@@ -93,11 +99,78 @@ impl PluginLoader {
                 }
             };
 
+            // Collect preload scripts (e.g. framework JS) before the main plugin code.
+            let mut preload_scripts: Vec<String> = Vec::new();
+            for preload_path in &manifest.preload {
+                // Paths are relative to the .plugins root (e.g. "../_framework/sniffer_ui.js")
+                let resolved = plugin_dir.join(preload_path);
+                match fs::read_to_string(&resolved) {
+                    Ok(src) => {
+                        println!(
+                            "Preloading '{}' for plugin '{}'",
+                            preload_path, manifest.name
+                        );
+                        preload_scripts.push(src);
+                    }
+                    Err(e) => eprintln!(
+                        "Could not read preload '{}' for plugin '{}': {e}",
+                        preload_path, manifest.name
+                    ),
+                }
+            }
+
             let main_js_path = plugin_dir.join(&manifest.main);
             if main_js_path.exists() {
                 match fs::read_to_string(&main_js_path) {
-                    Ok(content) => {
-                        match crate::plugin::JsPlugin::new(content, action_queue.clone()) {
+                    Ok(main_content) => {
+                        // Concatenate preload scripts + main script into one bundle.
+                        let mut full_script = preload_scripts.join("\n");
+                        if !full_script.is_empty() {
+                            full_script.push('\n');
+                        }
+                        full_script.push_str(&main_content);
+
+                        let hash = crate::core::ui::widget::fnv1a(full_script.as_bytes());
+                        let cache_dir = self.assets_dir.join(".cache");
+                        let _ = fs::create_dir_all(&cache_dir);
+                        let cache_file = cache_dir.join(format!("{}_{}_ui.bin", manifest.id, hash));
+
+                        let mut cached_ui = None;
+                        if cache_file.exists() {
+                            println!(
+                                "Cache file found for {}: {}",
+                                manifest.id,
+                                cache_file.display()
+                            );
+                            if let Ok(bytes) = fs::read(&cache_file) {
+                                if let Ok(ui) =
+                                    postcard::from_bytes::<crate::core::types::Element>(&bytes)
+                                {
+                                    println!(
+                                        "Successfully deserialized UI from cache for {}",
+                                        manifest.id
+                                    );
+                                    cached_ui = Some(ui);
+                                } else {
+                                    println!("Failed to deserialize postcard for {}", manifest.id);
+                                }
+                            }
+                        } else {
+                            println!(
+                                "No cache file found for {}. Will be created upon host_set_ui.",
+                                manifest.id
+                            );
+                        }
+
+                        match crate::plugin::JsPlugin::new(
+                            full_script,
+                            manifest.id.clone(),
+                            action_queue.clone(),
+                            api_map.clone(),
+                            broadcast_queue.clone(),
+                            cached_ui,
+                            Some(cache_file),
+                        ) {
                             Ok(plugin) => {
                                 registry.register(
                                     &(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>),
@@ -109,10 +182,12 @@ impl PluginLoader {
                                     main_js_path.display()
                                 );
                             }
-                            Err(e) => eprintln!(
-                                "Failed to instantiate JS plugin '{}': {e}",
-                                manifest.name
-                            ),
+                            Err(e) => {
+                                eprintln!(
+                                    "Failed to instantiate JS plugin '{}': {e}",
+                                    manifest.name
+                                );
+                            }
                         }
                     }
                     Err(e) => eprintln!(
@@ -135,7 +210,8 @@ impl PluginLoader {
     /// Read plugins from Android Assets instead of the filesystem.
     ///
     /// # Panics
-    /// Panics if the internal asset path string contains a null byte.
+    /// Instantiate and register all plugins defined in `plugins.json` from Android assets.
+    #[allow(clippy::too_many_lines)]
     pub fn register_all_from_assets(
         registry: &mut PluginRegistry,
         asset_manager: &ndk::asset::AssetManager,
@@ -165,6 +241,9 @@ impl PluginLoader {
             }
         };
 
+        let api_map = registry.api_registry();
+        let broadcast_queue = registry.broadcast_queue();
+
         for plugin_folder in config.active_plugins {
             let manifest_path = format!("{plugin_folder}/manifest.json");
             if let Ok(manifest_cstr) = std::ffi::CString::new(manifest_path.clone()) {
@@ -173,16 +252,55 @@ impl PluginLoader {
                     if asset.read_to_string(&mut manifest_str).is_ok() {
                         if let Ok(manifest) = serde_json::from_str::<PluginManifest>(&manifest_str)
                         {
-                            let main_js_path = format!("{}/{}", plugin_folder, manifest.main);
+                            // Collect preload scripts from Android assets.
+                            let mut preload_scripts: Vec<String> = Vec::new();
+                            for preload_rel in &manifest.preload {
+                                // Resolve the path relative to the plugin folder:
+                                // e.g. "../_framework/sniffer_ui.js" -> "_framework/sniffer_ui.js"
+                                let resolved = std::path::Path::new(&plugin_folder)
+                                    .join(preload_rel)
+                                    .to_string_lossy()
+                                    .replace('\\', "/");
+                                // Normalise: remove leading "./" or "../" components naively
+                                let resolved = resolved.trim_start_matches("../").to_string();
+                                if let Ok(cstr) = std::ffi::CString::new(resolved.clone()) {
+                                    if let Some(mut pa) = asset_manager.open(cstr.as_c_str()) {
+                                        let mut src = String::new();
+                                        if pa.read_to_string(&mut src).is_ok() {
+                                            println!(
+                                                "Android: preloading '{}' for plugin '{}'",
+                                                resolved, manifest.name
+                                            );
+                                            preload_scripts.push(src);
+                                        }
+                                    } else {
+                                        eprintln!("Android: preload asset '{resolved}' not found");
+                                    }
+                                }
+                            }
+
+                            let main_js_path = format!("{plugin_folder}/{}", manifest.main);
                             if let Ok(main_cstr) = std::ffi::CString::new(main_js_path.clone()) {
                                 if let Some(mut main_asset) =
                                     asset_manager.open(main_cstr.as_c_str())
                                 {
-                                    let mut content = String::new();
-                                    if main_asset.read_to_string(&mut content).is_ok() {
+                                    let mut main_content = String::new();
+                                    if main_asset.read_to_string(&mut main_content).is_ok() {
+                                        // Bundle preload + main
+                                        let mut full_script = preload_scripts.join("\n");
+                                        if !full_script.is_empty() {
+                                            full_script.push('\n');
+                                        }
+                                        full_script.push_str(&main_content);
+
                                         match crate::plugin::JsPlugin::new(
-                                            content,
+                                            full_script,
+                                            manifest.id.clone(),
                                             action_queue.clone(),
+                                            api_map.clone(),
+                                            broadcast_queue.clone(),
+                                            None,
+                                            None,
                                         ) {
                                             Ok(plugin) => {
                                                 registry.register(

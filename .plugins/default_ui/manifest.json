@@ -1,6 +1,7 @@
 {
   "id": "com.sniffer.defaultui",
-  "name": "Varsayılan Arayüz",
+  "name": "Default Interface",
   "version": "1.0.0",
+  "preload": ["../_framework/sniffer_ui.js"],
   "main": "main.js"
 }

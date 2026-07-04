@@ -12,6 +12,7 @@ pub enum UiEvent {
     PointerDown(u64),
     PointerUp(Option<u64>),
     Scroll(Option<u64>, f32, f32),
+    WindowResized(f32, f32),
 }
 
 #[derive(Default)]

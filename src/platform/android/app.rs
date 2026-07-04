@@ -92,6 +92,9 @@ pub fn android_main(app: AndroidApp) {
                             && let Some(window) = app.native_window()
                         {
                             let _ = egl.bind_window(&window);
+                            let width = f32::from(u16::try_from(window.width()).unwrap_or(0));
+                            let height = f32::from(u16::try_from(window.height()).unwrap_or(0));
+                            state.event_bus.push(UiEvent::WindowResized(width, height));
                         }
                     }
                     MainEvent::WindowResized { .. }
@@ -101,6 +104,9 @@ pub fn android_main(app: AndroidApp) {
                             && let Some(window) = app.native_window()
                         {
                             let _ = egl.bind_window(&window);
+                            let width = f32::from(u16::try_from(window.width()).unwrap_or(0));
+                            let height = f32::from(u16::try_from(window.height()).unwrap_or(0));
+                            state.event_bus.push(UiEvent::WindowResized(width, height));
                         }
                         needs_redraw = true;
                     }

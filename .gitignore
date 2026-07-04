@@ -13,3 +13,4 @@
 .plugins/*.vscode/
 .plugins/*.cargo/
 .plugins/*.extensions/
+.plugins/.cache/
