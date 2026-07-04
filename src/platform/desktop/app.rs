@@ -362,14 +362,23 @@ pub fn run_loop(
                     Action::OpenContacts => println!("Desktop Preview: Open Contacts triggered"),
                     Action::OpenCamera => println!("Desktop Preview: Open Camera triggered"),
                     Action::LoadImage { id, src } => {
-                        let result = image::open(&src);
-                        match result {
-                            Ok(img) => {
-                                let rgba = img.to_rgba8();
-                                let (w, h) = rgba.dimensions();
-                                renderer.load_image(&id, rgba.as_raw(), w, h);
+                        if src.starts_with("app-icon://") {
+                            // Dummy 64x64 green image for desktop simulation
+                            let w = 64;
+                            let h = 64;
+                            let pixels = [0, 255, 0, 255].repeat((w * h) as usize);
+                            renderer.load_image(&id, &pixels, w, h);
+                            println!("Loaded dummy app icon for {src}");
+                        } else {
+                            let result = image::open(&src);
+                            match result {
+                                Ok(img) => {
+                                    let rgba = img.to_rgba8();
+                                    let (w, h) = rgba.dimensions();
+                                    renderer.load_image(&id, rgba.as_raw(), w, h);
+                                }
+                                Err(e) => eprintln!("Failed to load image: {e}"),
                             }
-                            Err(e) => eprintln!("Desktop Image Load Error: {e:?}"),
                         }
                     }
                     Action::FocusTextInput(_) | Action::BlurTextInput => {}

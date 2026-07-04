@@ -10,14 +10,14 @@
 // 1. STATE
 // ---------------------------------------------------------------------------
 let state = {
-    greetingText:    "Sniffer Dashboard",
-    bgColor:         "#FFD700",
-    clickCount:      0,
-    searchQuery:     "",
+    greetingText: "Sniffer Dashboard",
+    bgColor: "#FFD700",
+    clickCount: 0,
+    searchQuery: "",
     isSearchFocused: false,
-    fabOpacity:      0.9,
-    scrollY:         0.0,
-    items:           [1, 2, 3, 4, 5, 6],
+    fabOpacity: 0.9,
+    scrollY: 0.0,
+    items: [1, 2, 3, 4, 5, 6],
 };
 
 // ---------------------------------------------------------------------------
@@ -25,56 +25,56 @@ let state = {
 // ---------------------------------------------------------------------------
 function App() {
     return Container("root", {
-        display:          "Flex",
-        flex_direction:   "Column",
-        justify_content:  "Center",
-        align_items:      "Center",
-        width:            pct(100),
-        height:           pct(100),
+        display: "Flex",
+        flex_direction: "Column",
+        justify_content: "Center",
+        align_items: "Center",
+        width: pct(100),
+        height: pct(100),
         background_color: hex(state.bgColor),
-        gap:              vh(2.0),
+        gap: vh(2.0),
     }, [
         // --- Greeting Label ---
         Label("btn-greeting", state.greetingText, {
             text_color: hex("#000000"),
-            text_size:  vmin(8.0),
-            width:      "Auto",
+            text_size: vmin(8.0),
+            width: "Auto",
         }),
 
         // --- Click Counter ---
         Label("btn-counter", "Clicks: " + state.clickCount, {
             text_color: hex("#000000"),
-            text_size:  vmin(5.0),
-            width:      "Auto",
+            text_size: vmin(5.0),
+            width: "Auto",
         }),
 
         // --- ScrollView ---
         ScrollView("scroll-container", {
             scroll_y: state.scrollY,
             style: {
-                width:            pct(90),
-                height:           pct(50),
+                width: pct(90),
+                height: pct(50),
                 background_color: hex("#FFFFFF"),
-                overflow_hidden:  true,
-                border_radius:    vmin(2.0),
-                gap:              vh(1.0),
+                overflow_hidden: true,
+                border_radius: vmin(2.0),
+                gap: vh(1.0),
             },
         }, [
             // Header Image
             Image("test_img", ".plugins/default_ui/test.jpg", {
-                width:        pct(100),
-                height:       pct(40),
+                width: pct(100),
+                height: pct(40),
                 border_radius: vmin(2.0),
-                object_fit:   "Cover",
+                object_fit: "Cover",
             }),
 
             // Dynamic List
             ...state.items.map((n, i) =>
                 Label("scroll-item-" + i, "List Item " + n, {
-                    text_size:  vmin(5.0),
+                    text_size: vmin(5.0),
                     text_color: hex("#000000"),
-                    padding:    pad(vmin(2.0)),
-                    height:     "Auto",
+                    padding: pad(vmin(2.0)),
+                    height: "Auto",
                 })
             ),
         ]),
@@ -83,35 +83,35 @@ function App() {
         TextInput("search_input", state.searchQuery || "Search plugins...", {
             focused: state.isSearchFocused,
             style: {
-                text_color:       hex("#0000FF"),
-                text_size:        vmin(4.0),
-                width:            pct(80),
-                height:           "Auto",
+                text_color: hex("#0000FF"),
+                text_size: vmin(4.0),
+                width: pct(80),
+                height: "Auto",
                 background_color: hex("#E0E0E0"),
-                border_radius:    vmin(1.5),
-                padding:          pad(vmin(2.0)),
+                border_radius: vmin(1.5),
+                padding: pad(vmin(2.0)),
             },
         }),
 
         // --- FAB (+) Button ---
         Container("fab_button", {
-            position:             "Absolute",
-            bottom:               px(vmin(5.0)),
-            right:                px(vmin(5.0)),
-            width:                px(vmin(12.0)),
-            height:               px(vmin(12.0)),
-            border_radius:        vmin(6.0),
-            background_gradient:  [hex("#FF0055"), hex("#FF00AA")],
-            shadow_color:         hex("#88000000"),
-            shadow_spread:        vmin(0.5),
-            shadow_offset_y:      vmin(0.5),
-            opacity:              state.fabOpacity,
-            justify_content:      "Center",
-            align_items:          "Center",
+            position: "Absolute",
+            bottom: px(vmin(5.0)),
+            right: px(vmin(5.0)),
+            width: px(vmin(12.0)),
+            height: px(vmin(12.0)),
+            border_radius: vmin(6.0),
+            background_gradient: [hex("#FF0055"), hex("#FF00AA")],
+            shadow_color: hex("#88000000"),
+            shadow_spread: vmin(0.5),
+            shadow_offset_y: vmin(0.5),
+            opacity: state.fabOpacity,
+            justify_content: "Center",
+            align_items: "Center",
         }, [
             Label("fab_text", "+", {
                 text_color: hex("#FFFFFF"),
-                text_size:  vmin(7.0),
+                text_size: vmin(7.0),
             }),
         ]),
     ]);
@@ -121,13 +121,15 @@ function App() {
 // 3. EVENTS
 // ---------------------------------------------------------------------------
 globalThis.onEvent = function (eventJsonString) {
+    const apps = JSON.parse(host_get_application_list());
+    host_log(JSON.stringify(apps));
     const e = JSON.parse(eventJsonString);
 
     // Greeting label clicked
     if (e.type === "Click" && e.id === host_hash("btn-greeting")) {
         SnifferUI.setState({
             greetingText: "Active! 🎉",
-            bgColor:      "#00CC66",
+            bgColor: "#00CC66",
         });
         return "[]";
     }
@@ -149,7 +151,7 @@ globalThis.onEvent = function (eventJsonString) {
     // FAB pressed → dim effect
     if (e.type === "PointerDown" &&
         (String(e.id) === String(host_hash("fab_button")) ||
-         String(e.id) === String(host_hash("fab_text")))) {
+            String(e.id) === String(host_hash("fab_text")))) {
         SnifferUI.setState({ fabOpacity: 0.5 });
         return "[]";
     }
@@ -191,12 +193,18 @@ globalThis.onEvent = function (eventJsonString) {
 
     // Scroll
     if (e.type === "Scroll" && e.id === host_hash("scroll-container")) {
-        // Calculate dynamic content height (Approximation)
-        // Image = 40vh, Item = 5vmin text + 4vmin padding + 1vh gap
-        const imgH = vh(40);
-        const itemH = vmin(9) + vh(1);
-        const contentH = imgH + vh(1) + (state.items.length * itemH);
+        // Calculate dynamic content height to match Rust layout calculations
+        // ScrollView height = 50vh
+        // Image height = 40% of ScrollView = 20vh
+        // Label text = 5vmin. Text measure height = 1.2 * text_size = 6vmin. Padding Y = 4vmin. Total = 10.0vmin.
+        // Gap = 1vh between elements. Total gaps = state.items.length (between img and items)
         const scrollH = vh(50);
+        const imgH = scrollH * 0.40;
+        const itemH = vmin(10.0);
+        const gapH = vh(1.0);
+        const numItems = state.items.length;
+
+        const contentH = imgH + (numItems * gapH) + (numItems * itemH);
         const maxScroll = Math.max(0.0, contentH - scrollH);
 
         const newY = Math.max(0.0, Math.min(state.scrollY + e.dy, maxScroll));
@@ -206,7 +214,23 @@ globalThis.onEvent = function (eventJsonString) {
 
     // Force update on window resize to refresh vw/vh/vmin
     if (e.type === "WindowResized") {
-        SnifferUI.forceUpdate();
+        // Recalculate scroll boundaries since vh/vmin have changed
+        const scrollH = vh(50);
+        const imgH = scrollH * 0.40;
+        const itemH = vmin(10.0);
+        const gapH = vh(1.0);
+        const numItems = state.items.length;
+
+        const contentH = imgH + (numItems * gapH) + (numItems * itemH);
+        const maxScroll = Math.max(0.0, contentH - scrollH);
+
+        const newY = Math.max(0.0, Math.min(state.scrollY, maxScroll));
+
+        if (newY !== state.scrollY) {
+            SnifferUI.setState({ scrollY: newY });
+        } else {
+            SnifferUI.forceUpdate();
+        }
         return "[]";
     }
 

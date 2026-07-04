@@ -36,3 +36,33 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     app::run_loop(app_state, window, renderer).map_err(Into::into)
 }
+
+/// Returns a mocked list of applications for the desktop environment.
+/// Simulates Android's `get_application_list` so JS plugins can test UI.
+///
+/// # Errors
+///
+/// Returns an error if generating the dummy list fails.
+pub fn get_application_list() -> Result<Vec<crate::core::types::AppInfo>, String> {
+    use crate::core::types::AppInfo;
+    
+    let mock_apps = vec![
+        ("Browser", "com.desktop.browser"),
+        ("Calculator", "com.desktop.calculator"),
+        ("Camera", "com.desktop.camera"),
+        ("Contacts", "com.desktop.contacts"),
+        ("Files", "com.desktop.files"),
+        ("Settings", "com.desktop.settings"),
+        ("Phone", "com.desktop.phone"),
+        ("Messages", "com.desktop.messages"),
+        ("Calendar", "com.desktop.calendar"),
+        ("Music", "com.desktop.music"),
+    ];
+
+    let mut apps = Vec::new();
+    for (name, pkg) in mock_apps {
+        apps.push(AppInfo::from_package_info(name.to_string(), pkg.to_string()));
+    }
+    
+    Ok(apps)
+}

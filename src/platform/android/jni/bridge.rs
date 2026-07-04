@@ -82,8 +82,8 @@ pub fn start_activity(
 ///
 /// Returns an error if JNI calls fail while querying the package manager or
 /// converting Java strings to Rust strings.
-pub fn get_application_list() -> Result<Vec<crate::platform::android::types::AppInfo>, String> {
-    use crate::platform::android::types::AppInfo;
+pub fn get_application_list() -> Result<Vec<crate::core::types::AppInfo>, String> {
+    use crate::core::types::AppInfo;
 
     let jvm = vm();
 
@@ -179,7 +179,7 @@ pub fn get_application_list() -> Result<Vec<crate::platform::android::types::App
                 let package_name_jstring = env.as_cast::<JString>(&package_name_obj)?;
                 let package_name_str = package_name_jstring.try_to_string(env)?;
 
-                local_list.push(AppInfo::new(app_name, package_name_str, Vec::new()));
+                local_list.push(AppInfo::new(app_name, package_name_str));
             }
 
             Ok(local_list)
@@ -247,4 +247,144 @@ pub fn get_density() -> (f32, f32) {
         Ok((density, scaled_density))
     })
     .unwrap_or((1.0_f32, 1.0_f32))
+}
+
+/// Retrieves the application icon for a given package name and returns it as a raw RGBA pixel buffer.
+/// Returns `Option<(pixels, width, height)>`.
+fn extract_drawable_pixels(
+    env: &mut Env,
+    drawable: &jni::objects::JObject,
+    width: i32,
+    height: i32,
+) -> Result<Vec<u8>, JniError> {
+    let config_class = env.find_class(jni_str!("android/graphics/Bitmap$Config"))?;
+    let argb8888 = env
+        .get_static_field(
+            config_class,
+            jni_str!("ARGB_8888"),
+            jni_sig!("Landroid/graphics/Bitmap$Config;"),
+        )?
+        .l()?;
+
+    let bitmap_class = env.find_class(jni_str!("android/graphics/Bitmap"))?;
+    let bitmap = env
+        .call_static_method(
+            bitmap_class,
+            jni_str!("createBitmap"),
+            jni_sig!("(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;"),
+            &[JValue::Int(width), JValue::Int(height), JValue::Object(&argb8888)],
+        )?
+        .l()?;
+
+    let canvas_class = env.find_class(jni_str!("android/graphics/Canvas"))?;
+    let canvas = env.new_object(
+        canvas_class,
+        jni_sig!("(Landroid/graphics/Bitmap;)V"),
+        &[JValue::Object(&bitmap)],
+    )?;
+
+    env.call_method(
+        drawable,
+        jni_str!("setBounds"),
+        jni_sig!("(IIII)V"),
+        &[
+            JValue::Int(0),
+            JValue::Int(0),
+            JValue::Int(width),
+            JValue::Int(height),
+        ],
+    )?;
+
+    env.call_method(
+        drawable,
+        jni_str!("draw"),
+        jni_sig!("(Landroid/graphics/Canvas;)V"),
+        &[JValue::Object(&canvas)],
+    )?;
+
+    let pixel_count = usize::try_from(width).unwrap_or(0) * usize::try_from(height).unwrap_or(0);
+    let pixels_array = env.new_int_array(pixel_count)?;
+
+    env.call_method(
+        &bitmap,
+        jni_str!("getPixels"),
+        jni_sig!("([IIIIIII)V"),
+        &[
+            JValue::Object(&pixels_array),
+            JValue::Int(0),
+            JValue::Int(width),
+            JValue::Int(0),
+            JValue::Int(0),
+            JValue::Int(width),
+            JValue::Int(height),
+        ],
+    )?;
+
+    let mut buf = vec![0i32; pixel_count];
+    pixels_array.get_region(env, 0, &mut buf)?;
+
+    let rgba_bytes: Vec<u8> = buf
+        .into_iter()
+        .flat_map(|pixel| {
+            let [alpha, red, green, blue] = pixel.cast_unsigned().to_be_bytes();
+            vec![red, green, blue, alpha]
+        })
+        .collect();
+
+    Ok(rgba_bytes)
+}
+
+/// Retrieves the application icon for a given package name and returns it as a raw RGBA pixel buffer.
+/// Returns `Option<(pixels, width, height)>`.
+#[must_use]
+pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
+    let jvm = vm();
+
+    jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
+        let ctx = context(env);
+
+        let pm = env
+            .call_method(
+                &ctx,
+                jni_str!("getPackageManager"),
+                jni_sig!("()Landroid/content/pm/PackageManager;"),
+                &[],
+            )?
+            .l()?;
+
+        let pkg_str = env.new_string(package_name)?;
+
+        let app_info = env
+            .call_method(
+                &pm,
+                jni_str!("getApplicationInfo"),
+                jni_sig!("(Ljava/lang/String;I)Landroid/content/pm/ApplicationInfo;"),
+                &[JValue::Object(&pkg_str)],
+            )?
+            .l()?;
+
+        let drawable = env
+            .call_method(
+                &pm,
+                jni_str!("getApplicationIcon"),
+                jni_sig!("(Landroid/content/pm/ApplicationInfo;)Landroid/graphics/drawable/Drawable;"),
+                &[JValue::Object(&app_info)],
+            )?
+            .l()?;
+
+        let width = env
+            .call_method(&drawable, jni_str!("getIntrinsicWidth"), jni_sig!("()I"), &[])?
+            .i()?;
+        let height = env
+            .call_method(&drawable, jni_str!("getIntrinsicHeight"), jni_sig!("()I"), &[])?
+            .i()?;
+
+        // If dimensions are invalid, fallback to standard icon size (e.g., 96x96)
+        let (width, height) = if width <= 0 || height <= 0 { (96, 96) } else { (width, height) };
+
+        let rgba_bytes = extract_drawable_pixels(env, &drawable, width, height)?;
+
+        Ok((rgba_bytes, width.cast_unsigned(), height.cast_unsigned()))
+    })
+    .ok()
 }
