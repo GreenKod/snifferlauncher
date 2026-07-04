@@ -43,7 +43,7 @@ impl AppState {
         crate::plugin::PluginLoader::register_all_from_assets(
             &mut plugin_registry,
             &app.asset_manager(),
-            action_queue.clone(),
+            &action_queue,
         );
 
         Self {
@@ -246,7 +246,7 @@ pub fn android_main(app: AndroidApp) {
                                 // Since the Android asset manager treats the contents of the .plugins folder as root,
                                 // we strip the .plugins/ prefix and access the internal path directly.
                                 let asset_path = src.replace(".plugins/", "").replace("\\", "/");
-                                
+
                                 if let Ok(cstr) = std::ffi::CString::new(asset_path.clone()) {
                                     if let Some(mut asset) = app.asset_manager().open(cstr.as_c_str()) {
                                         use std::io::Read;

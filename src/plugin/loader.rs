@@ -36,10 +36,13 @@ impl PluginLoader {
     pub fn register_all(
         &self,
         registry: &mut PluginRegistry,
-        action_queue: Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
+        action_queue: &Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
     ) {
         if !self.assets_dir.exists() {
-            println!("Plugin directory {} does not exist.", self.assets_dir.display());
+            println!(
+                "Plugin directory {} does not exist.",
+                self.assets_dir.display()
+            );
             return;
         }
 
@@ -70,14 +73,14 @@ impl PluginLoader {
             let manifest_path = plugin_dir.join("manifest.json");
 
             if !manifest_path.exists() {
-                eprintln!("manifest.json not found for plugin '{}'", plugin_folder);
+                eprintln!("manifest.json not found for plugin '{plugin_folder}'");
                 continue;
             }
 
             let manifest_str = match fs::read_to_string(&manifest_path) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("Failed to read manifest.json for plugin '{}': {e}", plugin_folder);
+                    eprintln!("Failed to read manifest.json for plugin '{plugin_folder}': {e}");
                     continue;
                 }
             };
@@ -85,7 +88,7 @@ impl PluginLoader {
             let manifest: PluginManifest = match serde_json::from_str(&manifest_str) {
                 Ok(m) => m,
                 Err(e) => {
-                    eprintln!("Failed to parse manifest.json for plugin '{}': {e}", plugin_folder);
+                    eprintln!("Failed to parse manifest.json for plugin '{plugin_folder}': {e}");
                     continue;
                 }
             };
@@ -93,17 +96,35 @@ impl PluginLoader {
             let main_js_path = plugin_dir.join(&manifest.main);
             if main_js_path.exists() {
                 match fs::read_to_string(&main_js_path) {
-                    Ok(content) => match crate::plugin::JsPlugin::new(content, action_queue.clone()) {
-                        Ok(plugin) => {
-                            registry.register(&(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>));
-                            println!("Successfully loaded JS plugin '{}' ({}) from {}", manifest.name, manifest.id, main_js_path.display());
+                    Ok(content) => {
+                        match crate::plugin::JsPlugin::new(content, action_queue.clone()) {
+                            Ok(plugin) => {
+                                registry.register(
+                                    &(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>),
+                                );
+                                println!(
+                                    "Successfully loaded JS plugin '{}' ({}) from {}",
+                                    manifest.name,
+                                    manifest.id,
+                                    main_js_path.display()
+                                );
+                            }
+                            Err(e) => eprintln!(
+                                "Failed to instantiate JS plugin '{}': {e}",
+                                manifest.name
+                            ),
                         }
-                        Err(e) => eprintln!("Failed to instantiate JS plugin '{}': {e}", manifest.name),
-                    },
-                    Err(e) => eprintln!("Could not read {} for plugin '{}': {e}", manifest.main, manifest.name),
+                    }
+                    Err(e) => eprintln!(
+                        "Could not read {} for plugin '{}': {e}",
+                        manifest.main, manifest.name
+                    ),
                 }
             } else {
-                eprintln!("Main script '{}' not found for plugin '{}'", manifest.main, manifest.name);
+                eprintln!(
+                    "Main script '{}' not found for plugin '{}'",
+                    manifest.main, manifest.name
+                );
             }
         }
     }
@@ -118,12 +139,12 @@ impl PluginLoader {
     pub fn register_all_from_assets(
         registry: &mut PluginRegistry,
         asset_manager: &ndk::asset::AssetManager,
-        action_queue: Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
+        action_queue: &Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
     ) {
         use std::io::Read;
         let config_cstr = std::ffi::CString::new("plugins.json").unwrap();
-        
-        let config_str = if let Some(mut asset) = asset_manager.open(config_cstr.as_c_str()) {
+
+        let config_string = if let Some(mut asset) = asset_manager.open(config_cstr.as_c_str()) {
             let mut content = String::new();
             if asset.read_to_string(&mut content).is_ok() {
                 content
@@ -136,7 +157,7 @@ impl PluginLoader {
             return;
         };
 
-        let config: PluginsConfig = match serde_json::from_str(&config_str) {
+        let config: PluginsConfig = match serde_json::from_str(&config_string) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("Failed to parse plugins.json on Android: {e}");
@@ -145,39 +166,63 @@ impl PluginLoader {
         };
 
         for plugin_folder in config.active_plugins {
-            let manifest_path = format!("{}/manifest.json", plugin_folder);
+            let manifest_path = format!("{plugin_folder}/manifest.json");
             if let Ok(manifest_cstr) = std::ffi::CString::new(manifest_path.clone()) {
                 if let Some(mut asset) = asset_manager.open(manifest_cstr.as_c_str()) {
                     let mut manifest_str = String::new();
                     if asset.read_to_string(&mut manifest_str).is_ok() {
-                        if let Ok(manifest) = serde_json::from_str::<PluginManifest>(&manifest_str) {
+                        if let Ok(manifest) = serde_json::from_str::<PluginManifest>(&manifest_str)
+                        {
                             let main_js_path = format!("{}/{}", plugin_folder, manifest.main);
                             if let Ok(main_cstr) = std::ffi::CString::new(main_js_path.clone()) {
-                                if let Some(mut main_asset) = asset_manager.open(main_cstr.as_c_str()) {
+                                if let Some(mut main_asset) =
+                                    asset_manager.open(main_cstr.as_c_str())
+                                {
                                     let mut content = String::new();
                                     if main_asset.read_to_string(&mut content).is_ok() {
-                                        match crate::plugin::JsPlugin::new(content, action_queue.clone()) {
+                                        match crate::plugin::JsPlugin::new(
+                                            content,
+                                            action_queue.clone(),
+                                        ) {
                                             Ok(plugin) => {
-                                                registry.register(&(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>));
-                                                println!("Successfully loaded JS plugin '{}' ({}) from Android Assets", manifest.name, manifest.id);
+                                                registry.register(
+                                                    &(Arc::new(plugin)
+                                                        as Arc<dyn crate::plugin::UiPlugin>),
+                                                );
+                                                println!(
+                                                    "Successfully loaded JS plugin '{}' ({}) from Android Assets",
+                                                    manifest.name, manifest.id
+                                                );
                                             }
-                                            Err(e) => eprintln!("Failed to instantiate JS plugin '{}' on Android: {e}", manifest.name),
+                                            Err(e) => eprintln!(
+                                                "Failed to instantiate JS plugin '{}' on Android: {e}",
+                                                manifest.name
+                                            ),
                                         }
                                     } else {
-                                        eprintln!("Failed to read content of {} from Android assets", main_js_path);
+                                        eprintln!(
+                                            "Failed to read content of {main_js_path} from Android assets"
+                                        );
                                     }
                                 } else {
-                                    eprintln!("Main script '{}' not found for plugin '{}' in Android assets", manifest.main, manifest.name);
+                                    eprintln!(
+                                        "Main script '{}' not found for plugin '{}' in Android assets",
+                                        manifest.main, manifest.name
+                                    );
                                 }
                             }
                         } else {
-                            eprintln!("Failed to parse manifest.json for plugin '{}' on Android", plugin_folder);
+                            eprintln!(
+                                "Failed to parse manifest.json for plugin '{plugin_folder}' on Android"
+                            );
                         }
                     } else {
-                        eprintln!("Failed to read manifest.json for plugin '{}' on Android", plugin_folder);
+                        eprintln!(
+                            "Failed to read manifest.json for plugin '{plugin_folder}' on Android"
+                        );
                     }
                 } else {
-                    eprintln!("manifest.json not found for plugin '{}' on Android", plugin_folder);
+                    eprintln!("manifest.json not found for plugin '{plugin_folder}' on Android");
                 }
             }
         }
