@@ -38,7 +38,18 @@ impl AppState {
         let mut plugin_registry = PluginRegistry::default();
         let action_queue = Arc::new(Mutex::new(Vec::new()));
 
-        crate::plugin::PluginLoader::new("assets/ui")
+        let mut plugins_dir = std::env::current_exe()
+            .unwrap_or_default()
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join(".plugins");
+
+        if !plugins_dir.exists() {
+            // Fallback to current working directory
+            plugins_dir = std::path::PathBuf::from(".plugins");
+        }
+
+        crate::plugin::PluginLoader::new(&plugins_dir)
             .register_all(&mut plugin_registry, action_queue.clone());
 
         Self {

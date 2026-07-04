@@ -82,7 +82,7 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
     // Wait, the default is 0.0 anyway. Let's just rely on the mapped flex_shrink above.
 
     if let Element::ScrollView { .. } = element {
-        // Taffy'e bu konteynerin scroll edilebilir olduğunu (içeriği sınırlandırmaması gerektiğini) belirtelim
+        // Instruct Taffy that this container is scrollable and should not constrain its content
         style.overflow = taffy::geometry::Point {
             x: taffy::style::Overflow::Scroll,
             y: taffy::style::Overflow::Scroll,

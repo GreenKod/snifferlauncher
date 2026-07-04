@@ -38,7 +38,7 @@ khronos-egl = { version = "6.0", features = ["dynamic"] }
 [package.metadata.android]
 package = "com.greenkod.snifferlauncher"
 build_targets = ["aarch64-linux-android"]
-assets = "assets"
+assets = ".plugins"
 
 [package.metadata.android.sdk]
 min_sdk_version = 30
@@ -53,22 +53,22 @@ panic = "abort"      # Abort on panic, not unwind
 
 [profile.release]
 opt-level = 3
-strip = "symbols"    # 'true' yerine 'symbols' daha spesifik bir temizlik yapar
-lto = "fat"          # 'true' yerine 'fat' daha agresif bir LTO sağlar
-codegen-units = 1    # Derleme süresini uzatır ama kodu çok daha fazla optimize eder
+strip = "symbols"    # Using 'symbols' instead of 'true' provides more specific stripping
+lto = "fat"          # Using 'fat' instead of 'true' provides more aggressive LTO
+codegen-units = 1    # Increases compilation time but heavily optimizes the code
 panic = "abort"
 
 [workspace.lints.rust]
-warnings = "deny" # -D warnings karşılığı
+warnings = "deny" # Equivalent to -D warnings
 
 [workspace.lints.clippy]
-# Grupları aktif ediyoruz (priority = -1 vererek tekil izinlerin ezilmesini önlüyoruz)
-pedantic = { level = "deny", priority = -1 } # -D clippy::pedantic karşılığı
-nursery = { level = "deny", priority = -1 }  # -D clippy::nursery karşılığı
-cargo = { level = "deny", priority = -1 }    # -D clippy::cargo karşılığı
+# Enable groups (priority = -1 prevents overriding individual allowances)
+pedantic = { level = "deny", priority = -1 } # Equivalent to -D clippy::pedantic
+nursery = { level = "deny", priority = -1 }  # Equivalent to -D clippy::nursery
+cargo = { level = "deny", priority = -1 }    # Equivalent to -D clippy::cargo
 
-# Spesifik olarak izin vermek (Açık bırakmak) istediğin kural
-multiple_crate_versions = "allow"            # -A clippy::multiple-crate-versions karşılığı
+# Specifically allowed rules
+multiple_crate_versions = "allow"            # Equivalent to -A clippy::multiple-crate-versions
 
 [lints]
 workspace = true

@@ -35,7 +35,7 @@ const UI_TREE = {
                     "style": {
                         "text_color": hexToColor("#000000"), // Black Text
                         "text_size": 48.0,
-                        "width": { "Pixels": 220.0 } // Fixed width so it centers correctly
+                        "width": "Auto" // Metin genişliğine göre otomatik ayarlanır
                     }
                 }
             },
@@ -46,7 +46,7 @@ const UI_TREE = {
                     "style": {
                         "text_color": hexToColor("#000000"), // Black Text
                         "text_size": 32.0,
-                        "width": { "Pixels": 300.0 }
+                        "width": "Auto"
                     }
                 }
             },
@@ -60,8 +60,8 @@ const UI_TREE = {
                     "momentum_scrolling": true,
                     "capture_drag": true,
                     "style": {
-                        "width": { "Pixels": 500.0 },
-                        "height": { "Pixels": 300.0 },
+                        "width": { "Percent": 90.0 }, // Ekranın genişliğinin %90'ını kaplar (Responsive)
+                        "height": { "Percent": 50.0 }, // Ekran yüksekliğinin %50'sini kaplar (Responsive)
                         "background_color": hexToColor("#FFFFFF"),
                         "overflow_hidden": true,
                         "border_radius": 12.0,
@@ -72,10 +72,10 @@ const UI_TREE = {
                         {
                             "Image": {
                                 "id": "test_img",
-                                "src": "assets/test.png", // TEST İÇİN: Buraya bir resim (PNG) koymalısınız
+                                "src": ".plugins/default_ui/test.jpg",
                                 "style": {
                                     "width": { "Percent": 100.0 },
-                                    "height": { "Pixels": 150.0 },
+                                    "height": { "Percent": 40.0 }, // Scroll container'ın %40'ı kadar yükseklik
                                     "border_radius": 12.0,
                                     "object_fit": "Cover"
                                 }
@@ -85,42 +85,42 @@ const UI_TREE = {
                             "Label": {
                                 "id": "scroll-item-1",
                                 "text": "Kaydırılabilir Öğe 1",
-                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": "Auto" }
                             }
                         },
                         {
                             "Label": {
                                 "id": "scroll-item-2",
                                 "text": "Kaydırılabilir Öğe 2",
-                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": "Auto" }
                             }
                         },
                         {
                             "Label": {
                                 "id": "scroll-item-3",
                                 "text": "Kaydırılabilir Öğe 3",
-                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": "Auto" }
                             }
                         },
                         {
                             "Label": {
                                 "id": "scroll-item-4",
                                 "text": "Kaydırılabilir Öğe 4",
-                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": "Auto" }
                             }
                         },
                         {
                             "Label": {
                                 "id": "scroll-item-5",
                                 "text": "Kaydırılabilir Öğe 5",
-                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": "Auto" }
                             }
                         },
                         {
                             "Label": {
                                 "id": "scroll-item-6",
                                 "text": "Kaydırılabilir Öğe 6",
-                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                                "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": "Auto" }
                             }
                         }
                     ]
@@ -134,7 +134,7 @@ const UI_TREE = {
                     "style": {
                         "text_color": hexToColor("#0000FF"),
                         "text_size": 24.0,
-                        "width": "Auto",
+                        "width": { "Percent": 80.0 }, // Genişliği ekranın %80'i yap (Responsive)
                         "height": "Auto",
                         "background_color": hexToColor("#E0E0E0"),
                         "border_radius": 8.0,
@@ -185,7 +185,7 @@ host_log("Hash of 'scroll-container': " + host_hash("scroll-container"));
 host_log("Hash of 'search_input': " + host_hash("search_input"));
 
 // Arka planda resmi GPU'ya yükle
-host_create_image("test_img", "assets/test.png");
+host_create_image("test_img", ".plugins/default_ui/test.jpg");
 
 // Send UI to Rust Host
 host_set_ui(JSON.stringify(UI_TREE));
@@ -297,7 +297,7 @@ globalThis.onEvent = function (eventJsonString) {
     } else if (event.type === "PointerUp" || event.type === "ClickOutside") {
         if (UI_TREE.Container.children[4].Container.style.opacity === 0.5) {
             UI_TREE.Container.children[4].Container.style.opacity = 0.9;
-            
+
             // Eğer PointerUp event ise ve FAB butonuna/metnine aitse yeni öğe ekle
             if (event.type === "PointerUp" && (String(event.id) === host_hash("fab_button") || String(event.id) === host_hash("fab_text"))) {
                 let scrollview = UI_TREE.Container.children[2].ScrollView;
@@ -306,7 +306,7 @@ globalThis.onEvent = function (eventJsonString) {
                     "Label": {
                         "id": "scroll-item-" + numItems,
                         "text": "Kaydırılabilir Öğe " + numItems,
-                        "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": { "Pixels": 100.0 } }
+                        "style": { "text_size": 32.0, "text_color": hexToColor("#000000"), "padding": { "top": 10.0, "bottom": 10.0, "left": 10.0, "right": 10.0 }, "height": "Auto" }
                     }
                 });
             }
@@ -339,10 +339,10 @@ globalThis.onEvent = function (eventJsonString) {
         let num_labels = num_children - 1; // 1 tane resim var
         let content_height = 150.0 + (num_labels * 100.0) + ((num_children - 1) * 10.0);
         let max_scroll = Math.max(0.0, content_height - 300.0);
-        
+
         if (scrollview.scroll_y < 0) scrollview.scroll_y = 0;
         if (scrollview.scroll_y > max_scroll) scrollview.scroll_y = max_scroll;
-        
+
         host_set_ui(JSON.stringify(UI_TREE));
     }
 
