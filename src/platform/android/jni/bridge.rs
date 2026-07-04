@@ -272,7 +272,11 @@ fn extract_drawable_pixels(
             bitmap_class,
             jni_str!("createBitmap"),
             jni_sig!("(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;"),
-            &[JValue::Int(width), JValue::Int(height), JValue::Object(&argb8888)],
+            &[
+                JValue::Int(width),
+                JValue::Int(height),
+                JValue::Object(&argb8888),
+            ],
         )?
         .l()?;
 
@@ -367,20 +371,36 @@ pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
             .call_method(
                 &pm,
                 jni_str!("getApplicationIcon"),
-                jni_sig!("(Landroid/content/pm/ApplicationInfo;)Landroid/graphics/drawable/Drawable;"),
+                jni_sig!(
+                    "(Landroid/content/pm/ApplicationInfo;)Landroid/graphics/drawable/Drawable;"
+                ),
                 &[JValue::Object(&app_info)],
             )?
             .l()?;
 
         let width = env
-            .call_method(&drawable, jni_str!("getIntrinsicWidth"), jni_sig!("()I"), &[])?
+            .call_method(
+                &drawable,
+                jni_str!("getIntrinsicWidth"),
+                jni_sig!("()I"),
+                &[],
+            )?
             .i()?;
         let height = env
-            .call_method(&drawable, jni_str!("getIntrinsicHeight"), jni_sig!("()I"), &[])?
+            .call_method(
+                &drawable,
+                jni_str!("getIntrinsicHeight"),
+                jni_sig!("()I"),
+                &[],
+            )?
             .i()?;
 
         // If dimensions are invalid, fallback to standard icon size (e.g., 96x96)
-        let (width, height) = if width <= 0 || height <= 0 { (96, 96) } else { (width, height) };
+        let (width, height) = if width <= 0 || height <= 0 {
+            (96, 96)
+        } else {
+            (width, height)
+        };
 
         let rgba_bytes = extract_drawable_pixels(env, &drawable, width, height)?;
 
