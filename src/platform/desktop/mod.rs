@@ -45,7 +45,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 /// Returns an error if generating the dummy list fails.
 pub fn get_application_list() -> Result<Vec<crate::core::types::AppInfo>, String> {
     use crate::core::types::AppInfo;
-    
+
     let mock_apps = vec![
         ("Browser", "com.desktop.browser"),
         ("Calculator", "com.desktop.calculator"),
@@ -61,8 +61,11 @@ pub fn get_application_list() -> Result<Vec<crate::core::types::AppInfo>, String
 
     let mut apps = Vec::new();
     for (name, pkg) in mock_apps {
-        apps.push(AppInfo::from_package_info(name.to_string(), pkg.to_string()));
+        apps.push(AppInfo::from_package_info(
+            name.to_string(),
+            pkg.to_string(),
+        ));
     }
-    
+
     Ok(apps)
 }

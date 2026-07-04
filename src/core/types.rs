@@ -16,19 +16,13 @@ pub struct AppInfo {
 impl AppInfo {
     #[must_use]
     pub const fn new(name: String, package_name: String) -> Self {
-        Self {
-            name,
-            package_name,
-        }
+        Self { name, package_name }
     }
 
     /// Creates an `AppInfo` instance with only basic information.
     #[must_use]
     pub const fn from_package_info(name: String, package_name: String) -> Self {
-        Self {
-            name,
-            package_name,
-        }
+        Self { name, package_name }
     }
 
     /// Filters apps by name for the launcher search bar.
