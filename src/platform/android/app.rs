@@ -249,26 +249,35 @@ pub fn android_main(app: AndroidApp) {
                     for action in q.drain(..) {
                         match action {
                             crate::core::Action::LoadImage { id, src } => {
-                                // Since the Android asset manager treats the contents of the .plugins folder as root,
-                                // we strip the .plugins/ prefix and access the internal path directly.
-                                let asset_path = src.replace(".plugins/", "").replace("\\", "/");
-
-                                if let Ok(cstr) = std::ffi::CString::new(asset_path.clone()) {
-                                    if let Some(mut asset) = app.asset_manager().open(cstr.as_c_str()) {
-                                        use std::io::Read;
-                                        let mut buffer = Vec::new();
-                                        if asset.read_to_end(&mut buffer).is_ok() {
-                                            if let Ok(img) = image::load_from_memory(&buffer) {
-                                                let rgba = img.to_rgba8();
-                                                let (w, h) = rgba.dimensions();
-                                                renderer.load_image(&id, rgba.as_raw(), w, h);
-                                                println!("Successfully loaded image {} from Android assets", asset_path);
-                                            } else {
-                                                eprintln!("Failed to parse image data for {}", asset_path);
-                                            }
-                                        }
+                                if let Some(pkg_name) = src.strip_prefix("app-icon://") {
+                                    if let Some((pixels, w, h)) = crate::platform::android::jni::bridge::get_app_icon_pixels(pkg_name) {
+                                        renderer.load_image(&id, &pixels, w, h);
+                                        println!("Successfully loaded app icon for {}", pkg_name);
                                     } else {
-                                        eprintln!("Failed to open image asset: {}", asset_path);
+                                        eprintln!("Failed to load app icon for {}", pkg_name);
+                                    }
+                                } else {
+                                    // Since the Android asset manager treats the contents of the .plugins folder as root,
+                                    // we strip the .plugins/ prefix and access the internal path directly.
+                                    let asset_path = src.replace(".plugins/", "").replace("\\", "/");
+
+                                    if let Ok(cstr) = std::ffi::CString::new(asset_path.clone()) {
+                                        if let Some(mut asset) = app.asset_manager().open(cstr.as_c_str()) {
+                                            use std::io::Read;
+                                            let mut buffer = Vec::new();
+                                            if asset.read_to_end(&mut buffer).is_ok() {
+                                                if let Ok(img) = image::load_from_memory(&buffer) {
+                                                    let rgba = img.to_rgba8();
+                                                    let (w, h) = rgba.dimensions();
+                                                    renderer.load_image(&id, rgba.as_raw(), w, h);
+                                                    println!("Successfully loaded image {} from Android assets", asset_path);
+                                                } else {
+                                                    eprintln!("Failed to parse image data for {}", asset_path);
+                                                }
+                                            }
+                                        } else {
+                                            eprintln!("Failed to open image asset: {}", asset_path);
+                                        }
                                     }
                                 }
                             }

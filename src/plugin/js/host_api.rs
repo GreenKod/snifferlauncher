@@ -61,15 +61,12 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
             Ok(parsed) => {
                 if let Ok(mut lock) = tree_set_ui.lock() {
                     *lock = Some(parsed.clone());
-                    println!("host_set_ui successfully parsed and locked UI.");
                 }
                 if let Some(path) = &cache_path
                     && let Ok(bytes) = postcard::to_allocvec(&parsed)
                 {
                     match std::fs::write(path, bytes) {
-                        Ok(_) => {
-                            println!("host_set_ui wrote to cache.");
-                        }
+                        Ok(_) => {}
                         Err(e) => {
                             println!("host_set_ui cache write failed: {e}");
                         }
@@ -259,6 +256,29 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     })
     .unwrap();
     globals.set("host_blur_input", blur_input_func).unwrap();
+
+    // ------------------------------------------------------------------
+    // host_get_application_list
+    // ------------------------------------------------------------------
+    let get_app_list_func = Function::new(ctx.clone(), || -> String {
+        #[cfg(target_os = "android")]
+        let result = crate::platform::android::jni::bridge::get_application_list();
+
+        #[cfg(not(target_os = "android"))]
+        let result = crate::platform::desktop::get_application_list();
+
+        match result {
+            Ok(apps) => serde_json::to_string(&apps).unwrap_or_else(|_| "[]".to_string()),
+            Err(e) => {
+                eprintln!("Failed to get application list: {e}");
+                "[]".to_string()
+            }
+        }
+    })
+    .unwrap();
+    globals
+        .set("host_get_application_list", get_app_list_func)
+        .unwrap();
 
     // ==================================================================
     // Inter-Plugin API host functions
