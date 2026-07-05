@@ -4,6 +4,59 @@ use super::layout::{
 };
 use serde::{Deserialize, Serialize};
 
+/// The easing curve used for interpolating animation values.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Easing {
+    #[default]
+    Linear,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+    Spring {
+        stiffness: f32,
+        damping: f32,
+    },
+}
+
+/// Defines how a style property transitions to a new value.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Transition {
+    pub duration: f32, // in seconds
+    pub easing: Easing,
+}
+
+impl Default for Transition {
+    fn default() -> Self {
+        Self {
+            duration: 0.0, // 0 means instant
+            easing: Easing::Linear,
+        }
+    }
+}
+
+/// Defines affine transformations applied during rendering (does not affect Taffy layout).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Transform {
+    pub scale: f32,
+    pub translate_x: f32,
+    pub translate_y: f32,
+    pub rotate: f32, // in degrees
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Self {
+            scale: 1.0,
+            translate_x: 0.0,
+            translate_y: 0.0,
+            rotate: 0.0,
+        }
+    }
+}
+
 /// All visual and layout properties of a single UI element.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -50,6 +103,9 @@ pub struct Style {
 
     pub overflow_hidden: bool,
     pub object_fit: ObjectFit,
+
+    pub transition: Transition,
+    pub transform: Transform,
 }
 
 impl Default for Style {
@@ -90,6 +146,8 @@ impl Default for Style {
             text_size: 16.0,
             overflow_hidden: false,
             object_fit: ObjectFit::Fill,
+            transition: Transition::default(),
+            transform: Transform::default(),
         }
     }
 }

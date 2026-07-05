@@ -13,6 +13,45 @@ pub fn handle_input_event(
     root_element: &crate::core::types::Element,
     layout_tree: &crate::core::layout::LayoutNode,
 ) -> InputStatus {
+    let get_max_scroll = |target_id: Option<u64>| -> f32 {
+        target_id.map_or(0.0, |target| {
+            let mut found_max = 0.0;
+            let mut search = vec![(root_element, layout_tree)];
+            while let Some((el, lay)) = search.pop() {
+                if let crate::core::types::Element::ScrollView { id, .. } = el
+                    && id
+                        .as_deref()
+                        .map(|s| crate::core::ui::widget::fnv1a(s.as_bytes()))
+                        == Some(target)
+                {
+                    let view_height = lay.rect.height;
+                    let mut min_y = f32::MAX;
+                    let mut max_y = f32::MIN;
+                    for child in &lay.children {
+                        if child.rect.y < min_y {
+                            min_y = child.rect.y;
+                        }
+                        if child.rect.y + child.rect.height > max_y {
+                            max_y = child.rect.y + child.rect.height;
+                        }
+                    }
+                    if min_y <= max_y {
+                        found_max = (max_y - min_y - view_height).max(0.0);
+                    }
+                    break;
+                }
+                if let crate::core::types::Element::Container { children, .. }
+                | crate::core::types::Element::ScrollView { children, .. } = el
+                {
+                    for (child, child_lay) in children.iter().zip(lay.children.iter()) {
+                        search.push((child, child_lay));
+                    }
+                }
+            }
+            found_max
+        })
+    };
+
     match input_event {
         InputEvent::MotionEvent(motion_event) => {
             let pointer = motion_event.pointer_at_index(motion_event.pointer_index());
@@ -70,9 +109,12 @@ pub fn handle_input_event(
                     if motion_event.action() == MotionAction::Move {
                         state.last_drag_delta = (delta_x, delta_y);
                         if let Some(sv_id) = state.active_scrollview_drag {
-                            state
-                                .event_bus
-                                .push(UiEvent::Scroll(Some(sv_id), delta_x, delta_y));
+                            state.event_bus.push(UiEvent::Scroll(
+                                Some(sv_id),
+                                delta_x,
+                                delta_y,
+                                get_max_scroll(Some(sv_id)),
+                            ));
                         } else if let Some((
                             crate::core::types::Element::ScrollView {
                                 id, capture_drag, ..
@@ -90,14 +132,18 @@ pub fn handle_input_event(
                             let sv_id = id
                                 .as_deref()
                                 .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
-                            state
-                                .event_bus
-                                .push(UiEvent::Scroll(sv_id, delta_x, delta_y));
+                            state.event_bus.push(UiEvent::Scroll(
+                                sv_id,
+                                delta_x,
+                                delta_y,
+                                get_max_scroll(sv_id),
+                            ));
                         } else {
                             state.event_bus.push(UiEvent::Scroll(
                                 state.hovered_btn,
                                 delta_x,
                                 delta_y,
+                                get_max_scroll(state.hovered_btn),
                             ));
                         }
                     }
@@ -201,6 +247,7 @@ pub fn handle_input_event(
                             sv_id,
                             axis_h * -20.0 * factor,
                             axis_v * -20.0 * factor,
+                            get_max_scroll(sv_id),
                         ));
                     }
                     InputStatus::Handled

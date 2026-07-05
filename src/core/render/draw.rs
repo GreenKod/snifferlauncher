@@ -19,8 +19,8 @@ pub fn find_clicked_button(
     }
     match element {
         Element::Container { children, id, .. } => {
-            // Check children first
-            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+            // Check children first (reverse order for z-index correctness)
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
                 if let Some(clicked_data) = find_clicked_button(child_el, child_lay, point) {
                     return Some(clicked_data);
                 }
@@ -45,7 +45,7 @@ pub fn find_clicked_button(
             ..
         } => {
             let offset_point = Point::new(point.x + scroll_x, point.y + scroll_y);
-            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
                 if let Some(clicked_data) = find_clicked_button(child_el, child_lay, offset_point) {
                     return Some(clicked_data);
                 }
@@ -98,7 +98,7 @@ pub fn find_hovered_scrollview<'a>(
     }
     match element {
         Element::Container { children, .. } => {
-            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
                 if let Some(scrollview_data) = find_hovered_scrollview(child_el, child_lay, point) {
                     return Some(scrollview_data);
                 }
@@ -116,7 +116,7 @@ pub fn find_hovered_scrollview<'a>(
             ..
         } => {
             let offset_point = Point::new(point.x + scroll_x, point.y + scroll_y);
-            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
                 if let Some(scrollview_data) =
                     find_hovered_scrollview(child_el, child_lay, offset_point)
                 {
@@ -131,6 +131,7 @@ pub fn find_hovered_scrollview<'a>(
 
 /// Platform-agnostic traversal to draw the UI elements using the Renderer interface.
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
 pub fn draw_ui(
     renderer: &mut dyn Renderer,
     element: &Element,
@@ -138,6 +139,7 @@ pub fn draw_ui(
     metrics: &ScreenMetrics,
     style_map: &StyleMap,
     data_map: &DataMap,
+    transition_manager: &crate::core::anim::TransitionManager,
     alpha_multiplier: f32,
 ) {
     use crate::core::ui::data_map::DataValue;
@@ -148,48 +150,61 @@ pub fn draw_ui(
         .id()
         .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
 
-    // Use plugin-provided style override if available, fallback to element's own style
-    let style = if let Some(w_id) = widget_id {
-        style_map.get(w_id).map_or_else(
-            || element.style().clone(),
-            |override_style| override_style.apply(element.style().clone()),
-        )
-    } else {
-        element.style().clone()
-    };
+    let mut base_style = element.style().clone();
+    if let Some(id_str) = element.id()
+        && let Some(anim_style) = transition_manager.get_current_style(id_str)
+    {
+        base_style = anim_style.clone();
+    }
 
-    // Combine parent opacity with this element's opacity
-    let current_alpha = alpha_multiplier * style.opacity;
-    renderer.set_global_alpha(current_alpha);
+    if let Some(id) = widget_id
+        && let Some(override_style) = style_map.get(id)
+    {
+        base_style = override_style.apply(base_style);
+    }
+
+    let final_alpha = alpha_multiplier * base_style.opacity.clamp(0.0, 1.0);
+
+    // Apply transforms (scale, rotate, translate)
+    renderer.push_transform(
+        rect.x + rect.width / 2.0,
+        rect.y + rect.height / 2.0,
+        base_style.transform.scale,
+        base_style.transform.rotate,
+        base_style.transform.translate_x,
+        base_style.transform.translate_y,
+    );
+
+    renderer.set_global_alpha(final_alpha);
 
     // 1. Draw drop shadow
-    if let Some(shadow_color) = style.shadow_color {
+    if let Some(shadow_color) = base_style.shadow_color {
         renderer.draw_shadow(
             rect,
-            style.border_radius,
-            style.shadow_offset_y,
-            style.shadow_spread,
+            base_style.border_radius,
+            base_style.shadow_offset_y,
+            base_style.shadow_spread,
             shadow_color,
         );
     }
 
     // 2. Draw background card / gradient
-    if let Some((color_top, color_bottom)) = style.background_gradient {
+    if let Some((color_top, color_bottom)) = base_style.background_gradient {
         renderer.draw_rect_gradient(
             rect,
             color_top,
             color_bottom,
-            style.border_radius,
-            style.border_width,
-            style.border_color,
+            base_style.border_radius,
+            base_style.border_width,
+            base_style.border_color,
         );
-    } else if let Some(bg_color) = style.background_color {
+    } else if let Some(bg_color) = base_style.background_color {
         renderer.draw_rect(
             rect,
             bg_color,
-            style.border_radius,
-            style.border_width,
-            style.border_color,
+            base_style.border_radius,
+            base_style.border_width,
+            base_style.border_color,
         );
     }
 
@@ -227,8 +242,8 @@ pub fn draw_ui(
     }
 
     // 4. Handle clipping
-    if style.overflow_hidden {
-        renderer.set_clip_rect(rect);
+    if base_style.overflow_hidden {
+        renderer.push_clip_rect(rect, base_style.border_radius);
     }
 
     // 5. Draw contents
@@ -242,7 +257,8 @@ pub fn draw_ui(
                     metrics,
                     style_map,
                     data_map,
-                    current_alpha,
+                    transition_manager,
+                    final_alpha,
                 );
             }
         }
@@ -256,19 +272,24 @@ pub fn draw_ui(
             capture_drag: _,
             ..
         } => {
-            renderer.set_clip_rect(rect);
+            renderer.push_clip_rect(rect, base_style.border_radius);
             let mut max_y = 0.0_f32;
-            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                let mut offset_lay = child_lay.clone();
-
-                // Calculate max content height for the scrollbar
+            for child_lay in layout.children.iter() {
                 let child_bottom = child_lay.rect.y + child_lay.rect.height;
                 if child_bottom > max_y {
                     max_y = child_bottom;
                 }
+            }
+
+            let content_height = max_y - rect.y;
+            let max_scroll_y = (content_height - rect.height).max(0.0);
+            let actual_scroll_y = scroll_y.clamp(0.0, max_scroll_y);
+
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+                let mut offset_lay = child_lay.clone();
 
                 // Shift rects recursively so children draw with scroll offset
-                shift_layout(&mut offset_lay, -*scroll_x, -*scroll_y);
+                shift_layout(&mut offset_lay, -*scroll_x, -actual_scroll_y);
                 draw_ui(
                     renderer,
                     child_el,
@@ -276,15 +297,15 @@ pub fn draw_ui(
                     metrics,
                     style_map,
                     data_map,
-                    current_alpha,
+                    transition_manager,
+                    final_alpha,
                 );
             }
-            renderer.clear_clip_rect();
+            renderer.pop_clip_rect();
 
             // Draw visual scrollbar if content exceeds container
-            let content_height = max_y - rect.y;
             if content_height > rect.height {
-                renderer.set_global_alpha(current_alpha * 0.5); // Semi-transparent scrollbar
+                renderer.set_global_alpha(final_alpha * 0.5); // Semi-transparent scrollbar
                 let ratio = rect.height / content_height;
                 let scrollbar_height = (rect.height * ratio).max(20.0);
 
@@ -301,7 +322,7 @@ pub fn draw_ui(
                 );
 
                 renderer.draw_rect(scrollbar_rect, 0xFF00_0000, 2.0, 0.0, None);
-                renderer.set_global_alpha(current_alpha); // Restore
+                renderer.set_global_alpha(final_alpha); // Restore
             }
         }
         Element::Label { text, .. } => {
@@ -312,33 +333,47 @@ pub fn draw_ui(
                 text.clone()
             };
 
-            let color = style.text_color.unwrap_or(BUTTON_TEXT);
-            let text_w = renderer.measure_text(&display_text, style.text_size);
+            let color = base_style.text_color.unwrap_or(BUTTON_TEXT);
+            let text_w = renderer.measure_text(&display_text, base_style.text_size);
 
             // Center horizontally and vertically within the node bounds
             let draw_x = rect.x + (rect.width - text_w) / 2.0;
-            let draw_y = rect.y + (rect.height - style.text_size) / 2.0;
+            let draw_y = rect.y + (rect.height - base_style.text_size) / 2.0;
 
-            renderer.draw_text(&display_text, draw_x, draw_y, style.text_size, color);
+            renderer.draw_text(&display_text, draw_x, draw_y, base_style.text_size, color);
         }
         Element::Image { id, src, .. } => {
             let img_id = id.as_deref().unwrap_or(src.as_str());
-            renderer.draw_image(img_id, rect, style.border_radius, style.object_fit);
+            renderer.draw_image(
+                img_id,
+                rect,
+                base_style.border_radius,
+                base_style.object_fit,
+            );
         }
         Element::TextInput { value, focused, .. } => {
-            // Draw text
+            // Clip to the box — the GPU scissor rect prevents any text from
+            // escaping outside the TextInput border even if text_size is large.
+            renderer.push_clip_rect(rect, base_style.border_radius);
+
             let display_text = if *focused {
                 format!("{value}_")
             } else {
                 value.clone()
             };
-            let color = style.text_color.unwrap_or(BUTTON_TEXT);
+            let color = base_style.text_color.unwrap_or(BUTTON_TEXT);
 
-            // Left align with padding, center vertically
-            let draw_x = rect.x + style.padding.left;
-            let draw_y = rect.y + (rect.height - style.text_size) / 2.0;
+            // Use the style's text_size directly (already computed as vmin in JS,
+            // so it is fully responsive). The clip rect handles any rare overflow.
+            let ts = base_style.text_size;
 
-            renderer.draw_text(&display_text, draw_x, draw_y, style.text_size, color);
+            // Vertically center the text within the node bounds, matching Label behavior.
+            let draw_y = rect.y + (rect.height - ts) / 2.0;
+            let draw_x = rect.x + base_style.padding.left;
+
+            renderer.draw_text(&display_text, draw_x, draw_y, ts, color);
+
+            renderer.pop_clip_rect();
         }
         Element::Checkbox { checked, .. } => {
             if *checked {
@@ -350,7 +385,7 @@ pub fn draw_ui(
                 );
                 renderer.draw_rect(
                     inner_rect,
-                    style.text_color.unwrap_or(0xFF00_0000),
+                    base_style.text_color.unwrap_or(0xFF00_0000),
                     2.0,
                     0.0,
                     None,
@@ -369,7 +404,7 @@ pub fn draw_ui(
             let thumb_rect = Rect::new(thumb_x, rect.y + rect.height / 2.0 - 8.0, 16.0, 16.0);
             renderer.draw_rect(
                 thumb_rect,
-                style.text_color.unwrap_or(0xFF00_0000),
+                base_style.text_color.unwrap_or(0xFF00_0000),
                 8.0,
                 0.0,
                 None,
@@ -380,20 +415,21 @@ pub fn draw_ui(
             let fill_rect = Rect::new(rect.x, rect.y, rect.width * pct, rect.height);
             renderer.draw_rect(
                 fill_rect,
-                style.text_color.unwrap_or(0xFF00_00FF),
-                style.border_radius,
+                base_style.text_color.unwrap_or(0xFF00_00FF),
+                base_style.border_radius,
                 0.0,
                 None,
             );
         }
     }
 
-    if style.overflow_hidden {
-        renderer.clear_clip_rect();
+    if base_style.overflow_hidden {
+        renderer.pop_clip_rect();
     }
 
     // Restore parent alpha multiplier
     renderer.set_global_alpha(alpha_multiplier);
+    renderer.pop_transform();
 }
 
 fn shift_layout(layout: &mut LayoutNode, dx: f32, dy: f32) {
