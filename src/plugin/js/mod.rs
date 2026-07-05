@@ -239,12 +239,12 @@ impl UiPlugin for JsPlugin {
                         };
                         format!(r#"{{"type":"PointerUp","id":{id_str}}}"#)
                     }
-                    UiEvent::Scroll(id_opt, dx, dy) => {
+                    UiEvent::Scroll(id_opt, dx, dy, max_y) => {
                         let id_str = match id_opt {
                             Some(id) => format!(r#""{id}""#),
                             None => "null".to_string(),
                         };
-                        format!(r#"{{"type":"Scroll","id":{id_str},"dx":{dx},"dy":{dy}}}"#)
+                        format!(r#"{{"type":"Scroll","id":{id_str},"dx":{dx},"dy":{dy},"max_y":{max_y}}}"#)
                     }
                     UiEvent::WindowResized(w, h) => {
                         format!(r#"{{"type":"WindowResized","w":{w},"h":{h}}}"#)

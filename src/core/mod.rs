@@ -1,3 +1,4 @@
+pub mod anim;
 pub mod layout;
 pub mod render;
 pub mod style;

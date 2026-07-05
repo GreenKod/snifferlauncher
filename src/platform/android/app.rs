@@ -32,6 +32,7 @@ pub struct AppState {
     pub data_map: DataMap,
     pub action_queue: Arc<Mutex<Vec<Action>>>,
     pub plugin_registry: PluginRegistry,
+    pub transition_manager: crate::core::anim::TransitionManager,
 }
 
 impl AppState {
@@ -59,6 +60,7 @@ impl AppState {
             data_map: DataMap::default(),
             action_queue,
             plugin_registry,
+            transition_manager: crate::core::anim::TransitionManager::default(),
         }
     }
 }
@@ -75,7 +77,13 @@ pub fn android_main(app: AndroidApp) {
         children: vec![],
     };
 
+    let mut last_frame_time = std::time::Instant::now();
+
     while state.running {
+        let now = std::time::Instant::now();
+        let dt = now.duration_since(last_frame_time).as_secs_f32();
+        last_frame_time = now;
+
         let mut needs_redraw = false;
 
         app.poll_events(Some(Duration::from_millis(16)), |event| {
@@ -186,6 +194,12 @@ pub fn android_main(app: AndroidApp) {
                     }
                 });
 
+                state.transition_manager.sync_tree(&root_element);
+                if state.transition_manager.tick(dt) {
+                    // Schedule another redraw next frame for smooth animation
+                    needs_redraw = true;
+                }
+
                 let width =
                     f32::from(u16::try_from(window.width()).expect("window width fits in u16"));
                 let height =
@@ -223,12 +237,43 @@ pub fn android_main(app: AndroidApp) {
                     safe_area_top,
                 );
 
+                let get_max_scroll = |target_id: Option<u64>| -> f32 {
+                    target_id.map_or(0.0, |target| {
+                        let mut found_max = 0.0;
+                        let mut search = vec![(&root_element, &layout_tree)];
+                        while let Some((el, lay)) = search.pop() {
+                            if let crate::core::types::Element::ScrollView { id, .. } = el
+                                && id.as_deref().map(|s| crate::core::ui::widget::fnv1a(s.as_bytes())) == Some(target)
+                            {
+                                    let view_height = lay.rect.height;
+                                    let mut min_y = f32::MAX;
+                                    let mut max_y = f32::MIN;
+                                    for child in &lay.children {
+                                        if child.rect.y < min_y { min_y = child.rect.y; }
+                                        if child.rect.y + child.rect.height > max_y { max_y = child.rect.y + child.rect.height; }
+                                    }
+                                    if min_y <= max_y {
+                                        found_max = (max_y - min_y - view_height).max(0.0);
+                                    }
+                                    break;
+                                }
+                            if let crate::core::types::Element::Container { children, .. } | crate::core::types::Element::ScrollView { children, .. } = el {
+                                for (child, child_lay) in children.iter().zip(lay.children.iter()) {
+                                    search.push((child, child_lay));
+                                }
+                            }
+                        }
+                        found_max
+                    })
+                };
+
                 state.kinetic_scrolls.retain_mut(|k| {
                     if k.velocity_x.abs() > 0.1 || k.velocity_y.abs() > 0.1 {
                         state.event_bus.push(UiEvent::Scroll(
                             Some(k.sv_id),
                             k.velocity_x,
                             k.velocity_y,
+                            get_max_scroll(Some(k.sv_id)),
                         ));
                         k.velocity_x *= 0.92;
                         k.velocity_y *= 0.92;
@@ -305,6 +350,7 @@ pub fn android_main(app: AndroidApp) {
                     &metrics,
                     &state.style_map,
                     &state.data_map,
+                    &state.transition_manager,
                     1.0,
                 );
 

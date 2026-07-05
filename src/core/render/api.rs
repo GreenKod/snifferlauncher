@@ -28,6 +28,23 @@ pub trait Renderer {
     fn end_frame(&mut self);
     fn set_clip_rect(&mut self, rect: Rect);
     fn clear_clip_rect(&mut self);
+    fn push_clip_rect(&mut self, rect: Rect, _radius: f32) {
+        self.set_clip_rect(rect);
+    }
+    fn pop_clip_rect(&mut self) {
+        self.clear_clip_rect();
+    }
+    fn push_transform(
+        &mut self,
+        _cx: f32,
+        _cy: f32,
+        _scale: f32,
+        _rotate: f32,
+        _tx: f32,
+        _ty: f32,
+    ) {
+    }
+    fn pop_transform(&mut self) {}
     fn set_global_alpha(&mut self, alpha: f32);
     fn load_image(&mut self, id: &str, rgba_pixels: &[u8], width: u32, height: u32);
     fn draw_image(
@@ -38,4 +55,10 @@ pub trait Renderer {
         object_fit: crate::core::style::ObjectFit,
     );
     fn measure_text(&self, text: &str, size: f32) -> f32;
+    /// Returns the ascent (distance from the top of the text box to the baseline)
+    /// at the given size. Used to correctly center text vertically within a rect.
+    fn text_ascent(&self, size: f32) -> f32 {
+        // Default: assume ascent is 75% of size (typical for most fonts)
+        size * 0.75
+    }
 }

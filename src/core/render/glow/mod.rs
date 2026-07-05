@@ -21,6 +21,8 @@ pub struct GlowRenderer {
     pub(crate) image_program: glow::Program,
     pub(crate) image_textures: std::collections::HashMap<String, (glow::Texture, f32, f32)>,
     pub(crate) global_alpha: f32,
+    pub(crate) transform_stack: Vec<[f32; 9]>,
+    pub(crate) clip_stack: Vec<(Rect, f32)>,
 }
 
 fn unpack_color(color: u32) -> [f32; 4] {
@@ -156,6 +158,8 @@ impl GlowRenderer {
                 image_program,
                 image_textures: std::collections::HashMap::new(),
                 global_alpha: 1.0,
+                transform_stack: vec![[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]],
+                clip_stack: Vec::new(),
             })
         }
     }
@@ -276,6 +280,12 @@ impl Renderer for GlowRenderer {
                 col_bot[3],
             );
 
+            let loc_transform = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_transform");
+            let t = self.transform_stack.last().unwrap();
+            self.gl
+                .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
@@ -342,6 +352,12 @@ impl Renderer for GlowRenderer {
             self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 1.0);
             self.gl.uniform_1_f32(loc_shadow_blur.as_ref(), blur);
 
+            let loc_transform = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_transform");
+            let t = self.transform_stack.last().unwrap();
+            self.gl
+                .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
@@ -394,6 +410,12 @@ impl Renderer for GlowRenderer {
             self.gl.uniform_1_f32(loc_is_circle.as_ref(), 1.0);
             self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 0.0);
 
+            let loc_transform = self
+                .gl
+                .get_uniform_location(self.shape_program, "u_transform");
+            let t = self.transform_stack.last().unwrap();
+            self.gl
+                .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
@@ -485,6 +507,12 @@ impl Renderer for GlowRenderer {
                         .uniform_2_f32(loc_uv_start.as_ref(), u_min_x, u_min_y);
                     self.gl.uniform_2_f32(loc_uv_end.as_ref(), u_max_x, u_max_y);
 
+                    let loc_transform = self
+                        .gl
+                        .get_uniform_location(self.text_program, "u_transform");
+                    let t = self.transform_stack.last().unwrap();
+                    self.gl
+                        .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
                     self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
                     curr_x = glyph.advance_width.mul_add(scale, curr_x);
                 }
@@ -510,6 +538,12 @@ impl Renderer for GlowRenderer {
                     self.gl
                         .uniform_2_f32(loc_uv_end.as_ref(), (idx + 1.0) / 96.0, 1.0);
 
+                    let loc_transform = self
+                        .gl
+                        .get_uniform_location(self.text_program, "u_transform");
+                    let t = self.transform_stack.last().unwrap();
+                    self.gl
+                        .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
                     self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
                     curr_x += char_width + gap;
                 }
@@ -545,6 +579,78 @@ impl Renderer for GlowRenderer {
     fn clear_clip_rect(&mut self) {
         unsafe {
             self.gl.disable(glow::SCISSOR_TEST);
+        }
+    }
+
+    fn push_clip_rect(&mut self, rect: Rect, radius: f32) {
+        // Compute intersection with current clip rect
+        let current = if let Some(&(cur_rect, _)) = self.clip_stack.last() {
+            let cx = cur_rect.x.max(rect.x);
+            let cy = cur_rect.y.max(rect.y);
+            let cw = (cur_rect.x + cur_rect.width).min(rect.x + rect.width) - cx;
+            let ch = (cur_rect.y + cur_rect.height).min(rect.y + rect.height) - cy;
+            Rect::new(cx, cy, cw.max(0.0), ch.max(0.0))
+        } else {
+            rect
+        };
+        self.clip_stack.push((current, radius));
+        self.set_clip_rect(current);
+    }
+
+    fn pop_clip_rect(&mut self) {
+        self.clip_stack.pop();
+        if let Some(&(rect, _)) = self.clip_stack.last() {
+            self.set_clip_rect(rect);
+        } else {
+            self.clear_clip_rect();
+        }
+    }
+
+    fn push_transform(&mut self, cx: f32, cy: f32, scale: f32, rotate: f32, tx: f32, ty: f32) {
+        let parent = self
+            .transform_stack
+            .last()
+            .copied()
+            .unwrap_or([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
+
+        let rot_rad = rotate.to_radians();
+        let c = rot_rad.cos() * scale;
+        let s = rot_rad.sin() * scale;
+
+        // T_origin * R * S * T_-origin * Translate
+        // Instead of building a complex matrix, we can just apply simple operations:
+        // We want to translate to origin, rotate/scale, translate back, then apply tx, ty
+
+        let m00 = c;
+        let m10 = s;
+        let m20 = 0.0;
+
+        let m01 = -s;
+        let m11 = c;
+        let m21 = 0.0;
+
+        let m02 = s.mul_add(cy, c.mul_add(-cx, cx + tx));
+        let m12 = c.mul_add(-cy, s.mul_add(-cx, cy + ty));
+        let m22 = 1.0;
+
+        let res = [
+            parent[6].mul_add(m20, parent[3].mul_add(m10, parent[0] * m00)),
+            parent[7].mul_add(m20, parent[4].mul_add(m10, parent[1] * m00)),
+            parent[8].mul_add(m20, parent[5].mul_add(m10, parent[2] * m00)),
+            parent[6].mul_add(m21, parent[3].mul_add(m11, parent[0] * m01)),
+            parent[7].mul_add(m21, parent[4].mul_add(m11, parent[1] * m01)),
+            parent[8].mul_add(m21, parent[5].mul_add(m11, parent[2] * m01)),
+            parent[6].mul_add(m22, parent[3].mul_add(m12, parent[0] * m02)),
+            parent[7].mul_add(m22, parent[4].mul_add(m12, parent[1] * m02)),
+            parent[8].mul_add(m22, parent[5].mul_add(m12, parent[2] * m02)),
+        ];
+
+        self.transform_stack.push(res);
+    }
+
+    fn pop_transform(&mut self) {
+        if self.transform_stack.len() > 1 {
+            self.transform_stack.pop();
         }
     }
 
@@ -676,6 +782,12 @@ impl Renderer for GlowRenderer {
                 self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
                 self.gl.uniform_1_f32(loc_alpha.as_ref(), self.global_alpha);
 
+                let loc_transform = self
+                    .gl
+                    .get_uniform_location(self.image_program, "u_transform");
+                let t = self.transform_stack.last().unwrap();
+                self.gl
+                    .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
                 self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
             }
         }
@@ -695,6 +807,16 @@ impl Renderer for GlowRenderer {
                 }
             },
             |atlas| font_atlas::estimate_text_width(atlas, text, size),
+        )
+    }
+
+    fn text_ascent(&self, size: f32) -> f32 {
+        self.font_atlas.as_ref().map_or(
+            size * 0.75, // fallback if no atlas
+            |atlas| {
+                let scale = size / atlas.rasterize_size;
+                atlas.ascent * scale
+            },
         )
     }
 }

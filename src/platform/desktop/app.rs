@@ -30,6 +30,7 @@ pub struct AppState {
     pub data_map: DataMap,
     pub action_queue: Arc<Mutex<Vec<Action>>>,
     pub plugin_registry: PluginRegistry,
+    pub transition_manager: crate::core::anim::TransitionManager,
 }
 
 impl AppState {
@@ -65,6 +66,7 @@ impl AppState {
             data_map: DataMap::default(),
             action_queue,
             plugin_registry,
+            transition_manager: crate::core::anim::TransitionManager::default(),
         }
     }
 }
@@ -87,8 +89,13 @@ pub fn run_loop(
     mut renderer: GlowRenderer,
 ) -> Result<(), String> {
     let mut event_pump = desktop.sdl_context.event_pump()?;
+    let mut last_frame_time = std::time::Instant::now();
 
     while app.running {
+        let now = std::time::Instant::now();
+        let dt = now.duration_since(last_frame_time).as_secs_f32();
+        last_frame_time = now;
+
         app.plugin_registry.tick();
 
         let root_element = app.plugin_registry.build_ui().unwrap_or_else(|| {
@@ -104,6 +111,9 @@ pub fn run_loop(
         let mut mouse_moved = false;
         let mut scroll_events = Vec::new();
         let mut drag_events = Vec::new();
+
+        app.transition_manager.sync_tree(&root_element);
+        let _anim_needs_redraw = app.transition_manager.tick(dt);
 
         for event in event_pump.poll_iter() {
             super::input::handle_event(
@@ -256,6 +266,45 @@ pub fn run_loop(
             app.last_drag_delta = (0.0, 0.0);
         }
 
+        let get_max_scroll = |target_id: Option<u64>| -> f32 {
+            target_id.map_or(0.0, |target| {
+                let mut found_max = 0.0;
+                let mut search = vec![(&root_element, &layout_tree)];
+                while let Some((el, lay)) = search.pop() {
+                    if let crate::core::types::Element::ScrollView { id, .. } = el
+                        && id
+                            .as_deref()
+                            .map(|s| crate::core::ui::widget::fnv1a(s.as_bytes()))
+                            == Some(target)
+                    {
+                        let view_height = lay.rect.height;
+                        let mut min_y = f32::MAX;
+                        let mut max_y = f32::MIN;
+                        for child in &lay.children {
+                            if child.rect.y < min_y {
+                                min_y = child.rect.y;
+                            }
+                            if child.rect.y + child.rect.height > max_y {
+                                max_y = child.rect.y + child.rect.height;
+                            }
+                        }
+                        if min_y <= max_y {
+                            found_max = (max_y - min_y - view_height).max(0.0);
+                        }
+                        break;
+                    }
+                    if let crate::core::types::Element::Container { children, .. }
+                    | crate::core::types::Element::ScrollView { children, .. } = el
+                    {
+                        for (child, child_lay) in children.iter().zip(lay.children.iter()) {
+                            search.push((child, child_lay));
+                        }
+                    }
+                }
+                found_max
+            })
+        };
+
         for (x, y) in scroll_events {
             if let Some((
                 crate::core::types::Element::ScrollView {
@@ -296,6 +345,7 @@ pub fn run_loop(
                     sv_id,
                     f32::from(i16::try_from(x).unwrap_or(0)) * -20.0 * factor,
                     f32::from(i16::try_from(y).unwrap_or(0)) * -20.0 * factor,
+                    get_max_scroll(sv_id),
                 ));
             }
         }
@@ -309,7 +359,12 @@ pub fn run_loop(
             total_dy += s_dy;
 
             if let Some(sv_id) = app.active_scrollview_drag {
-                app.event_bus.push(UiEvent::Scroll(Some(sv_id), s_dx, s_dy));
+                app.event_bus.push(UiEvent::Scroll(
+                    Some(sv_id),
+                    s_dx,
+                    s_dy,
+                    get_max_scroll(Some(sv_id)),
+                ));
             } else if let Some((
                 crate::core::types::Element::ScrollView {
                     id, capture_drag, ..
@@ -328,7 +383,8 @@ pub fn run_loop(
                 let sv_id = id
                     .as_deref()
                     .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
-                app.event_bus.push(UiEvent::Scroll(sv_id, s_dx, s_dy));
+                app.event_bus
+                    .push(UiEvent::Scroll(sv_id, s_dx, s_dy, get_max_scroll(sv_id)));
             }
         }
 
@@ -338,8 +394,12 @@ pub fn run_loop(
 
         app.kinetic_scrolls.retain_mut(|k| {
             if k.velocity_x.abs() > 0.1 || k.velocity_y.abs() > 0.1 {
-                app.event_bus
-                    .push(UiEvent::Scroll(Some(k.sv_id), k.velocity_x, k.velocity_y));
+                app.event_bus.push(UiEvent::Scroll(
+                    Some(k.sv_id),
+                    k.velocity_x,
+                    k.velocity_y,
+                    get_max_scroll(Some(k.sv_id)),
+                ));
                 k.velocity_x *= 0.92;
                 k.velocity_y *= 0.92;
                 true
@@ -381,7 +441,12 @@ pub fn run_loop(
                             }
                         }
                     }
-                    Action::FocusTextInput(_) | Action::BlurTextInput => {}
+                    Action::FocusTextInput(_) => {
+                        desktop.video_subsystem.text_input().start();
+                    }
+                    Action::BlurTextInput => {
+                        desktop.video_subsystem.text_input().stop();
+                    }
                 }
             }
         }
@@ -396,6 +461,7 @@ pub fn run_loop(
             &metrics,
             &app.style_map,
             &app.data_map,
+            &app.transition_manager,
             1.0,
         );
 
