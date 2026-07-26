@@ -1,4 +1,5 @@
 use crate::core::types::Element;
+use crate::plugin::js::permission_manager::permission_granted;
 use crate::plugin::registry::{ApiEntry, ApiMap, BroadcastQueue};
 use rquickjs::Function;
 use std::sync::{Arc, Mutex};
@@ -31,6 +32,8 @@ pub struct HostApiConfig {
     pub action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
     pub api_map: ApiMap,
     pub broadcast_queue: BroadcastQueue,
+    pub plugin_permissions: Vec<String>,
+    pub granted_permissions: Arc<Mutex<Vec<String>>>,
     pub cache_path: Option<std::path::PathBuf>,
 }
 
@@ -46,6 +49,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         action_queue,
         api_map,
         broadcast_queue,
+        plugin_permissions: plugin_permissions_vec,
+        granted_permissions: granted_permissions_arc,
         cache_path,
     } = cfg;
 
@@ -55,9 +60,19 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     // host_set_ui
     // ------------------------------------------------------------------
     let tree_set_ui = ui_tree.clone();
-    let set_ui_func = Function::new(
-        ctx.clone(),
-        move |json_str: String| match serde_json::from_str::<Element>(&json_str) {
+    let plugin_permissions_ui = plugin_permissions_vec.clone();
+    let granted_permissions_ui = granted_permissions_arc.clone();
+    let set_ui_func = Function::new(ctx.clone(), move |json_str: String| {
+        let required_permission = "plugin.permission.UI";
+        if !permission_granted(
+            required_permission,
+            &plugin_permissions_ui,
+            &granted_permissions_ui,
+        ) {
+            return;
+        }
+
+        match serde_json::from_str::<Element>(&json_str) {
             Ok(parsed) => {
                 if let Ok(mut lock) = tree_set_ui.lock() {
                     *lock = Some(parsed.clone());
@@ -76,8 +91,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
             Err(e) => {
                 println!("JS Error: Failed to parse host_set_ui JSON: {e}");
             }
-        },
-    )
+        }
+    })
     .unwrap();
     globals.set("host_set_ui", set_ui_func).unwrap();
 
@@ -85,9 +100,20 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     // host_update_style
     // ------------------------------------------------------------------
     let tree_update_style = ui_tree.clone();
+    let plugin_permissions_style = plugin_permissions_vec.clone();
+    let granted_permissions_style = granted_permissions_arc.clone();
     let update_style_func = Function::new(
         ctx.clone(),
         move |id: String, property: String, value: String| {
+            let required_permission = "plugin.permission.UI";
+            if !permission_granted(
+                required_permission,
+                &plugin_permissions_style,
+                &granted_permissions_style,
+            ) {
+                return;
+            }
+
             if let Ok(mut lock) = tree_update_style.lock()
                 && let Some(ref mut root) = *lock
             {
@@ -102,7 +128,18 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     // host_set_text
     // ------------------------------------------------------------------
     let tree_set_text = ui_tree.clone();
+    let plugin_permissions_text = plugin_permissions_vec.clone();
+    let granted_permissions_text = granted_permissions_arc.clone();
     let set_text_func = Function::new(ctx.clone(), move |id: String, text: String| {
+        let required_permission = "plugin.permission.UI";
+        if !permission_granted(
+            required_permission,
+            &plugin_permissions_text,
+            &granted_permissions_text,
+        ) {
+            return;
+        }
+
         if let Ok(mut lock) = tree_set_text.lock()
             && let Some(ref mut root) = *lock
         {
@@ -116,8 +153,19 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     // host_insert_child
     // ------------------------------------------------------------------
     let tree_insert_child = ui_tree.clone();
+    let plugin_permissions_insert = plugin_permissions_vec.clone();
+    let granted_permissions_insert = granted_permissions_arc.clone();
     let insert_child_func =
         Function::new(ctx.clone(), move |parent_id: String, child_json: String| {
+            let required_permission = "plugin.permission.UI";
+            if !permission_granted(
+                required_permission,
+                &plugin_permissions_insert,
+                &granted_permissions_insert,
+            ) {
+                return;
+            }
+
             if let Ok(parsed_child) = serde_json::from_str::<Element>(&child_json) {
                 if let Ok(mut lock) = tree_insert_child.lock()
                     && let Some(ref mut root) = *lock
@@ -135,7 +183,18 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     // host_remove_node
     // ------------------------------------------------------------------
     let tree_remove_node = ui_tree.clone();
+    let plugin_permissions_remove = plugin_permissions_vec.clone();
+    let granted_permissions_remove = granted_permissions_arc.clone();
     let remove_node_func = Function::new(ctx.clone(), move |id: String| {
+        let required_permission = "plugin.permission.UI";
+        if !permission_granted(
+            required_permission,
+            &plugin_permissions_remove,
+            &granted_permissions_remove,
+        ) {
+            return;
+        }
+
         if let Ok(mut lock) = tree_remove_node.lock()
             && let Some(ref mut root) = *lock
         {
@@ -225,7 +284,18 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     // host_create_image
     // ------------------------------------------------------------------
     let aq_img = action_queue.clone();
+    let plugin_permissions_image = plugin_permissions_vec.clone();
+    let granted_permissions_image = granted_permissions_arc.clone();
     let create_image_func = Function::new(ctx.clone(), move |id: String, src: String| {
+        let required_permission = "plugin.permission.IMAGE";
+        if !permission_granted(
+            required_permission,
+            &plugin_permissions_image,
+            &granted_permissions_image,
+        ) {
+            return;
+        }
+
         if let Ok(mut q) = aq_img.lock() {
             q.push(crate::core::types::Action::LoadImage { id, src });
         }
@@ -237,7 +307,18 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     // host_focus_input
     // ------------------------------------------------------------------
     let aq_focus = action_queue.clone();
+    let plugin_permissions_focus = plugin_permissions_vec.clone();
+    let granted_permissions_focus = granted_permissions_arc.clone();
     let focus_input_func = Function::new(ctx.clone(), move |id: String| {
+        let required_permission = "plugin.permission.INPUT";
+        if !permission_granted(
+            required_permission,
+            &plugin_permissions_focus,
+            &granted_permissions_focus,
+        ) {
+            return;
+        }
+
         if let Ok(mut q) = aq_focus.lock() {
             q.push(crate::core::types::Action::FocusTextInput(id));
         }
@@ -249,7 +330,18 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     // host_blur_input
     // ------------------------------------------------------------------
     let aq_blur = action_queue.clone();
+    let plugin_permissions_blur = plugin_permissions_vec.clone();
+    let granted_permissions_blur = granted_permissions_arc.clone();
     let blur_input_func = Function::new(ctx.clone(), move || {
+        let required_permission = "plugin.permission.INPUT";
+        if !permission_granted(
+            required_permission,
+            &plugin_permissions_blur,
+            &granted_permissions_blur,
+        ) {
+            return;
+        }
+
         if let Ok(mut q) = aq_blur.lock() {
             q.push(crate::core::types::Action::BlurTextInput);
         }
@@ -260,12 +352,29 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     // ------------------------------------------------------------------
     // host_get_application_list
     // ------------------------------------------------------------------
-    let get_app_list_func = Function::new(ctx.clone(), || -> String {
-        #[cfg(target_os = "android")]
-        let result = crate::platform::android::jni::bridge::get_application_list();
+    let plugin_permissions_app_list = plugin_permissions_vec.clone();
+    let granted_permissions_app_list = Arc::clone(&granted_permissions_arc);
+    let get_app_list_func = Function::new(ctx.clone(), move || -> String {
+        let required_permission = "android.permission.QUERY_ALL_PACKAGES";
+        if !permission_granted(
+            required_permission,
+            &plugin_permissions_app_list,
+            &granted_permissions_app_list,
+        ) {
+            return "[]".to_string();
+        }
 
-        #[cfg(not(target_os = "android"))]
-        let result = crate::platform::desktop::get_application_list();
+        let result = {
+            #[cfg(target_os = "android")]
+            {
+                crate::platform::android::jni::bridge::get_application_list()
+            }
+
+            #[cfg(not(target_os = "android"))]
+            {
+                crate::platform::desktop::get_application_list()
+            }
+        };
 
         match result {
             Ok(apps) => serde_json::to_string(&apps).unwrap_or_else(|_| "[]".to_string()),
@@ -278,6 +387,68 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     .unwrap();
     globals
         .set("host_get_application_list", get_app_list_func)
+        .unwrap();
+
+    // ------------------------------------------------------------------
+    // host_has_permission(permission: String) -> bool
+    // ------------------------------------------------------------------
+    let granted_permissions_has = Arc::clone(&granted_permissions_arc);
+    let has_permission_func = Function::new(ctx.clone(), move |permission: String| -> bool {
+        if let Ok(lock) = granted_permissions_has.lock() {
+            lock.contains(&permission)
+        } else {
+            false
+        }
+    })
+    .unwrap();
+    globals
+        .set("host_has_permission", has_permission_func)
+        .unwrap();
+
+    // ------------------------------------------------------------------
+    // host_request_permissions(permissions: String[]) -> String
+    // ------------------------------------------------------------------
+    let plugin_permissions_clone2 = plugin_permissions_vec.clone();
+    let granted_permissions_clone2 = granted_permissions_arc.clone();
+    let request_permissions_func =
+        Function::new(ctx.clone(), move |permissions: Vec<String>| -> String {
+            let valid_permissions: Vec<String> = permissions
+                .into_iter()
+                .filter(|p| plugin_permissions_clone2.contains(p))
+                .collect();
+
+            if valid_permissions.is_empty() {
+                eprintln!("Plugin requested permissions it did not declare or are invalid.");
+                return "[]".to_string();
+            }
+
+            #[cfg(target_os = "android")]
+            let granted =
+                crate::platform::android::jni::bridge::request_permissions(&valid_permissions);
+
+            #[cfg(not(target_os = "android"))]
+            let granted: Result<Vec<String>, String> = Ok(valid_permissions.clone());
+
+            match granted {
+                Ok(granted) => {
+                    if let Ok(mut lock) = granted_permissions_clone2.lock() {
+                        for perm in granted.iter() {
+                            if !lock.contains(perm) {
+                                lock.push(perm.clone());
+                            }
+                        }
+                    }
+                    serde_json::to_string(&granted).unwrap_or_else(|_| "[]".to_string())
+                }
+                Err(e) => {
+                    eprintln!("Failed to request permissions: {e}");
+                    "[]".to_string()
+                }
+            }
+        })
+        .unwrap();
+    globals
+        .set("host_request_permissions", request_permissions_func)
         .unwrap();
 
     // ==================================================================
@@ -297,7 +468,17 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let api_map_register = api_map.clone();
     let owning_plugin_id = plugin_id.clone();
 
+    let plugin_permissions_ipc = plugin_permissions_vec.clone();
+    let granted_permissions_ipc = Arc::clone(&granted_permissions_arc);
     let register_api_func = Function::new(ctx.clone(), move |name: String| {
+        if !permission_granted(
+            "plugin.permission.IPC",
+            &plugin_permissions_ipc,
+            &granted_permissions_ipc,
+        ) {
+            return;
+        }
+
         let ctx_clone = Arc::clone(&safe_ctx);
         let api_name_clone = name.clone();
         let owning_id = owning_plugin_id.clone();

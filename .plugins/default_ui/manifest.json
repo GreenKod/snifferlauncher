@@ -1,7 +1,8 @@
 {
   "id": "com.sniffer.defaultui",
   "name": "Default Interface",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "preload": ["../_framework/sniffer_ui.js"],
-  "main": "main.js"
+  "main": "main.js",
+  "permissions": ["plugin.permission.UI"]
 }

@@ -2,6 +2,7 @@
 
 pub mod engine;
 pub mod host_api;
+pub mod permission_manager;
 
 use crate::core::types::Element;
 use crate::core::ui::data_map::DataMap;
@@ -62,6 +63,36 @@ globalThis.broadcastEvent = function(channel, data) {
 };
 
 /**
+ * Request runtime permissions for this plugin.
+ *
+ * @param {string[]} permissions
+ * @returns {string[]} - Granted permission names.
+ */
+globalThis.requestPermissions = function(permissions) {
+    return JSON.parse(host_request_permissions(permissions));
+};
+
+/**
+ * Check whether a permission has already been granted.
+ *
+ * @param {string} permission
+ * @returns {boolean}
+ */
+globalThis.hasPermission = function(permission) {
+    return host_has_permission(permission);
+};
+
+/**
+ * Fetch the installed application list.
+ *
+ * Requires the plugin to declare the appropriate permission in its manifest.
+ * @returns {Array<{name:string, package_name:string}>}
+ */
+globalThis.getApplicationList = function() {
+    return JSON.parse(host_get_application_list());
+};
+
+/**
  * Override this in your plugin to receive broadcasts from other plugins.
  *
  * @param {string} channel
@@ -105,61 +136,78 @@ pub struct JsPlugin {
     action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
     api_map: ApiMap,
     broadcast_queue: BroadcastQueue,
+    permissions: Vec<String>,
+    granted_permissions: Arc<Mutex<Vec<String>>>,
 }
 
 #[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl Send for JsPlugin {}
 unsafe impl Sync for JsPlugin {}
 
+pub struct JsPluginConfig {
+    pub script_content: String,
+    pub plugin_id: String,
+    pub action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
+    pub api_map: ApiMap,
+    pub broadcast_queue: BroadcastQueue,
+    pub permissions: Vec<String>,
+    pub cached_ui: Option<Element>,
+    pub cache_path: Option<std::path::PathBuf>,
+}
+
+struct JsPluginEnvConfig {
+    pub plugin_id: String,
+    pub ui_tree: Arc<Mutex<Option<Element>>>,
+    pub action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
+    pub api_map: ApiMap,
+    pub broadcast_queue: BroadcastQueue,
+    pub plugin_permissions: Vec<String>,
+    pub granted_permissions: Arc<Mutex<Vec<String>>>,
+    pub cache_path: Option<std::path::PathBuf>,
+}
+
 impl JsPlugin {
     /// Initialize a QuickJS runtime and context for a plugin.
     ///
     /// # Errors
     /// Returns a `String` error if runtime/context creation or script evaluation fails.
-    pub fn new(
-        script_content: String,
-        plugin_id: String,
-        action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
-        api_map: ApiMap,
-        broadcast_queue: BroadcastQueue,
-        cached_ui: Option<Element>,
-        cache_path: Option<std::path::PathBuf>,
-    ) -> Result<Self, String> {
+    pub fn new(config: JsPluginConfig) -> Result<Self, String> {
         let (runtime, context) = create_engine()?;
-        let ui_tree = Arc::new(Mutex::new(cached_ui));
+        let ui_tree = Arc::new(Mutex::new(config.cached_ui));
+        let granted_permissions = Arc::new(Mutex::new(Vec::new()));
+        let permissions_clone = config.permissions.clone();
 
         let plugin = Self {
-            script_content,
+            script_content: config.script_content,
             runtime,
             context,
             subscriptions: vec![],
             ui_tree: ui_tree.clone(),
             gc_counter: std::sync::Mutex::new(0),
-            action_queue: action_queue.clone(),
-            api_map: api_map.clone(),
-            broadcast_queue: broadcast_queue.clone(),
+            action_queue: config.action_queue.clone(),
+            api_map: config.api_map.clone(),
+            broadcast_queue: config.broadcast_queue.clone(),
+            permissions: config.permissions.clone(),
+            granted_permissions: granted_permissions.clone(),
         };
 
-        plugin.init_js_env(
-            plugin_id,
+        plugin.init_js_env(JsPluginEnvConfig {
+            plugin_id: config.plugin_id,
             ui_tree,
-            action_queue,
-            api_map,
-            broadcast_queue,
-            cache_path,
-        )?;
+            action_queue: config.action_queue,
+            api_map: config.api_map,
+            broadcast_queue: config.broadcast_queue,
+            plugin_permissions: permissions_clone,
+            granted_permissions: granted_permissions.clone(),
+            cache_path: config.cache_path,
+        })?;
 
         Ok(plugin)
     }
 
     fn init_js_env(
         &self,
-        plugin_id: String,
-        ui_tree: Arc<Mutex<Option<Element>>>,
-        action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
-        api_map: ApiMap,
-        broadcast_queue: BroadcastQueue,
-        cache_path: Option<std::path::PathBuf>,
+        config: JsPluginEnvConfig,
     ) -> Result<(), String> {
         // Clone the context to pass into host_api (captured as SafeContext).
         let context_clone = self.context.clone();
@@ -168,13 +216,15 @@ impl JsPlugin {
             register_host_api(
                 &ctx,
                 HostApiConfig {
-                    plugin_id,
+                    plugin_id: config.plugin_id,
                     context: context_clone,
-                    ui_tree,
-                    action_queue,
-                    api_map,
-                    broadcast_queue,
-                    cache_path,
+                    ui_tree: config.ui_tree,
+                    action_queue: config.action_queue,
+                    api_map: config.api_map,
+                    broadcast_queue: config.broadcast_queue,
+                    plugin_permissions: config.plugin_permissions,
+                    granted_permissions: config.granted_permissions,
+                    cache_path: config.cache_path,
                 },
             );
 

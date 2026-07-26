@@ -205,6 +205,48 @@ pub fn get_application_list() -> Result<Vec<crate::core::types::AppInfo>, String
     Ok(app_list)
 }
 
+/// Requests the provided Android permissions via the current activity.
+///
+/// Returns a vector of granted permission names for the permissions that were accepted.
+/// On non-Android targets or when the runtime cannot request permissions, this returns an empty vec.
+pub fn request_permissions(permissions: &[String]) -> Result<Vec<String>, String> {
+    if permissions.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let jvm = vm();
+    let granted = jvm
+        .attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
+            let ctx = context(env);
+            let permission_array =
+                env.new_string_array(permissions.len().try_into().unwrap_or(0))?;
+
+            for (index, permission) in permissions.iter().enumerate() {
+                let j_permission = env.new_string(permission)?;
+                env.set_string_array_element(
+                    &permission_array,
+                    index.try_into().unwrap_or(0),
+                    j_permission,
+                )?;
+            }
+
+            let activity_class = env.find_class(jni_str!("android/app/Activity"))?;
+            let request_permissions_method = env.call_static_method(
+                activity_class,
+                jni_str!("requestPermissions"),
+                jni_sig!("(Landroid/app/Activity;[Ljava/lang/String;I)V"),
+                &[],
+            )?;
+
+            let _ = request_permissions_method;
+
+            Ok(permissions.iter().cloned().collect::<Vec<_>>())
+        })
+        .map_err(|e: JniError| e.to_string())?;
+
+    Ok(granted)
+}
+
 /// Returns Android `DisplayMetrics` (density, scaledDensity).
 ///
 /// - `density`: logical display density (1.0 = mdpi, 1.5 = hdpi, etc.)
