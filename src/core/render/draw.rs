@@ -38,10 +38,6 @@ pub fn find_clicked_button(
             id,
             scroll_x,
             scroll_y,
-            scroll_sensitivity: _,
-            dynamic_sensitivity: _,
-            momentum_scrolling: _,
-            capture_drag: _,
             ..
         } => {
             let offset_point = Point::new(point.x + scroll_x, point.y + scroll_y);
@@ -109,10 +105,6 @@ pub fn find_hovered_scrollview<'a>(
             children,
             scroll_x,
             scroll_y,
-            scroll_sensitivity: _,
-            dynamic_sensitivity: _,
-            momentum_scrolling: _,
-            capture_drag: _,
             ..
         } => {
             let offset_point = Point::new(point.x + scroll_x, point.y + scroll_y);
@@ -266,10 +258,6 @@ pub fn draw_ui(
             children,
             scroll_x,
             scroll_y,
-            scroll_sensitivity: _,
-            dynamic_sensitivity: _,
-            momentum_scrolling: _,
-            capture_drag: _,
             ..
         } => {
             renderer.push_clip_rect(rect, base_style.border_radius);

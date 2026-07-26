@@ -18,6 +18,8 @@ pub struct PluginManifest {
     pub main: String,
     #[serde(default)]
     pub preload: Vec<String>,
+    #[serde(default)]
+    pub permissions: Vec<String>,
 }
 
 /// Loads and registers JavaScript plugins from the assets directory.
@@ -32,6 +34,30 @@ impl PluginLoader {
         Self {
             assets_dir: assets_dir.as_ref().to_path_buf(),
         }
+    }
+
+    /// Validate a manifest and return a list of human-readable issues.
+    #[must_use]
+    pub fn validate_manifest(manifest: &PluginManifest) -> Vec<String> {
+        let mut issues = Vec::new();
+
+        if manifest.id.trim().is_empty() {
+            issues.push("manifest id must not be empty".to_string());
+        }
+        if manifest.name.trim().is_empty() {
+            issues.push("manifest name must not be empty".to_string());
+        }
+        if manifest.version.trim().is_empty() {
+            issues.push("manifest version must not be empty".to_string());
+        }
+        if manifest.main.trim().is_empty() {
+            issues.push("manifest main entry must not be empty".to_string());
+        }
+        if manifest.permissions.iter().any(|p| p.trim().is_empty()) {
+            issues.push("manifest permissions must not contain empty values".to_string());
+        }
+
+        issues
     }
 
     /// Instantiate and register all plugins defined in `plugins.json`.
@@ -99,6 +125,16 @@ impl PluginLoader {
                 }
             };
 
+            let manifest_issues = Self::validate_manifest(&manifest);
+            if !manifest_issues.is_empty() {
+                eprintln!(
+                    "Manifest validation failed for plugin '{}': {}",
+                    plugin_folder,
+                    manifest_issues.join(", ")
+                );
+                continue;
+            }
+
             // Collect preload scripts (e.g. framework JS) before the main plugin code.
             let mut preload_scripts: Vec<String> = Vec::new();
             for preload_path in &manifest.preload {
@@ -162,15 +198,16 @@ impl PluginLoader {
                             );
                         }
 
-                        match crate::plugin::JsPlugin::new(
-                            full_script,
-                            manifest.id.clone(),
-                            action_queue.clone(),
-                            api_map.clone(),
-                            broadcast_queue.clone(),
+                        match crate::plugin::JsPlugin::new(crate::plugin::js::JsPluginConfig {
+                            script_content: full_script,
+                            plugin_id: manifest.id.clone(),
+                            action_queue: action_queue.clone(),
+                            api_map: api_map.clone(),
+                            broadcast_queue: broadcast_queue.clone(),
+                            permissions: manifest.permissions.clone(),
                             cached_ui,
-                            Some(cache_file),
-                        ) {
+                            cache_path: Some(cache_file),
+                        }) {
                             Ok(plugin) => {
                                 registry.register(
                                     &(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>),
@@ -202,6 +239,45 @@ impl PluginLoader {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PluginLoader, PluginManifest};
+
+    #[test]
+    fn validate_manifest_accepts_basic_plugin_manifest() {
+        let manifest = PluginManifest {
+            id: "com.example.plugin".to_string(),
+            name: "Example Plugin".to_string(),
+            version: "1.0.0".to_string(),
+            main: "main.js".to_string(),
+            preload: vec![],
+            permissions: vec!["android.permission.CAMERA".to_string()],
+        };
+
+        let issues = PluginLoader::validate_manifest(&manifest);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn validate_manifest_reports_missing_required_fields() {
+        let manifest = PluginManifest {
+            id: "   ".to_string(),
+            name: String::new(),
+            version: " ".to_string(),
+            main: String::new(),
+            preload: vec![],
+            permissions: vec![String::new()],
+        };
+
+        let issues = PluginLoader::validate_manifest(&manifest);
+        assert!(issues.iter().any(|issue| issue.contains("id")));
+        assert!(issues.iter().any(|issue| issue.contains("name")));
+        assert!(issues.iter().any(|issue| issue.contains("version")));
+        assert!(issues.iter().any(|issue| issue.contains("main")));
+        assert!(issues.iter().any(|issue| issue.contains("permission")));
     }
 }
 
@@ -299,6 +375,7 @@ impl PluginLoader {
                                             action_queue.clone(),
                                             api_map.clone(),
                                             broadcast_queue.clone(),
+                                            manifest.permissions.clone(),
                                             None,
                                             None,
                                         ) {
