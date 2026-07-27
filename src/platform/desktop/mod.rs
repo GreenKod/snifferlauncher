@@ -16,13 +16,13 @@ use crate::core::GlowRenderer;
 /// conversions used for clippy-clean float handling.
 #[allow(clippy::missing_panics_doc)]
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let (window, gl) = window::DesktopWindow::new()?;
+    let (event_loop, window, gl) = window::DesktopWindow::new()?;
     let font_bytes: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
     let renderer = unsafe { GlowRenderer::with_font(gl, Some(font_bytes))? };
 
     // Initialize screen dimensions BEFORE AppState evaluates JS plugins
     // so that the initial UI layout has the correct vw/vh values.
-    let (phys_w, phys_h) = window.window.drawable_size();
+    let (phys_w, phys_h) = window.drawable_size();
     crate::core::types::SCREEN_WIDTH.store(
         f32::from(u16::try_from(phys_w).unwrap_or(0)).to_bits(),
         std::sync::atomic::Ordering::Relaxed,
@@ -34,7 +34,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let app_state = app::AppState::new();
 
-    app::run_loop(app_state, window, renderer).map_err(Into::into)
+    app::run_loop(app_state, event_loop, window, renderer).map_err(Into::into)
 }
 
 /// Returns a mocked list of applications for the desktop environment.

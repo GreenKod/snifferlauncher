@@ -174,7 +174,19 @@ impl JsPlugin {
     pub fn new(config: JsPluginConfig) -> Result<Self, String> {
         let (runtime, context) = create_engine()?;
         let ui_tree = Arc::new(Mutex::new(config.cached_ui));
-        let granted_permissions = Arc::new(Mutex::new(Vec::new()));
+
+        #[cfg(not(target_os = "android"))]
+        let initial_granted = config.permissions.clone();
+
+        #[cfg(target_os = "android")]
+        let initial_granted: Vec<String> = config
+            .permissions
+            .iter()
+            .filter(|p| p.starts_with("plugin.permission."))
+            .cloned()
+            .collect();
+
+        let granted_permissions = Arc::new(Mutex::new(initial_granted));
         let permissions_clone = config.permissions.clone();
 
         let plugin = Self {

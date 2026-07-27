@@ -1,93 +1,103 @@
 use crate::core::Point;
 use crate::core::ui::event::UiEvent;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
+use winit::dpi::PhysicalPosition;
+use winit::event::{ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent};
+use winit::keyboard::{Key, NamedKey};
 
-#[allow(clippy::missing_panics_doc)]
-pub fn handle_event(
-    event: Event,
+#[allow(
+    clippy::missing_panics_doc,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss
+)]
+pub fn handle_winit_event(
+    event: &WindowEvent,
     app: &mut super::app::AppState,
-    clicked_pos: &mut Option<Point>,
-    mouse_released: &mut bool,
-    mouse_moved: &mut bool,
-    scroll_events: &mut Vec<(i32, i32)>,
-    drag_events: &mut Vec<(i32, i32)>,
+    input: &mut super::app::FrameInputState,
 ) {
     match event {
-        Event::Quit { .. }
-        | Event::KeyDown {
-            keycode: Some(Keycode::Escape),
-            ..
-        } => {
+        WindowEvent::CloseRequested => {
             app.running = false;
         }
-        Event::KeyDown {
-            keycode: Some(Keycode::Backspace),
-            ..
-        } => {
-            app.event_bus.push(UiEvent::Backspace);
-        }
-        Event::MouseMotion {
-            x,
-            y,
-            xrel,
-            yrel,
-            mousestate,
-            ..
-        } => {
-            app.last_mouse_pos = Point::new(
-                f32::from(i16::try_from(x).expect("mouse x fits in i16")),
-                f32::from(i16::try_from(y).expect("mouse y fits in i16")),
-            );
-            *mouse_moved = true;
-            if mousestate.left() {
-                drag_events.push((-xrel, -yrel)); // Invert to simulate touch panning
+        WindowEvent::Focused(focused) => {
+            app.window_focused = *focused;
+            if !*focused {
+                if let Some(prev) = app.hovered_btn.take() {
+                    app.event_bus.push(UiEvent::HoverEnd(prev));
+                }
+                app.last_mouse_pos = Point::new(-9999.0, -9999.0);
+                input.mouse_moved = true;
             }
         }
-        Event::MouseButtonDown {
-            mouse_btn: sdl2::mouse::MouseButton::Left,
-            x,
-            y,
-            ..
-        } => {
-            *clicked_pos = Some(Point::new(
-                f32::from(i16::try_from(x).expect("mouse x fits in i16")),
-                f32::from(i16::try_from(y).expect("mouse y fits in i16")),
-            ));
+        WindowEvent::Ime(ime_event) => match ime_event {
+            Ime::Commit(text) => {
+                app.event_bus.push(UiEvent::TextInput(text.clone()));
+            }
+            Ime::Preedit(_text, _cursor) => {
+                // Preedit candidate string received (can be used for inline IME UI preview if needed)
+            }
+            _ => {}
+        },
+        WindowEvent::KeyboardInput { event, .. } => {
+            if event.state == ElementState::Pressed {
+                match event.logical_key {
+                    Key::Named(NamedKey::Escape) => {
+                        app.running = false;
+                    }
+                    Key::Named(NamedKey::Backspace) => {
+                        app.event_bus.push(UiEvent::Backspace);
+                    }
+                    Key::Named(NamedKey::Enter) => {
+                        app.event_bus.push(UiEvent::TextInput("\n".to_string()));
+                    }
+                    Key::Named(NamedKey::Tab) => {
+                        app.event_bus.push(UiEvent::TextInput("\t".to_string()));
+                    }
+                    _ => {
+                        if let Some(ref text) = event.text
+                            && !text.is_empty()
+                            && !text.chars().any(char::is_control)
+                        {
+                            app.event_bus.push(UiEvent::TextInput(text.to_string()));
+                        }
+                    }
+                }
+            }
         }
-        Event::MouseButtonUp {
-            mouse_btn: sdl2::mouse::MouseButton::Left,
-            ..
-        } => {
-            *mouse_released = true;
+        WindowEvent::CursorMoved { position, .. } => {
+            app.last_mouse_pos = Point::new(position.x as f32, position.y as f32);
+            input.mouse_moved = true;
         }
-        Event::Window {
-            win_event: sdl2::event::WindowEvent::Leave,
-            ..
-        } => {
+        WindowEvent::MouseInput { state, button, .. } => {
+            if *button == MouseButton::Left {
+                if *state == ElementState::Pressed {
+                    input.clicked_pos = Some(app.last_mouse_pos);
+                } else {
+                    input.mouse_released = true;
+                }
+            }
+        }
+        WindowEvent::CursorLeft { .. } => {
             let prev_hovered = app.hovered_btn;
             app.hovered_btn = None;
             if let Some(prev) = prev_hovered {
                 app.event_bus.push(UiEvent::HoverEnd(prev));
             }
             app.last_mouse_pos = Point::new(-9999.0, -9999.0);
-            *mouse_moved = true;
+            input.mouse_moved = true;
         }
-        Event::Window {
-            win_event: sdl2::event::WindowEvent::Resized(w, h),
-            ..
-        } => {
-            let width = f32::from(u16::try_from(w).unwrap_or(0));
-            let height = f32::from(u16::try_from(h).unwrap_or(0));
+        WindowEvent::Resized(size) => {
+            let width = f32::from(u16::try_from(size.width).unwrap_or(0));
+            let height = f32::from(u16::try_from(size.height).unwrap_or(0));
             app.event_bus.push(UiEvent::WindowResized(width, height));
         }
-
-        Event::TextInput { text, .. } => {
-            app.event_bus.push(UiEvent::TextInput(text));
-        }
-        Event::MouseWheel { x, y, .. } => {
-            scroll_events.push((x, y));
-        }
+        WindowEvent::MouseWheel { delta, .. } => match delta {
+            MouseScrollDelta::LineDelta(x, y) => {
+                input.scroll_events.push((*x as i32, *y as i32));
+            }
+            MouseScrollDelta::PixelDelta(PhysicalPosition { x, y }) => {
+                input.scroll_events.push((*x as i32, *y as i32));
+            }
+        },
         _ => {}
     }
 }

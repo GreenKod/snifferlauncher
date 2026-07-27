@@ -120,7 +120,6 @@ jobs:
             libx11-dev \
             libxkbcommon-dev \
             libwayland-dev \
-            libsdl2-dev \
             cmake
 
       - name: Setup Rust Toolchain
@@ -165,7 +164,6 @@ jobs:
           update: true
           install: >-
             mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-pkgconf
             mingw-w64-x86_64-cmake
 
@@ -188,22 +186,8 @@ jobs:
           $msys2Root = "${{ steps.msys2.outputs.msys2-location }}"
           $mingwRoot = Join-Path $msys2Root "mingw64"
           if (-not (Test-Path "$mingwRoot\bin\x86_64-w64-mingw32-gcc.exe")) { throw "MINGW64 compiler not found under $mingwRoot" }
-          $sdl2LibPaths = @("$mingwRoot\lib", "$mingwRoot\x86_64-w64-mingw32\lib") | Where-Object { Test-Path $_ }
-          $sdl2ImportLib = $sdl2LibPaths | ForEach-Object { Join-Path $_ "libSDL2.dll.a" } | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $sdl2ImportLib) {
-            Get-ChildItem -Path $msys2Root -Recurse -Filter "libSDL2*.a" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
-            throw "SDL2 import library not found under $msys2Root"
-          }
-          $sdl2LibDir = Split-Path $sdl2ImportLib -Parent
-          $sdl2LibPaths = @($sdl2LibDir) + ($sdl2LibPaths | Where-Object { $_ -ne $sdl2LibDir })
-          Write-Host "Using MINGW64 root: $mingwRoot"
-          Write-Host "Using SDL2 library paths: $($sdl2LibPaths -join ';')"
           $env:Path = "$mingwRoot\bin;$msys2Root\usr\bin;$env:Path"
-          $env:LIBRARY_PATH = "$($sdl2LibPaths -join ';');$env:LIBRARY_PATH"
           $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
-          $env:SDL2_LIB_DIR = $sdl2LibDir
-          $env:SDL2_INCLUDE_DIR = "$mingwRoot\include\SDL2"
-          $env:RUSTFLAGS = "$env:RUSTFLAGS $(($sdl2LibPaths | ForEach-Object { "-L native=$_" }) -join ' ')"
           cargo --version
           cargo check --locked --target x86_64-pc-windows-gnu
           cargo clippy --locked --workspace --all-targets --all-features --target x86_64-pc-windows-gnu -- -D warnings -D clippy::pedantic -D clippy::nursery -D clippy::cargo -A clippy::multiple-crate-versions
@@ -216,22 +200,8 @@ jobs:
           $msys2Root = "${{ steps.msys2.outputs.msys2-location }}"
           $mingwRoot = Join-Path $msys2Root "mingw64"
           if (-not (Test-Path "$mingwRoot\bin\x86_64-w64-mingw32-gcc.exe")) { throw "MINGW64 compiler not found under $mingwRoot" }
-          $sdl2LibPaths = @("$mingwRoot\lib", "$mingwRoot\x86_64-w64-mingw32\lib") | Where-Object { Test-Path $_ }
-          $sdl2ImportLib = $sdl2LibPaths | ForEach-Object { Join-Path $_ "libSDL2.dll.a" } | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $sdl2ImportLib) {
-            Get-ChildItem -Path $msys2Root -Recurse -Filter "libSDL2*.a" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
-            throw "SDL2 import library not found under $msys2Root"
-          }
-          $sdl2LibDir = Split-Path $sdl2ImportLib -Parent
-          $sdl2LibPaths = @($sdl2LibDir) + ($sdl2LibPaths | Where-Object { $_ -ne $sdl2LibDir })
-          Write-Host "Using MINGW64 root: $mingwRoot"
-          Write-Host "Using SDL2 library paths: $($sdl2LibPaths -join ';')"
           $env:Path = "$mingwRoot\bin;$msys2Root\usr\bin;$env:Path"
-          $env:LIBRARY_PATH = "$($sdl2LibPaths -join ';');$env:LIBRARY_PATH"
           $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
-          $env:SDL2_LIB_DIR = $sdl2LibDir
-          $env:SDL2_INCLUDE_DIR = "$mingwRoot\include\SDL2"
-          $env:RUSTFLAGS = "$env:RUSTFLAGS $(($sdl2LibPaths | ForEach-Object { "-L native=$_" }) -join ' ')"
           cargo build --locked --release --target x86_64-pc-windows-gnu
 
   # macOS verification on native runners (Apple Silicon)
@@ -243,8 +213,8 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install SDL2
-        run: brew install pkg-config sdl2
+      - name: Install System Dependencies
+        run: brew install pkg-config
 
       - name: Setup Rust Toolchain and macOS Targets
         uses: dtolnay/rust-toolchain@stable
@@ -259,8 +229,6 @@ jobs:
 
       - name: macOS (Apple Silicon) Check & Clippy
         run: |
-          export PKG_CONFIG_PATH="$(brew --prefix sdl2)/lib/pkgconfig:$PKG_CONFIG_PATH"
-          export LIBRARY_PATH="$(brew --prefix sdl2)/lib:$LIBRARY_PATH"
           cargo check --locked --target aarch64-apple-darwin
           cargo clippy --locked --workspace --all-targets --all-features --target aarch64-apple-darwin -- \
             -D warnings \
@@ -271,8 +239,6 @@ jobs:
 
       - name: macOS Release Build Check
         run: |
-          export PKG_CONFIG_PATH="$(brew --prefix sdl2)/lib/pkgconfig:$PKG_CONFIG_PATH"
-          export LIBRARY_PATH="$(brew --prefix sdl2)/lib:$LIBRARY_PATH"
           cargo build --locked --release --target aarch64-apple-darwin
 
   # Android Compilation Verification
