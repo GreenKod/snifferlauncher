@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "CommonJS",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM"],
+    "checkJs": false,
+    "allowJs": true,
+    "noEmit": true,
+    "noImplicitAny": false
+  },
+  "include": [
+    "**/*.js",
+    "_framework/types.d.ts"
+  ]
+}

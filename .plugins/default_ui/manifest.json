@@ -1,8 +1,23 @@
 {
   "id": "com.sniffer.defaultui",
   "name": "Default Interface",
-  "version": "0.1.0",
-  "preload": ["../_framework/sniffer_ui.js"],
+  "version": "1.0.0",
+  "isMaster": true,
   "main": "main.js",
-  "permissions": ["plugin.permission.UI"]
+  "scripts": [
+    "state.js",
+    "components/header.js",
+    "components/search_bar.js",
+    "components/actions_grid.js",
+    "components/module_list.js",
+    "components/fab.js",
+    "main.js"
+  ],
+  "preload": [
+    "../_framework/sniffer_ui.js"
+  ],
+  "permissions": [
+    "plugin.permission.UI",
+    "plugin.permission.IPC"
+  ]
 }

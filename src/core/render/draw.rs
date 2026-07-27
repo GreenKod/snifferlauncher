@@ -18,7 +18,8 @@ pub fn find_clicked_button(
         return None;
     }
     match element {
-        Element::Container { children, id, .. } => {
+        Element::Container { children, id, .. }
+        | Element::SharedView { children, id, .. } => {
             // Check children first (reverse order for z-index correctness)
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
                 if let Some(clicked_data) = find_clicked_button(child_el, child_lay, point) {
@@ -93,7 +94,7 @@ pub fn find_hovered_scrollview<'a>(
         return None;
     }
     match element {
-        Element::Container { children, .. } => {
+        Element::Container { children, .. } | Element::SharedView { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
                 if let Some(scrollview_data) = find_hovered_scrollview(child_el, child_lay, point) {
                     return Some(scrollview_data);
@@ -240,7 +241,7 @@ pub fn draw_ui(
 
     // 5. Draw contents
     match element {
-        Element::Container { children, .. } => {
+        Element::Container { children, .. } | Element::SharedView { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
                 draw_ui(
                     renderer,

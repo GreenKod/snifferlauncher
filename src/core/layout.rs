@@ -95,7 +95,9 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
     }
 
     match element {
-        Element::Container { children, .. } | Element::ScrollView { children, .. } => {
+        Element::Container { children, .. }
+        | Element::ScrollView { children, .. }
+        | Element::SharedView { children, .. } => {
             let child_nodes: Vec<_> = children
                 .iter()
                 .map(|c| build_taffy_tree(taffy, c, measurer))
@@ -195,6 +197,10 @@ fn resolve_layout(
         ..
     }
     | Element::ScrollView {
+        children: el_children,
+        ..
+    }
+    | Element::SharedView {
         children: el_children,
         ..
     } = element

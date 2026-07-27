@@ -320,21 +320,37 @@ pub fn run_loop(
                         }
 
                         let get_max_scroll_for_lay =
-                            |lay: &crate::core::layout::LayoutNode| -> f32 {
+                            |lay: &crate::core::layout::LayoutNode| -> (f32, f32) {
+                                let view_width = lay.rect.width;
                                 let view_height = lay.rect.height;
+                                let mut max_x = 0.0_f32;
                                 let mut max_y = 0.0_f32;
                                 for child_lay in &lay.children {
+                                    let child_right = child_lay.rect.x + child_lay.rect.width;
                                     let child_bottom = child_lay.rect.y + child_lay.rect.height;
+                                    if child_right > max_x {
+                                        max_x = child_right;
+                                    }
                                     if child_bottom > max_y {
                                         max_y = child_bottom;
                                     }
                                 }
+                                let content_width = max_x - lay.rect.x;
                                 let content_height = max_y - lay.rect.y;
-                                if content_height > view_height && view_height > 0.0 {
-                                    content_height - view_height
-                                } else {
-                                    999_999.0
-                                }
+
+                                let max_scroll_x =
+                                    if content_width > view_width && view_width > 0.0 {
+                                        content_width - view_width
+                                    } else {
+                                        0.0
+                                    };
+                                let max_scroll_y =
+                                    if content_height > view_height && view_height > 0.0 {
+                                        content_height - view_height
+                                    } else {
+                                        0.0
+                                    };
+                                (max_scroll_x, max_scroll_y)
                             };
 
                         for &(x, y) in &input.scroll_events {
@@ -385,7 +401,8 @@ pub fn run_loop(
                                     sv_id,
                                     -x * 20.0 * factor,
                                     -y * 20.0 * factor,
-                                    max_scroll,
+                                    max_scroll.0,
+                                    max_scroll.1,
                                 ));
                             }
                         }
@@ -412,7 +429,8 @@ pub fn run_loop(
                                         Some(sv_id),
                                         s_dx,
                                         s_dy,
-                                        max_scroll,
+                                        max_scroll.0,
+                                        max_scroll.1,
                                     ));
                                 }
                             } else if let Some((
@@ -433,8 +451,13 @@ pub fn run_loop(
                                     crate::core::ui::widget::fnv1a(id_str.as_bytes())
                                 });
                                 let max_scroll = get_max_scroll_for_lay(lay);
-                                app.event_bus
-                                    .push(UiEvent::Scroll(sv_id, s_dx, s_dy, max_scroll));
+                                app.event_bus.push(UiEvent::Scroll(
+                                    sv_id,
+                                    s_dx,
+                                    s_dy,
+                                    max_scroll.0,
+                                    max_scroll.1,
+                                ));
                             }
                         }
 
@@ -445,12 +468,15 @@ pub fn run_loop(
                         app.kinetic_scrolls.retain_mut(|k| {
                             if k.velocity_x.abs() > 0.1 || k.velocity_y.abs() > 0.1 {
                                 let max_scroll = find_first_scrollview(&root_element, &layout_tree)
-                                    .map_or(999_999.0, |(_, lay)| get_max_scroll_for_lay(lay));
+                                    .map_or((0.0, 0.0), |(_, lay)| {
+                                        get_max_scroll_for_lay(lay)
+                                    });
                                 app.event_bus.push(UiEvent::Scroll(
                                     Some(k.sv_id),
                                     k.velocity_x,
                                     k.velocity_y,
-                                    max_scroll,
+                                    max_scroll.0,
+                                    max_scroll.1,
                                 ));
                                 k.velocity_x *= 0.92;
                                 k.velocity_y *= 0.92;

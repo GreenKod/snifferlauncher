@@ -112,6 +112,13 @@ pub enum Element {
         max: f32,
         style: Style,
     },
+    SharedView {
+        id: Option<String>,
+        target_plugin: Option<String>,
+        slot_name: Option<String>,
+        style: Style,
+        children: ElementChildren,
+    },
 }
 
 impl Element {
@@ -126,7 +133,8 @@ impl Element {
             | Self::ScrollView { style, .. }
             | Self::Checkbox { style, .. }
             | Self::Slider { style, .. }
-            | Self::ProgressBar { style, .. } => style,
+            | Self::ProgressBar { style, .. }
+            | Self::SharedView { style, .. } => style,
         }
     }
 
@@ -141,7 +149,8 @@ impl Element {
             | Self::ScrollView { id, .. }
             | Self::Checkbox { id, .. }
             | Self::Slider { id, .. }
-            | Self::ProgressBar { id, .. } => id.as_deref(),
+            | Self::ProgressBar { id, .. }
+            | Self::SharedView { id, .. } => id.as_deref(),
         }
     }
 
@@ -156,7 +165,8 @@ impl Element {
                 | Self::ScrollView { style, .. }
                 | Self::Checkbox { style, .. }
                 | Self::Slider { style, .. }
-                | Self::ProgressBar { style, .. } => style,
+                | Self::ProgressBar { style, .. }
+                | Self::SharedView { style, .. } => style,
             };
 
             // Simple property mapping
@@ -204,7 +214,10 @@ impl Element {
             return true;
         }
 
-        if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
+        if let Self::Container { children, .. }
+        | Self::ScrollView { children, .. }
+        | Self::SharedView { children, .. } = self
+        {
             for child in children {
                 if child.mutate_style(target_id, property, value) {
                     return true;
@@ -230,7 +243,10 @@ impl Element {
             }
         }
 
-        if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
+        if let Self::Container { children, .. }
+        | Self::ScrollView { children, .. }
+        | Self::SharedView { children, .. } = self
+        {
             for child in children {
                 if child.mutate_text(target_id, new_text) {
                     return true;
@@ -269,7 +285,10 @@ impl Element {
             }
         }
 
-        if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
+        if let Self::Container { children, .. }
+        | Self::ScrollView { children, .. }
+        | Self::SharedView { children, .. } = self
+        {
             for child in children {
                 if child.mutate_state(target_id, property, new_val) {
                     return true;
@@ -288,7 +307,10 @@ impl Element {
             return true;
         }
 
-        if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
+        if let Self::Container { children, .. }
+        | Self::ScrollView { children, .. }
+        | Self::SharedView { children, .. } = self
+        {
             for c in children {
                 if c.insert_child(parent_id, child.clone()) {
                     return true;
@@ -300,7 +322,10 @@ impl Element {
 
     /// Removes a child node with the matching ID from the tree.
     pub fn remove_node(&mut self, target_id: &str) -> bool {
-        if let Self::Container { children, .. } | Self::ScrollView { children, .. } = self {
+        if let Self::Container { children, .. }
+        | Self::ScrollView { children, .. }
+        | Self::SharedView { children, .. } = self
+        {
             if let Some(pos) = children.iter().position(|c| c.id() == Some(target_id)) {
                 children.remove(pos);
                 return true;
