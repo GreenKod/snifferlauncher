@@ -21,6 +21,7 @@ pub fn handle_winit_event(
         WindowEvent::Focused(focused) => {
             app.window_focused = *focused;
             if !*focused {
+                app.is_mouse_down = false;
                 if let Some(prev) = app.hovered_btn.take() {
                     app.event_bus.push(UiEvent::HoverEnd(prev));
                 }
@@ -64,19 +65,30 @@ pub fn handle_winit_event(
             }
         }
         WindowEvent::CursorMoved { position, .. } => {
-            app.last_mouse_pos = Point::new(position.x as f32, position.y as f32);
+            let new_pos = Point::new(position.x as f32, position.y as f32);
+            if app.is_mouse_down && (app.last_mouse_pos.x - -9999.0).abs() > f32::EPSILON {
+                let dx = new_pos.x - app.last_mouse_pos.x;
+                let dy = new_pos.y - app.last_mouse_pos.y;
+                if dx != 0.0 || dy != 0.0 {
+                    input.drag_events.push((dx, dy));
+                }
+            }
+            app.last_mouse_pos = new_pos;
             input.mouse_moved = true;
         }
         WindowEvent::MouseInput { state, button, .. } => {
             if *button == MouseButton::Left {
                 if *state == ElementState::Pressed {
+                    app.is_mouse_down = true;
                     input.clicked_pos = Some(app.last_mouse_pos);
                 } else {
+                    app.is_mouse_down = false;
                     input.mouse_released = true;
                 }
             }
         }
         WindowEvent::CursorLeft { .. } => {
+            app.is_mouse_down = false;
             let prev_hovered = app.hovered_btn;
             app.hovered_btn = None;
             if let Some(prev) = prev_hovered {
@@ -92,10 +104,12 @@ pub fn handle_winit_event(
         }
         WindowEvent::MouseWheel { delta, .. } => match delta {
             MouseScrollDelta::LineDelta(x, y) => {
-                input.scroll_events.push((*x as i32, *y as i32));
+                input.scroll_events.push((*x, *y));
             }
             MouseScrollDelta::PixelDelta(PhysicalPosition { x, y }) => {
-                input.scroll_events.push((*x as i32, *y as i32));
+                let px = (*x as f32) / 20.0;
+                let py = (*y as f32) / 20.0;
+                input.scroll_events.push((px, py));
             }
         },
         _ => {}
