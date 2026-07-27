@@ -50,9 +50,42 @@ const SnifferUI = (function () {
     };
 })();
 
-// Expose state to the plugin scope as a convenience shorthand.
-// Plugins should use:   state.myProp   (read)
-//                       SnifferUI.setState({ myProp: newVal })   (write)
+// =============================================================================
+// Channel Subscription Helper System
+// =============================================================================
+
+const _channelSubscribers = {};
+
+/**
+ * Subscribe to a specific broadcast channel name.
+ *
+ * @param {string}   channelName - Name of the channel to subscribe to
+ * @param {function} callback    - Callback function called with payload data
+ */
+function subscribeChannel(channelName, callback) {
+    if (!_channelSubscribers[channelName]) {
+        _channelSubscribers[channelName] = [];
+    }
+    _channelSubscribers[channelName].push(callback);
+}
+
+/**
+ * Unsubscribe from a broadcast channel name.
+ *
+ * @param {string} channelName
+ */
+function unsubscribeChannel(channelName) {
+    delete _channelSubscribers[channelName];
+}
+
+// Automatic global broadcast router
+globalThis.onBroadcast = function(channel, data) {
+    if (_channelSubscribers[channel]) {
+        _channelSubscribers[channel].forEach(function(cb) {
+            try { cb(data); } catch(e) {}
+        });
+    }
+};
 
 // =============================================================================
 // Color helpers
@@ -61,7 +94,7 @@ const SnifferUI = (function () {
 /**
  * Convert a CSS hex color string to a Rust u32 ARGB value.
  * Supports "#RGB", "#RRGGBB", "#AARRGGBB".
- * @param {string} hex
+ * @param {string} hexStr
  * @returns {number}
  */
 function hex(hexStr) {
@@ -99,24 +132,32 @@ function Label(id, text, style) {
 }
 
 /**
- * Build an Image element.
- * @param {string} id
- * @param {string} src  - Path relative to the plugin root, e.g. ".plugins/default_ui/photo.jpg"
- * @param {object} style
- */
-function Image(id, src, style) {
-    return { Image: { id, src, style: style ?? {} } };
-}
-
-/**
  * Build a TextInput element.
  * @param {string}  id
  * @param {string}  value
- * @param {object}  opts   - { focused, style }
+ * @param {object}  opts  - { focused, placeholder, style }
  */
 function TextInput(id, value, opts) {
-    const { focused = false, style = {} } = opts ?? {};
-    return { TextInput: { id, value: String(value), focused, style } };
+    const { focused = false, placeholder = "", style = {} } = opts ?? {};
+    return {
+        TextInput: {
+            id,
+            value: String(value),
+            placeholder: String(placeholder),
+            focused: !!focused,
+            style,
+        },
+    };
+}
+
+/**
+ * Build an Image element.
+ * @param {string} id
+ * @param {string} src   - Relative path, absolute path, or "app-icon://<pkg>"
+ * @param {object} style
+ */
+function Image(id, src, style) {
+    return { Image: { id, src: String(src), style: style ?? {} } };
 }
 
 /**
@@ -184,6 +225,26 @@ function ProgressBar(id, value, max, style) {
     return { ProgressBar: { id, value, max, style: style ?? {} } };
 }
 
+/**
+ * Build a SharedView element for cross-plugin shared layout drawing.
+ * @param {string}      id
+ * @param {string|null} targetPluginId - Target plugin ID
+ * @param {string|null} slotName       - SharedView slot identifier
+ * @param {object}      style
+ * @param {Array}       children       - Fallback elements if pending/rejected
+ */
+function SharedView(id, targetPluginId, slotName, style, children) {
+    return {
+        SharedView: {
+            id,
+            target_plugin: targetPluginId ? String(targetPluginId) : null,
+            slot_name: slotName ? String(slotName) : null,
+            style: style ?? {},
+            children: children ?? []
+        }
+    };
+}
+
 // =============================================================================
 // Layout shorthand helpers
 // =============================================================================
@@ -226,4 +287,65 @@ function vmin(percent) {
 /** The larger of vw or vh */
 function vmax(percent) {
     return Math.max(vw(percent), vh(percent));
+}
+
+// =============================================================================
+// Master Design System & Theme Tokens
+// =============================================================================
+
+const Theme = {
+    colors: {
+        bgCard:     hex("#1E293B"),
+        bgCardAlt:  hex("#0F172A"),
+        textMain:   hex("#F8FAFC"),
+        textSub:    hex("#94A3B8"),
+        accent:     hex("#38BDF8"),
+        success:    hex("#10B981"),
+        border:     hex("#334155")
+    },
+    spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
+    radius:  { sm: 8, md: 12, lg: 16 }
+};
+
+/**
+ * Standardized Card Widget Component Template for all plugins.
+ * Guarantees unified border radius, background color, padding, and layout grid.
+ *
+ * @param {object} opts - { id, title, subtitle, content, style }
+ */
+function CardWidget(opts) {
+    const { id = "card-widget", title = "", subtitle = "", content = [], style = {} } = opts ?? {};
+    
+    const children = [];
+    if (title) {
+        children.push(Label(`${id}-title`, title, {
+            text_color: Theme.colors.accent,
+            text_size: vmin(4.0),
+            width: "Auto"
+        }));
+    }
+    if (subtitle) {
+        children.push(Label(`${id}-sub`, subtitle, {
+            text_color: Theme.colors.textSub,
+            text_size: vmin(3.0),
+            width: "Auto"
+        }));
+    }
+    if (Array.isArray(content)) {
+        children.push(...content);
+    } else if (content) {
+        children.push(content);
+    }
+
+    return Container(id, {
+        background_color: Theme.colors.bgCard,
+        border_radius: vmin(4.0),
+        border_width: vmin(0.2),
+        border_color: Theme.colors.border,
+        padding: pad(vmin(3.5)),
+        flex_direction: "Column",
+        gap: vmin(2.0),
+        overflow_hidden: true,
+        ...style
+    }, children);
 }

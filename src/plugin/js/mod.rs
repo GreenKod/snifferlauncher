@@ -93,6 +93,86 @@ globalThis.getApplicationList = function() {
 };
 
 /**
+ * Fetch the exact OS local system time.
+ *
+ * @returns {{ time: string, date: string, hours: number, minutes: number, seconds: number, timestamp: number }}
+ */
+globalThis.getLocalTime = function() {
+    try {
+        return JSON.parse(host_get_local_time());
+    } catch(e) {
+        const d = new Date();
+        return {
+            time: d.toLocaleTimeString("tr-TR"),
+            date: d.toLocaleDateString("tr-TR"),
+            hours: d.getHours(),
+            minutes: d.getMinutes(),
+            seconds: d.getSeconds(),
+            timestamp: d.getTime()
+        };
+    }
+};
+
+/**
+ * Default settings loaded from manifest.json ("defaultSettings" key).
+ */
+try {
+    var defaultSettings = JSON.parse(host_get_default_settings());
+    globalThis.defaultSettings = defaultSettings;
+} catch(e) {
+    var defaultSettings = {};
+    globalThis.defaultSettings = defaultSettings;
+}
+
+// Timers Polyfill (setInterval, setTimeout, clearInterval, clearTimeout)
+globalThis._timers = {};
+globalThis._timerId = 1;
+
+globalThis.setInterval = function(callback, delayMs) {
+    const id = globalThis._timerId++;
+    globalThis._timers[id] = {
+        callback: callback,
+        delay: (typeof delayMs === 'number' && delayMs >= 0) ? delayMs : 1000,
+        lastRun: Date.now(),
+        once: false
+    };
+    return id;
+};
+
+globalThis.clearInterval = function(id) {
+    delete globalThis._timers[id];
+};
+
+globalThis.setTimeout = function(callback, delayMs) {
+    const id = globalThis._timerId++;
+    globalThis._timers[id] = {
+        callback: callback,
+        delay: (typeof delayMs === 'number' && delayMs >= 0) ? delayMs : 0,
+        lastRun: Date.now(),
+        once: true
+    };
+    return id;
+};
+
+globalThis.clearTimeout = function(id) {
+    delete globalThis._timers[id];
+};
+
+globalThis._onTimerTick = function() {
+    const now = Date.now();
+    for (const id in globalThis._timers) {
+        const timer = globalThis._timers[id];
+        if (now - timer.lastRun >= timer.delay) {
+            timer.lastRun = now;
+            try { timer.callback(); } catch(e) {}
+            if (timer.once) {
+                delete globalThis._timers[id];
+            }
+        }
+    }
+};
+
+/**
  * Override this in your plugin to receive broadcasts from other plugins.
  *
  * @param {string} channel
@@ -100,10 +180,105 @@ globalThis.getApplicationList = function() {
  */
 globalThis.onBroadcast = function(channel, data) {};
 
+// SharedView Handshake Protocol & Pending Invitations Storage
+globalThis._sharedViewPending = {};
+
+/**
+ * Request another plugin to draw inside a SharedView slot or invite another plugin to draw inside yours.
+ *
+ * @param {string} targetPluginId - Target plugin ID
+ * @param {string} slotName - SharedView slot identifier
+ * @param {object} payload - Custom data/parameters
+ * @param {number} timeoutMs - Response timeout in milliseconds (default 3000ms)
+ * @returns {Promise<{accepted: boolean, status: string, reason?: string, uiTree?: object}>}
+ */
+globalThis.requestSharedView = function(targetPluginId, slotName, payload, timeoutMs) {
+    const tMs = (typeof timeoutMs === 'number' && timeoutMs > 0) ? timeoutMs : 3000;
+    return new Promise(function(resolve) {
+        const invitationId = "inv_" + Math.random().toString(36).substring(2, 10);
+        
+        const timer = setTimeout(function() {
+            if (globalThis._sharedViewPending[invitationId]) {
+                delete globalThis._sharedViewPending[invitationId];
+                resolve({
+                    accepted: false,
+                    status: "timed_out",
+                    reason: "Response timeout exceeded (" + tMs + "ms)"
+                });
+            }
+        }, tMs);
+
+        globalThis._sharedViewPending[invitationId] = { resolve: resolve, timer: timer };
+
+        const payloadStr = JSON.stringify(payload ?? {});
+        broadcastEvent("shared_view_invite", {
+            invitationId: invitationId,
+            targetPluginId: targetPluginId,
+            slotName: slotName,
+            payload: payloadStr,
+            timeoutMs: tMs
+        });
+    });
+};
+
+/**
+ * Accept a SharedView invitation and return the UI tree to draw in the slot.
+ */
+globalThis.acceptSharedView = function(invitationId, uiTree) {
+    broadcastEvent("shared_view_response", {
+        invitationId: invitationId,
+        accepted: true,
+        status: "accepted",
+        uiTree: uiTree ?? null
+    });
+};
+
+/**
+ * Reject a SharedView invitation with a reason.
+ */
+globalThis.rejectSharedView = function(invitationId, reason) {
+    broadcastEvent("shared_view_response", {
+        invitationId: invitationId,
+        accepted: false,
+        status: "rejected",
+        reason: reason ?? "Invitation rejected"
+    });
+};
+
+/**
+ * Override this callback in your plugin to handle incoming SharedView requests.
+ */
+globalThis.onRequestSharedView = function(invitation) {
+    globalThis.rejectSharedView(invitation.invitationId, "No handler registered");
+};
+
 // Internal — Rust calls this to deliver a broadcast to this plugin.
 globalThis._dispatchBroadcast = function(channel, payload_json) {
     try {
         const data = JSON.parse(payload_json);
+        
+        if (channel === "shared_view_invite") {
+            if (data.targetPluginId && typeof globalThis.onRequestSharedView === 'function') {
+                globalThis.onRequestSharedView({
+                    invitationId: data.invitationId,
+                    slotName: data.slotName,
+                    payload: JSON.parse(data.payload ?? "{}")
+                });
+            }
+        } else if (channel === "shared_view_response") {
+            const pending = globalThis._sharedViewPending[data.invitationId];
+            if (pending) {
+                clearTimeout(pending.timer);
+                delete globalThis._sharedViewPending[data.invitationId];
+                pending.resolve({
+                    accepted: !!data.accepted,
+                    status: data.status,
+                    reason: data.reason,
+                    uiTree: data.uiTree
+                });
+            }
+        }
+
         globalThis.onBroadcast(channel, data);
     } catch(e) {}
 };
@@ -151,6 +326,7 @@ pub struct JsPluginConfig {
     pub api_map: ApiMap,
     pub broadcast_queue: BroadcastQueue,
     pub permissions: Vec<String>,
+    pub default_settings: serde_json::Value,
     pub cached_ui: Option<Element>,
     pub cache_path: Option<std::path::PathBuf>,
 }
@@ -163,6 +339,7 @@ struct JsPluginEnvConfig {
     pub broadcast_queue: BroadcastQueue,
     pub plugin_permissions: Vec<String>,
     pub granted_permissions: Arc<Mutex<Vec<String>>>,
+    pub default_settings: serde_json::Value,
     pub cache_path: Option<std::path::PathBuf>,
 }
 
@@ -211,6 +388,7 @@ impl JsPlugin {
             broadcast_queue: config.broadcast_queue,
             plugin_permissions: permissions_clone,
             granted_permissions: granted_permissions.clone(),
+            default_settings: config.default_settings,
             cache_path: config.cache_path,
         })?;
 
@@ -233,6 +411,7 @@ impl JsPlugin {
                     broadcast_queue: config.broadcast_queue,
                     plugin_permissions: config.plugin_permissions,
                     granted_permissions: config.granted_permissions,
+                    default_settings: config.default_settings,
                     cache_path: config.cache_path,
                 },
             );
@@ -298,12 +477,12 @@ impl UiPlugin for JsPlugin {
                         };
                         format!(r#"{{"type":"PointerUp","id":{id_str}}}"#)
                     }
-                    UiEvent::Scroll(id_opt, dx, dy, max_y) => {
+                    UiEvent::Scroll(id_opt, dx, dy, max_x, max_y) => {
                         let id_str = match id_opt {
                             Some(id) => format!(r#""{id}""#),
                             None => "null".to_string(),
                         };
-                        format!(r#"{{"type":"Scroll","id":{id_str},"dx":{dx},"dy":{dy},"max_y":{max_y}}}"#)
+                        format!(r#"{{"type":"Scroll","id":{id_str},"dx":{dx},"dy":{dy},"max_x":{max_x},"max_y":{max_y}}}"#)
                     }
                     UiEvent::WindowResized(w, h) => {
                         format!(r#"{{"type":"WindowResized","w":{w},"h":{h}}}"#)
@@ -326,6 +505,12 @@ impl UiPlugin for JsPlugin {
                 self.runtime.run_gc();
             }
         }
+
+        self.context.with(|ctx| {
+            if let Ok(handler) = ctx.globals().get::<_, rquickjs::Function>("_onTimerTick") {
+                let _ = handler.call::<_, ()>(());
+            }
+        });
     }
 
     /// Deliver a broadcast from another plugin to this plugin's `onBroadcast` handler.

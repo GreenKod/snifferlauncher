@@ -29,6 +29,7 @@ rquickjs = { version = "0.7", features = ["macro", "classes", "bindgen", "array-
 postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 image = { version = "0.25.1", default-features = false, features = ["png", "jpeg"] }
 taffy = "0.5"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6.1", features = ["native-activity"] }

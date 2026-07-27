@@ -34,6 +34,7 @@ pub struct HostApiConfig {
     pub broadcast_queue: BroadcastQueue,
     pub plugin_permissions: Vec<String>,
     pub granted_permissions: Arc<Mutex<Vec<String>>>,
+    pub default_settings: serde_json::Value,
     pub cache_path: Option<std::path::PathBuf>,
 }
 
@@ -51,10 +52,22 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         broadcast_queue,
         plugin_permissions: plugin_permissions_vec,
         granted_permissions: granted_permissions_arc,
+        default_settings,
         cache_path,
     } = cfg;
 
     let globals = ctx.globals();
+
+    // ------------------------------------------------------------------
+    // host_get_default_settings
+    // ------------------------------------------------------------------
+    let default_settings_json =
+        serde_json::to_string(&default_settings).unwrap_or_else(|_| "{}".to_string());
+    let get_default_settings_func =
+        Function::new(ctx.clone(), move || -> String { default_settings_json.clone() }).unwrap();
+    globals
+        .set("host_get_default_settings", get_default_settings_func)
+        .unwrap();
 
     // ------------------------------------------------------------------
     // host_set_ui
@@ -279,6 +292,26 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     })
     .unwrap();
     globals.set("host_screen_height", get_height_func).unwrap();
+
+    // ------------------------------------------------------------------
+    // host_get_local_time
+    // ------------------------------------------------------------------
+    let get_local_time_func = Function::new(ctx.clone(), || -> String {
+        let now = chrono::Local::now();
+        let json = serde_json::json!({
+            "time": now.format("%H:%M:%S").to_string(),
+            "date": now.format("%d.%m.%Y").to_string(),
+            "hours": now.format("%H").to_string().parse::<u32>().unwrap_or(0),
+            "minutes": now.format("%M").to_string().parse::<u32>().unwrap_or(0),
+            "seconds": now.format("%S").to_string().parse::<u32>().unwrap_or(0),
+            "timestamp": now.timestamp_millis()
+        });
+        json.to_string()
+    })
+    .unwrap();
+    globals
+        .set("host_get_local_time", get_local_time_func)
+        .unwrap();
 
     // ------------------------------------------------------------------
     // host_create_image

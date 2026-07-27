@@ -1,0 +1,19 @@
+{
+  "id": "com.sniffer.clockwidget",
+  "name": "Clock Widget",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": [
+    "services/time_service.js",
+    "components/clock_card.js",
+    "main.js"
+  ],
+  "permissions": [
+    "shared_view.provider",
+    "plugin.permission.IPC",
+    "plugin.permission.UI"
+  ],
+  "defaultSettings": {
+    "utcOffset": 3
+  }
+}

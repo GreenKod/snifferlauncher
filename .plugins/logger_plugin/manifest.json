@@ -1,7 +1,13 @@
 {
   "id": "com.sniffer.logger",
   "name": "Logger Eklentisi",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "main": "main.js",
-  "permissions": ["plugin.permission.IPC"]
+  "scripts": [
+    "services/logger_service.js",
+    "main.js"
+  ],
+  "permissions": [
+    "plugin.permission.IPC"
+  ]
 }

@@ -7,19 +7,27 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct PluginsConfig {
+    #[serde(default)]
+    pub master_plugin: Option<String>,
     pub active_plugins: Vec<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct PluginManifest {
     pub id: String,
     pub name: String,
     pub version: String,
     pub main: String,
     #[serde(default)]
+    pub scripts: Vec<String>,
+    #[serde(default, rename = "isMaster")]
+    pub is_master: bool,
+    #[serde(default)]
     pub preload: Vec<String>,
     #[serde(default)]
     pub permissions: Vec<String>,
+    #[serde(default, rename = "defaultSettings")]
+    pub default_settings: serde_json::Value,
 }
 
 /// Loads and registers JavaScript plugins from the assets directory.
@@ -97,6 +105,10 @@ impl PluginLoader {
             }
         };
 
+        if let Some(ref master) = config.master_plugin {
+            println!("[PluginLoader] Master plugin designated: '{master}'");
+        }
+
         let api_map = registry.api_registry();
         let broadcast_queue = registry.broadcast_queue();
 
@@ -155,16 +167,38 @@ impl PluginLoader {
                 }
             }
 
-            let main_js_path = plugin_dir.join(&manifest.main);
-            if main_js_path.exists() {
-                match fs::read_to_string(&main_js_path) {
-                    Ok(main_content) => {
-                        // Concatenate preload scripts + main script into one bundle.
-                        let mut full_script = preload_scripts.join("\n");
-                        if !full_script.is_empty() {
-                            full_script.push('\n');
+            let files_to_read = if !manifest.scripts.is_empty() {
+                manifest.scripts.clone()
+            } else {
+                vec![manifest.main.clone()]
+            };
+
+            let mut plugin_code = String::new();
+            for script_rel_path in &files_to_read {
+                let js_path = plugin_dir.join(script_rel_path);
+                if js_path.exists() {
+                    match fs::read_to_string(&js_path) {
+                        Ok(content) => {
+                            if !plugin_code.is_empty() {
+                                plugin_code.push('\n');
+                            }
+                            plugin_code.push_str(&content);
                         }
-                        full_script.push_str(&main_content);
+                        Err(e) => eprintln!(
+                            "Could not read script '{script_rel_path}' for plugin '{}': {e}",
+                            manifest.name
+                        ),
+                    }
+                }
+            }
+
+            if !plugin_code.is_empty() {
+                // Concatenate preload scripts + plugin script code into one bundle.
+                let mut full_script = preload_scripts.join("\n");
+                if !full_script.is_empty() {
+                    full_script.push('\n');
+                }
+                full_script.push_str(&plugin_code);
 
                         let hash = crate::core::ui::widget::fnv1a(full_script.as_bytes());
                         let cache_dir = self.assets_dir.join(".cache");
@@ -205,6 +239,7 @@ impl PluginLoader {
                             api_map: api_map.clone(),
                             broadcast_queue: broadcast_queue.clone(),
                             permissions: manifest.permissions.clone(),
+                            default_settings: manifest.default_settings.clone(),
                             cached_ui,
                             cache_path: Some(cache_file),
                         }) {
@@ -213,10 +248,9 @@ impl PluginLoader {
                                     &(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>),
                                 );
                                 println!(
-                                    "Successfully loaded JS plugin '{}' ({}) from {}",
+                                    "Successfully loaded JS plugin '{}' ({})",
                                     manifest.name,
-                                    manifest.id,
-                                    main_js_path.display()
+                                    manifest.id
                                 );
                             }
                             Err(e) => {
@@ -226,16 +260,10 @@ impl PluginLoader {
                                 );
                             }
                         }
-                    }
-                    Err(e) => eprintln!(
-                        "Could not read {} for plugin '{}': {e}",
-                        manifest.main, manifest.name
-                    ),
-                }
             } else {
                 eprintln!(
-                    "Main script '{}' not found for plugin '{}'",
-                    manifest.main, manifest.name
+                    "No script content found for plugin '{}'",
+                    manifest.name
                 );
             }
         }
@@ -253,8 +281,11 @@ mod tests {
             name: "Example Plugin".to_string(),
             version: "1.0.0".to_string(),
             main: "main.js".to_string(),
+            scripts: vec![],
+            is_master: false,
             preload: vec![],
-            permissions: vec!["android.permission.CAMERA".to_string()],
+            permissions: vec!["android.permission.CAMERA".to_string(), "shared_view.provider".to_string()],
+            default_settings: serde_json::Value::Null,
         };
 
         let issues = PluginLoader::validate_manifest(&manifest);
@@ -268,8 +299,11 @@ mod tests {
             name: String::new(),
             version: " ".to_string(),
             main: String::new(),
+            scripts: vec![],
+            is_master: false,
             preload: vec![],
             permissions: vec![String::new()],
+            default_settings: serde_json::Value::Null,
         };
 
         let issues = PluginLoader::validate_manifest(&manifest);

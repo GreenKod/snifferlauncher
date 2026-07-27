@@ -273,6 +273,7 @@ pub fn android_main(app: AndroidApp) {
                             Some(k.sv_id),
                             k.velocity_x,
                             k.velocity_y,
+                            999_999.0,
                             get_max_scroll(Some(k.sv_id)),
                         ));
                         k.velocity_x *= 0.92;
