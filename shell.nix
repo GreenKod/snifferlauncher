@@ -63,18 +63,11 @@ in pkgs.mkShell {
     pkgs.llvmPackages.libclang.lib      # required by rust bindgen
     pkgs.lld
 
-    # System libraries (Linux native targets)
+    # General system libraries (Linux native targets)
     pkgs.openssl
     pkgs.openssl.dev
     pkgs.zlib
     pkgs.zlib.dev
-
-    # SDL2 (required by the sdl2 Rust crate)
-    pkgs.SDL2
-    pkgs.SDL2.dev
-    pkgs.SDL2_ttf
-    pkgs.SDL2_image
-    pkgs.SDL2_mixer
 
     # Java runtime (required by Android build-tools / Gradle)
     pkgs.jdk17

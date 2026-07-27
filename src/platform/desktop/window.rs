@@ -1,63 +1,103 @@
-use crate::core::style::{WINDOW_HEIGHT, WINDOW_WIDTH};
+use glutin::config::ConfigTemplateBuilder;
+use glutin::context::{ContextApi, ContextAttributesBuilder, NotCurrentGlContext, PossiblyCurrentContext};
+use glutin::display::{GlDisplay, GetGlDisplay};
+use glutin::prelude::GlSurface;
+use glutin::surface::{SurfaceAttributesBuilder, WindowSurface};
+use glutin_winit::DisplayBuilder;
+use std::num::NonZeroU32;
+use std::sync::Arc;
+use winit::dpi::LogicalSize;
+use winit::event_loop::EventLoop;
+use winit::raw_window_handle::HasWindowHandle;
+use winit::window::WindowAttributes;
 
 pub struct DesktopWindow {
-    pub sdl_context: sdl2::Sdl,
-    pub video_subsystem: sdl2::VideoSubsystem,
-    pub window: sdl2::video::Window,
-    pub gl_context: sdl2::video::GLContext,
+    pub window: Arc<winit::window::Window>,
+    pub gl_surface: glutin::surface::Surface<WindowSurface>,
+    pub gl_context: PossiblyCurrentContext,
     pub dpi: f32,
 }
 
 impl DesktopWindow {
     #[allow(clippy::missing_panics_doc, clippy::missing_errors_doc)]
-    pub fn new() -> Result<(Self, glow::Context), Box<dyn std::error::Error>> {
-        let sdl_context = sdl2::init()?;
-        sdl2::hint::set("SDL_VIDEO_DRIVER", "x11");
-        let video_subsystem = sdl_context.video()?;
+    pub fn new() -> Result<(EventLoop<()>, Self, glow::Context), Box<dyn std::error::Error>> {
+        let event_loop = EventLoop::new()?;
+        let window_attributes = WindowAttributes::default()
+            .with_title("Platform-Agnostic Launcher")
+            .with_inner_size(LogicalSize::new(1280.0, 900.0))
+            .with_resizable(true);
 
-        let gl_attr = video_subsystem.gl_attr();
-        gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-        gl_attr.set_context_version(3, 3);
+        let template = ConfigTemplateBuilder::new().with_alpha_size(8);
+        let display_builder = DisplayBuilder::new().with_window_attributes(Some(window_attributes));
 
-        let display = video_subsystem.display_bounds(0).unwrap_or_else(|_| {
-            sdl2::rect::Rect::new(
-                0,
-                0,
-                u32::try_from(WINDOW_WIDTH).expect("window width fits in u32"),
-                u32::try_from(WINDOW_HEIGHT).expect("window height fits in u32"),
-            )
-        });
+        let (window, gl_config) = display_builder.build(&event_loop, template, |mut configs| {
+            configs.next().unwrap()
+        })?;
 
-        let init_width = display.width().saturating_mul(85) / 100;
-        let init_height = display.height().saturating_mul(85) / 100;
-        let init_width = if init_width < 400 { 400 } else { init_width };
-        let init_height = if init_height < 600 { 600 } else { init_height };
+        let window = window.ok_or("failed to create window")?;
+        let gl_display = gl_config.display();
 
-        let window = video_subsystem
-            .window("Platform-Agnostic Launcher", init_width, init_height)
-            .opengl()
-            .resizable()
-            .position_centered()
-            .build()?;
+        let size = window.inner_size();
+        let surface_attributes = SurfaceAttributesBuilder::<WindowSurface>::new().build(
+            window.window_handle().unwrap().as_raw(),
+            NonZeroU32::new(size.width).unwrap(),
+            NonZeroU32::new(size.height).unwrap(),
+        );
+        let gl_surface = unsafe { gl_display.create_window_surface(&gl_config, &surface_attributes)? };
 
-        let gl_context = window.gl_create_context()?;
+        let context_attributes = ContextAttributesBuilder::new()
+            .with_context_api(ContextApi::OpenGl(Some(glutin::context::Version::new(3, 3))))
+            .build(Some(window.window_handle().unwrap().as_raw()));
+        let gl_context = unsafe { gl_display.create_context(&gl_config, &context_attributes)? };
+        let gl_context = gl_context.make_current(&gl_surface)?;
+
         let gl = unsafe {
-            glow::Context::from_loader_function(|s| video_subsystem.gl_get_proc_address(s).cast())
+            glow::Context::from_loader_function(|s| {
+                let c_string = std::ffi::CString::new(s).unwrap();
+                gl_display.get_proc_address(&c_string).cast()
+            })
         };
 
-        let dpi = video_subsystem
-            .display_dpi(0)
-            .map_or(96.0, |(_ddpi, hdpi, _vdpi)| hdpi);
+        #[allow(clippy::cast_possible_truncation)]
+        let dpi = window.scale_factor() as f32;
 
         Ok((
+            event_loop,
             Self {
-                sdl_context,
-                video_subsystem,
-                window,
+                window: Arc::new(window),
+                gl_surface,
                 gl_context,
                 dpi,
             },
             gl,
         ))
     }
+
+    #[must_use]
+    pub fn size(&self) -> (u32, u32) {
+        let size = self.window.inner_size();
+        (size.width, size.height)
+    }
+
+    #[must_use]
+    pub fn drawable_size(&self) -> (u32, u32) {
+        self.size()
+    }
+
+    pub fn resize_surface(&self, width: u32, height: u32) {
+        if let (Some(w), Some(h)) = (NonZeroU32::new(width), NonZeroU32::new(height)) {
+            self.gl_surface.resize(&self.gl_context, w, h);
+        }
+    }
+
+    /// Swaps the front and back buffers.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if swap buffers fails on the underlying GL surface.
+    pub fn swap_buffers(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.gl_surface.swap_buffers(&self.gl_context)?;
+        Ok(())
+    }
 }
+
