@@ -1,6 +1,8 @@
 use glutin::config::ConfigTemplateBuilder;
-use glutin::context::{ContextApi, ContextAttributesBuilder, NotCurrentGlContext, PossiblyCurrentContext};
-use glutin::display::{GlDisplay, GetGlDisplay};
+use glutin::context::{
+    ContextApi, ContextAttributesBuilder, NotCurrentGlContext, PossiblyCurrentContext,
+};
+use glutin::display::{GetGlDisplay, GlDisplay};
 use glutin::prelude::GlSurface;
 use glutin::surface::{SurfaceAttributesBuilder, WindowSurface};
 use glutin_winit::DisplayBuilder;
@@ -30,9 +32,8 @@ impl DesktopWindow {
         let template = ConfigTemplateBuilder::new().with_alpha_size(8);
         let display_builder = DisplayBuilder::new().with_window_attributes(Some(window_attributes));
 
-        let (window, gl_config) = display_builder.build(&event_loop, template, |mut configs| {
-            configs.next().unwrap()
-        })?;
+        let (window, gl_config) =
+            display_builder.build(&event_loop, template, |mut configs| configs.next().unwrap())?;
 
         let window = window.ok_or("failed to create window")?;
         let gl_display = gl_config.display();
@@ -43,10 +44,13 @@ impl DesktopWindow {
             NonZeroU32::new(size.width).unwrap(),
             NonZeroU32::new(size.height).unwrap(),
         );
-        let gl_surface = unsafe { gl_display.create_window_surface(&gl_config, &surface_attributes)? };
+        let gl_surface =
+            unsafe { gl_display.create_window_surface(&gl_config, &surface_attributes)? };
 
         let context_attributes = ContextAttributesBuilder::new()
-            .with_context_api(ContextApi::OpenGl(Some(glutin::context::Version::new(3, 3))))
+            .with_context_api(ContextApi::OpenGl(Some(glutin::context::Version::new(
+                3, 3,
+            ))))
             .build(Some(window.window_handle().unwrap().as_raw()));
         let gl_context = unsafe { gl_display.create_context(&gl_config, &context_attributes)? };
         let gl_context = gl_context.make_current(&gl_surface)?;
@@ -100,4 +104,3 @@ impl DesktopWindow {
         Ok(())
     }
 }
-

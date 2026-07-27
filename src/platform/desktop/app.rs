@@ -22,13 +22,14 @@ pub struct FrameInputState {
     pub clicked_pos: Option<Point>,
     pub mouse_released: bool,
     pub mouse_moved: bool,
-    pub scroll_events: Vec<(i32, i32)>,
-    pub drag_events: Vec<(i32, i32)>,
+    pub scroll_events: Vec<(f32, f32)>,
+    pub drag_events: Vec<(f32, f32)>,
 }
 
 pub struct AppState {
     pub running: bool,
     pub window_focused: bool,
+    pub is_mouse_down: bool,
     pub focused_input_id: Option<String>,
     pub last_mouse_pos: Point,
     pub hovered_btn: Option<u64>,
@@ -67,6 +68,7 @@ impl AppState {
         Self {
             running: true,
             window_focused: true,
+            is_mouse_down: false,
             focused_input_id: None,
             last_mouse_pos: Point::new(-9999.0, -9999.0),
             hovered_btn: None,
@@ -90,6 +92,26 @@ impl Default for AppState {
     }
 }
 
+fn find_first_scrollview<'a>(
+    element: &'a crate::core::types::Element,
+    layout: &'a crate::core::layout::LayoutNode,
+) -> Option<(
+    &'a crate::core::types::Element,
+    &'a crate::core::layout::LayoutNode,
+)> {
+    if let crate::core::types::Element::ScrollView { .. } = element {
+        return Some((element, layout));
+    }
+    if let crate::core::types::Element::Container { children, .. } = element {
+        for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+            if let Some(res) = find_first_scrollview(child_el, child_lay) {
+                return Some(res);
+            }
+        }
+    }
+    None
+}
+
 #[allow(
     clippy::missing_errors_doc,
     clippy::too_many_lines,
@@ -111,8 +133,8 @@ pub fn run_loop(
     desktop.window.request_redraw();
 
     #[allow(deprecated)]
-    event_loop.run(move |event, active_event_loop| {
-        match event {
+    event_loop
+        .run(move |event, active_event_loop| match event {
             winit::event::Event::WindowEvent { event, .. } => {
                 match &event {
                     winit::event::WindowEvent::CloseRequested => {
@@ -172,12 +194,16 @@ pub fn run_loop(
                         });
 
                         let metrics = ScreenMetrics::from_dpi(width, height, desktop.dpi);
-                        let layout_tree = calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
+                        let layout_tree =
+                            calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
 
                         if input.mouse_moved {
                             let prev_hovered = app.hovered_btn;
-                            let hovered_data =
-                                find_hovered_button(&root_element, &layout_tree, scaled_last_mouse_pos);
+                            let hovered_data = find_hovered_button(
+                                &root_element,
+                                &layout_tree,
+                                scaled_last_mouse_pos,
+                            );
                             app.hovered_btn = hovered_data.map(|(id, _)| id);
 
                             match (prev_hovered, hovered_data) {
@@ -228,9 +254,9 @@ pub fn run_loop(
                                 clicked_pt,
                             ) {
                                 if capture_drag.unwrap_or(true) {
-                                    app.active_scrollview_drag = id
-                                        .as_deref()
-                                        .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                                    app.active_scrollview_drag = id.as_deref().map(|id_str| {
+                                        crate::core::ui::widget::fnv1a(id_str.as_bytes())
+                                    });
                                 }
                                 app.kinetic_scrolls.clear();
                             }
@@ -239,8 +265,11 @@ pub fn run_loop(
                                 find_clicked_button(&root_element, &layout_tree, clicked_pt)
                             {
                                 app.event_bus.push(UiEvent::PointerDown(clicked_btn));
-                                app.event_bus
-                                    .push(UiEvent::Click(clicked_btn, rect.width, rect.height));
+                                app.event_bus.push(UiEvent::Click(
+                                    clicked_btn,
+                                    rect.width,
+                                    rect.height,
+                                ));
                             } else {
                                 app.event_bus.push(UiEvent::PointerDown(0));
                                 app.event_bus.push(UiEvent::ClickOutside);
@@ -249,18 +278,21 @@ pub fn run_loop(
 
                         if input.mouse_released {
                             if let Some(sv_id) = app.active_scrollview_drag
-                                && (app.last_drag_delta.0.abs() > 0.5 || app.last_drag_delta.1.abs() > 0.5)
+                                && (app.last_drag_delta.0.abs() > 0.5
+                                    || app.last_drag_delta.1.abs() > 0.5)
                             {
                                 let momentum_enabled = if let Some((
                                     crate::core::types::Element::ScrollView {
-                                        momentum_scrolling, ..
+                                        momentum_scrolling,
+                                        ..
                                     },
                                     _,
-                                )) = crate::core::render::draw::find_hovered_scrollview(
-                                    &root_element,
-                                    &layout_tree,
-                                    scaled_last_mouse_pos,
-                                ) {
+                                )) =
+                                    crate::core::render::draw::find_hovered_scrollview(
+                                        &root_element,
+                                        &layout_tree,
+                                        scaled_last_mouse_pos,
+                                    ) {
                                     momentum_scrolling.unwrap_or(true)
                                 } else {
                                     true
@@ -275,55 +307,44 @@ pub fn run_loop(
                                 }
                             }
 
-                            let released_btn =
-                                find_hovered_button(&root_element, &layout_tree, scaled_last_mouse_pos)
-                                    .map(|(id, _)| id);
+                            let released_btn = find_hovered_button(
+                                &root_element,
+                                &layout_tree,
+                                scaled_last_mouse_pos,
+                            )
+                            .map(|(id, _)| id);
                             app.event_bus.push(UiEvent::PointerUp(released_btn));
 
                             app.active_scrollview_drag = None;
                             app.last_drag_delta = (0.0, 0.0);
                         }
 
-                        let get_max_scroll = |target_id: Option<u64>| -> f32 {
-                            target_id.map_or(0.0, |target| {
-                                let mut found_max = 0.0;
-                                let mut search = vec![(&root_element, &layout_tree)];
-                                while let Some((el, lay)) = search.pop() {
-                                    if let crate::core::types::Element::ScrollView { id, .. } = el
-                                        && id
-                                            .as_deref()
-                                            .map(|s| crate::core::ui::widget::fnv1a(s.as_bytes()))
-                                            == Some(target)
-                                    {
-                                        let view_height = lay.rect.height;
-                                        let mut min_y = f32::MAX;
-                                        let mut max_y = f32::MIN;
-                                        for child in &lay.children {
-                                            if child.rect.y < min_y {
-                                                min_y = child.rect.y;
-                                            }
-                                            if child.rect.y + child.rect.height > max_y {
-                                                max_y = child.rect.y + child.rect.height;
-                                            }
-                                        }
-                                        if min_y <= max_y {
-                                            found_max = (max_y - min_y - view_height).max(0.0);
-                                        }
-                                        break;
-                                    }
-                                    if let crate::core::types::Element::Container { children, .. }
-                                    | crate::core::types::Element::ScrollView { children, .. } = el
-                                    {
-                                        for (child, child_lay) in children.iter().zip(lay.children.iter()) {
-                                            search.push((child, child_lay));
-                                        }
+                        let get_max_scroll_for_lay =
+                            |lay: &crate::core::layout::LayoutNode| -> f32 {
+                                let view_height = lay.rect.height;
+                                let mut max_y = 0.0_f32;
+                                for child_lay in &lay.children {
+                                    let child_bottom = child_lay.rect.y + child_lay.rect.height;
+                                    if child_bottom > max_y {
+                                        max_y = child_bottom;
                                     }
                                 }
-                                found_max
-                            })
-                        };
+                                let content_height = max_y - lay.rect.y;
+                                if content_height > view_height && view_height > 0.0 {
+                                    content_height - view_height
+                                } else {
+                                    999_999.0
+                                }
+                            };
 
                         for &(x, y) in &input.scroll_events {
+                            let target = crate::core::render::draw::find_hovered_scrollview(
+                                &root_element,
+                                &layout_tree,
+                                scaled_last_mouse_pos,
+                            )
+                            .or_else(|| find_first_scrollview(&root_element, &layout_tree));
+
                             if let Some((
                                 crate::core::types::Element::ScrollView {
                                     id,
@@ -332,13 +353,11 @@ pub fn run_loop(
                                     ..
                                 },
                                 lay,
-                            )) = crate::core::render::draw::find_hovered_scrollview(
-                                &root_element,
-                                &layout_tree,
-                                scaled_last_mouse_pos,
-                            ) {
+                            )) = target
+                            {
                                 let mut factor = scroll_sensitivity.unwrap_or(1.0);
-                                if dynamic_sensitivity.unwrap_or(false) && !lay.children.is_empty() {
+                                if dynamic_sensitivity.unwrap_or(false) && !lay.children.is_empty()
+                                {
                                     let view_height = lay.rect.height;
                                     let mut min_y = f32::MAX;
                                     let mut max_y = f32::MIN;
@@ -356,14 +375,17 @@ pub fn run_loop(
                                     }
                                 }
 
-                                let sv_id = id
-                                    .as_deref()
-                                    .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                                let sv_id = id.as_deref().map(|id_str| {
+                                    crate::core::ui::widget::fnv1a(id_str.as_bytes())
+                                });
+
+                                let max_scroll = get_max_scroll_for_lay(lay);
+
                                 app.event_bus.push(UiEvent::Scroll(
                                     sv_id,
-                                    f32::from(i16::try_from(x).unwrap_or(0)) * -20.0 * factor,
-                                    f32::from(i16::try_from(y).unwrap_or(0)) * -20.0 * factor,
-                                    get_max_scroll(sv_id),
+                                    -x * 20.0 * factor,
+                                    -y * 20.0 * factor,
+                                    max_scroll,
                                 ));
                             }
                         }
@@ -371,38 +393,48 @@ pub fn run_loop(
                         let mut total_dx = 0.0;
                         let mut total_dy = 0.0;
                         for &(dx, dy) in &input.drag_events {
-                            let s_dx = f32::from(i16::try_from(dx).unwrap_or(0)) * scale_x;
-                            let s_dy = f32::from(i16::try_from(dy).unwrap_or(0)) * scale_y;
+                            let s_dx = -dx * scale_x;
+                            let s_dy = -dy * scale_y;
                             total_dx += s_dx;
                             total_dy += s_dy;
 
+                            let target = crate::core::render::draw::find_hovered_scrollview(
+                                &root_element,
+                                &layout_tree,
+                                scaled_last_mouse_pos,
+                            )
+                            .or_else(|| find_first_scrollview(&root_element, &layout_tree));
+
                             if let Some(sv_id) = app.active_scrollview_drag {
-                                app.event_bus.push(UiEvent::Scroll(
-                                    Some(sv_id),
-                                    s_dx,
-                                    s_dy,
-                                    get_max_scroll(Some(sv_id)),
-                                ));
+                                if let Some((_, lay)) = target {
+                                    let max_scroll = get_max_scroll_for_lay(lay);
+                                    app.event_bus.push(UiEvent::Scroll(
+                                        Some(sv_id),
+                                        s_dx,
+                                        s_dy,
+                                        max_scroll,
+                                    ));
+                                }
                             } else if let Some((
                                 crate::core::types::Element::ScrollView {
                                     id, capture_drag, ..
                                 },
-                                _,
-                            )) = crate::core::render::draw::find_hovered_scrollview(
-                                &root_element,
-                                &layout_tree,
-                                scaled_last_mouse_pos,
-                            ) {
-                                if capture_drag.unwrap_or(true) && app.active_scrollview_drag.is_none() {
-                                    app.active_scrollview_drag = id
-                                        .as_deref()
-                                        .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                                lay,
+                            )) = target
+                            {
+                                if capture_drag.unwrap_or(true)
+                                    && app.active_scrollview_drag.is_none()
+                                {
+                                    app.active_scrollview_drag = id.as_deref().map(|id_str| {
+                                        crate::core::ui::widget::fnv1a(id_str.as_bytes())
+                                    });
                                 }
-                                let sv_id = id
-                                    .as_deref()
-                                    .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
+                                let sv_id = id.as_deref().map(|id_str| {
+                                    crate::core::ui::widget::fnv1a(id_str.as_bytes())
+                                });
+                                let max_scroll = get_max_scroll_for_lay(lay);
                                 app.event_bus
-                                    .push(UiEvent::Scroll(sv_id, s_dx, s_dy, get_max_scroll(sv_id)));
+                                    .push(UiEvent::Scroll(sv_id, s_dx, s_dy, max_scroll));
                             }
                         }
 
@@ -412,11 +444,13 @@ pub fn run_loop(
 
                         app.kinetic_scrolls.retain_mut(|k| {
                             if k.velocity_x.abs() > 0.1 || k.velocity_y.abs() > 0.1 {
+                                let max_scroll = find_first_scrollview(&root_element, &layout_tree)
+                                    .map_or(999_999.0, |(_, lay)| get_max_scroll_for_lay(lay));
                                 app.event_bus.push(UiEvent::Scroll(
                                     Some(k.sv_id),
                                     k.velocity_x,
                                     k.velocity_y,
-                                    get_max_scroll(Some(k.sv_id)),
+                                    max_scroll,
                                 ));
                                 k.velocity_x *= 0.92;
                                 k.velocity_y *= 0.92;
@@ -436,9 +470,15 @@ pub fn run_loop(
                         if let Ok(mut q) = app.action_queue.lock() {
                             for action in q.drain(..) {
                                 match action {
-                                    Action::OpenSettings => println!("Desktop Preview: Open Settings triggered"),
-                                    Action::OpenContacts => println!("Desktop Preview: Open Contacts triggered"),
-                                    Action::OpenCamera => println!("Desktop Preview: Open Camera triggered"),
+                                    Action::OpenSettings => {
+                                        println!("Desktop Preview: Open Settings triggered");
+                                    }
+                                    Action::OpenContacts => {
+                                        println!("Desktop Preview: Open Contacts triggered");
+                                    }
+                                    Action::OpenCamera => {
+                                        println!("Desktop Preview: Open Camera triggered");
+                                    }
                                     Action::LoadImage { id, src } => {
                                         if src.starts_with("app-icon://") {
                                             let w = 64;
@@ -516,9 +556,8 @@ pub fn run_loop(
                 }
             }
             _ => {}
-        }
-    })
-    .map_err(|e| e.to_string())?;
+        })
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }

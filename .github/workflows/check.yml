@@ -286,14 +286,14 @@ jobs:
       # Performs checks using cargo-ndk.
       # ANDROID_NDK_HOME is automatically sourced from GITHUB_ENV.
       - name: Android (ARM64) Check
-        run: BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android" cargo ndk --target aarch64-linux-android check
+        run: BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android30" cargo ndk --target aarch64-linux-android check
 
       - name: Android (ARMv7) Check
         run: BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--target=armv7-linux-androideabi" cargo ndk --target armv7-linux-androideabi check
 
       - name: Android Clippy Checks
         run: |
-          BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android" cargo ndk --target aarch64-linux-android clippy --workspace --all-targets --all-features -- \
+          BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android30" cargo ndk --target aarch64-linux-android clippy --workspace --all-targets --all-features -- \
             -D warnings \
             -D clippy::pedantic \
             -D clippy::nursery \

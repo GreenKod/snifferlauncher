@@ -23,7 +23,7 @@ pub const fn fnv1a(s: &[u8]) -> u64 {
 /// typical widget name sets.
 ///
 /// # Example
-/// ```
+/// ```rust,ignore
 /// const MY_BUTTON: u64 = snifferlauncher::wid!(b"my-button");
 /// ```
 #[macro_export]

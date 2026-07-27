@@ -217,10 +217,7 @@ impl JsPlugin {
         Ok(plugin)
     }
 
-    fn init_js_env(
-        &self,
-        config: JsPluginEnvConfig,
-    ) -> Result<(), String> {
+    fn init_js_env(&self, config: JsPluginEnvConfig) -> Result<(), String> {
         // Clone the context to pass into host_api (captured as SafeContext).
         let context_clone = self.context.clone();
 
