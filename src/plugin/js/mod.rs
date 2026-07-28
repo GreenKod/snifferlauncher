@@ -359,7 +359,7 @@ impl JsPlugin {
         let initial_granted: Vec<String> = config
             .permissions
             .iter()
-            .filter(|p| p.starts_with("plugin.permission."))
+            .filter(|p| p.starts_with("plugin.permission.") || p.starts_with("android.permission."))
             .cloned()
             .collect();
 

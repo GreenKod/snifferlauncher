@@ -24,10 +24,25 @@ impl DesktopWindow {
     #[allow(clippy::missing_panics_doc, clippy::missing_errors_doc)]
     pub fn new() -> Result<(EventLoop<()>, Self, glow::Context), Box<dyn std::error::Error>> {
         let event_loop = EventLoop::new()?;
-        let window_attributes = WindowAttributes::default()
+        let window_icon = {
+            let icon_bytes = include_bytes!("../../../res/drawable/icon.png");
+            if let Ok(img) = image::load_from_memory(icon_bytes) {
+                let rgba = img.to_rgba8();
+                let (width, height) = rgba.dimensions();
+                winit::window::Icon::from_rgba(rgba.into_raw(), width, height).ok()
+            } else {
+                None
+            }
+        };
+
+        let mut window_attributes = WindowAttributes::default()
             .with_title("Platform-Agnostic Launcher")
             .with_inner_size(LogicalSize::new(1280.0, 900.0))
             .with_resizable(true);
+
+        if let Some(icon) = window_icon {
+            window_attributes = window_attributes.with_window_icon(Some(icon));
+        }
 
         let template = ConfigTemplateBuilder::new().with_alpha_size(8);
         let display_builder = DisplayBuilder::new().with_window_attributes(Some(window_attributes));

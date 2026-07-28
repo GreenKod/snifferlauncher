@@ -58,6 +58,25 @@ impl Default for Transform {
 }
 
 /// All visual and layout properties of a single UI element.
+fn deserialize_f32_or_dimension<'de, D>(deserializer: D) -> Result<f32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum F32OrDimension {
+        Float(f32),
+        Dim(Dimension),
+    }
+
+    match F32OrDimension::deserialize(deserializer)? {
+        F32OrDimension::Float(f) => Ok(f),
+        F32OrDimension::Dim(Dimension::Pixels(f)) => Ok(f),
+        F32OrDimension::Dim(Dimension::Percent(p)) => Ok(p),
+        F32OrDimension::Dim(Dimension::Auto) => Ok(0.0),
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Style {
@@ -85,13 +104,20 @@ pub struct Style {
 
     pub padding: RectOffset,
     pub margin: RectOffset,
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
     pub gap: f32,
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
+    pub row_gap: f32,
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
+    pub column_gap: f32,
 
     pub opacity: f32,
     pub background_color: Option<u32>,
     pub background_gradient: Option<(u32, u32)>,
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
     pub border_radius: f32,
     pub border_color: Option<u32>,
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
     pub border_width: f32,
 
     pub shadow_color: Option<u32>,
@@ -99,6 +125,7 @@ pub struct Style {
     pub shadow_spread: f32,
 
     pub text_color: Option<u32>,
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
     pub text_size: f32,
 
     pub overflow_hidden: bool,
@@ -133,6 +160,8 @@ impl Default for Style {
             padding: RectOffset::zero(),
             margin: RectOffset::zero(),
             gap: 0.0,
+            row_gap: 0.0,
+            column_gap: 0.0,
             opacity: 1.0,
             background_color: None,
             background_gradient: None,

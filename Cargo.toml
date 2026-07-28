@@ -42,6 +42,12 @@ khronos-egl = { version = "6.0", features = ["dynamic"] }
 package = "com.greenkod.snifferlauncher"
 build_targets = ["aarch64-linux-android"]
 assets = ".plugins"
+resources = "res"
+aapt_ignore_assets = "!.svn:!.git:!.ds_store:!*.scc:.*:!_*:!_"
+
+[package.metadata.android.application]
+icon = "@drawable/icon"
+label = "Sniffer Launcher"
 
 [package.metadata.android.sdk]
 min_sdk_version = 30
