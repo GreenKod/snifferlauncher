@@ -1,122 +1,87 @@
 // Default Interface - Main Entry Point
 
-function App() {
-    return ScrollView("root_scroll", {
-        scroll_x: state.scrollX ?? 0.0,
-        scroll_y: state.scrollY ?? 0.0,
-        style: {
-            display: "Flex",
-            flex_direction: "Column",
+function Root() {
+    const isLandscape = vw(100) > vh(100);
+
+    if (isLandscape) {
+        // Yatay Ekran (Landscape): Sol taraf %84 Grid, Sağ taraf %16 Dikey Görev Yöneticisi Şeridi
+        return Container("root", {
             width: pct(100),
             height: pct(100),
+            position: "Relative",
             background_color: hex(state.bgColor),
-            align_items: "Center",
-            padding: padXY(vh(8.0), vw(5.0)),
-            gap: vh(4.0),
-        }
-    }, [
-        HeaderComponent(),
-        SearchBarComponent(),
-        ActionsGridComponent(),
-        ...ModuleListComponent(),
-    ]);
-}
+            flex_direction: "Row",
+            justify_content: "Start",
+            align_items: "Stretch",
+        }, [
+            ...AppGridComponent(),
 
-function Root() {
+            // Dikey (Yukarıdan Aşağı) Görev Yöneticisi Alanı
+            Container("task_manager_reserved_area", {
+                width: px(vw(16.0)),
+                height: pct(100),
+                background_color: hex("#0B0B0E"),
+                flex_direction: "Column",
+                justify_content: "Center",
+                align_items: "Center",
+                gap: vh(1.2),
+            }, [
+                Label("tm_reserved_l1", "G Ö R E V", {
+                    text_color: hex("#333344"),
+                    text_size: vw(1.4),
+                    width: "Auto",
+                }),
+                Label("tm_reserved_l2", "Y Ö N E T İ C İ S İ", {
+                    text_color: hex("#333344"),
+                    text_size: vw(1.2),
+                    width: "Auto",
+                }),
+                Label("tm_reserved_l3", "A L A N I", {
+                    text_color: hex("#333344"),
+                    text_size: vw(1.4),
+                    width: "Auto",
+                }),
+                Label("tm_reserved_l4", "(%16)", {
+                    text_color: hex("#333344"),
+                    text_size: vw(1.2),
+                    width: "Auto",
+                })
+            ])
+        ]);
+    }
+
+    // Dikey Ekran (Portrait): Üst taraf %84 Grid, Alt taraf %16 Yatay Görev Yöneticisi Şeridi
     return Container("root", {
         width: pct(100),
         height: pct(100),
         position: "Relative",
         background_color: hex(state.bgColor),
+        flex_direction: "Column",
+        justify_content: "Start",
+        align_items: "Stretch",
     }, [
-        App(),
-        FabButtonComponent(),
+        ...AppGridComponent(),
+
+        Container("task_manager_reserved_area", {
+            width: pct(100),
+            height: px(vh(16.0)),
+            background_color: hex("#0B0B0E"),
+            justify_content: "Center",
+            align_items: "Center",
+        }, [
+            Label("tm_reserved_label", "Görev Yöneticisi Alanı (%16)", {
+                text_color: hex("#333344"),
+                text_size: vmin(4.0),
+                width: "Auto",
+            })
+        ])
     ]);
 }
 
-subscribeChannel("clock.secondChanged", function(eventData) {
-    host_log("[Default UI] Received clock.secondChanged event: " + JSON.stringify(eventData));
-});
+subscribeChannel("clock.secondChanged", function(eventData) {});
 
-// Event Listener
 globalThis.onEvent = function (eventJsonString) {
     const e = JSON.parse(eventJsonString);
-
-    if (e.type === "Click" && e.id === host_hash("btn-greeting")) {
-        SnifferUI.setState({
-            greetingText: "Ready for Action! 🚀",
-            bgColor: "#111111",
-        });
-        const time = callApi("clock.getTime", { "utcOffset": 3 });
-        host_log("[Default UI] Current Time from Clock Widget: " + JSON.stringify(time));
-        return "[]";
-    }
-
-    if (e.type === "Click" && (e.id === host_hash("counter_box") || e.id === host_hash("btn-counter") || e.id === host_hash("counter_val"))) {
-        SnifferUI.setState({ clickCount: state.clickCount + 1 });
-        return "[]";
-    }
-
-    if (e.type === "Click" && (e.id === host_hash("anim_box") || e.id === host_hash("anim_box_text"))) {
-        SnifferUI.setState({ boxToggled: !state.boxToggled });
-        return "[]";
-    }
-
-    if (e.type === "Click" && e.id === host_hash("search_input")) {
-        host_focus_input("search_input");
-        const query = state.searchQuery === "" ? "" : state.searchQuery;
-        SnifferUI.setState({ isSearchFocused: true, searchQuery: query });
-        return "[]";
-    }
-
-    if (e.type === "PointerDown" &&
-        (String(e.id) === String(host_hash("fab_button")) ||
-            String(e.id) === String(host_hash("fab_text")))) {
-        SnifferUI.setState({ fabOpacity: 0.5 });
-        return "[]";
-    }
-
-    if (e.type === "PointerUp") {
-        const wasFabPressed = state.fabOpacity === 0.5;
-        if (wasFabPressed) {
-            const newItems = [...state.items, state.items.length + 1];
-            SnifferUI.setState({ fabOpacity: 0.9, items: newItems });
-        } else {
-            SnifferUI.setState({ fabOpacity: 0.9 });
-        }
-        return "[]";
-    }
-
-    if (e.type === "ClickOutside") {
-        host_blur_input();
-        SnifferUI.setState({ isSearchFocused: false });
-        return "[]";
-    }
-
-    if (e.type === "TextInput") {
-        SnifferUI.setState({ searchQuery: state.searchQuery + e.text });
-        return "[]";
-    }
-
-    if (e.type === "Backspace") {
-        const val = state.searchQuery;
-        if (val.length > 0) {
-            SnifferUI.setState({ searchQuery: val.slice(0, -1) });
-        }
-        return "[]";
-    }
-
-    if (e.type === "Scroll" && e.id === host_hash("root_scroll")) {
-        const s_x = (state.scrollX ?? 0.0) + e.dx;
-        const s_y = (state.scrollY ?? 0.0) + e.dy;
-        const max_x = e.max_x ?? 999999;
-        const max_y = e.max_y ?? 999999;
-        SnifferUI.setState({
-            scrollX: Math.max(0, Math.min(s_x, max_x)),
-            scrollY: Math.max(0, Math.min(s_y, max_y))
-        });
-        return "[]";
-    }
 
     if (e.type === "WindowResized") {
         SnifferUI.forceUpdate();
@@ -126,5 +91,4 @@ globalThis.onEvent = function (eventJsonString) {
     return "[]";
 };
 
-// Start the SnifferUI framework with our root component and initial state
 SnifferUI.start(Root, state);

@@ -101,66 +101,83 @@ pub fn get_application_list() -> Result<Vec<crate::core::types::AppInfo>, String
                 )?
                 .l()?;
 
-            // Use the GET_ACTIVITIES (512) flag to include clickable activities
-            let packages = env
+            let intent_cls = env.find_class(jni_str!("android/content/Intent"))?;
+            let action_main = env
+                .get_static_field(
+                    &intent_cls,
+                    jni_str!("ACTION_MAIN"),
+                    jni_sig!("Ljava/lang/String;"),
+                )?
+                .l()?;
+            let category_launcher = env
+                .get_static_field(
+                    &intent_cls,
+                    jni_str!("CATEGORY_LAUNCHER"),
+                    jni_sig!("Ljava/lang/String;"),
+                )?
+                .l()?;
+
+            let intent = env.new_object(
+                &intent_cls,
+                jni_sig!("(Ljava/lang/String;)V"),
+                &[JValue::Object(&action_main)],
+            )?;
+            env.call_method(
+                &intent,
+                jni_str!("addCategory"),
+                jni_sig!("(Ljava/lang/String;)Landroid/content/Intent;"),
+                &[JValue::Object(&category_launcher)],
+            )?;
+
+            let resolve_infos = env
                 .call_method(
                     &package_manager,
-                    jni_str!("getInstalledPackages"),
-                    jni_sig!("(I)Ljava/util/List;"),
-                    &[JValue::Int(512)],
+                    jni_str!("queryIntentActivities"),
+                    jni_sig!("(Landroid/content/Intent;I)Ljava/util/List;"),
+                    &[JValue::Object(&intent), JValue::Int(0)],
                 )?
                 .l()?;
 
             let size = env
-                .call_method(&packages, jni_str!("size"), jni_sig!("()I"), &[])?
+                .call_method(&resolve_infos, jni_str!("size"), jni_sig!("()I"), &[])?
                 .i()?;
 
             for i in 0..size {
-                let package_info = env
+                let resolve_info = env
                     .call_method(
-                        &packages,
+                        &resolve_infos,
                         jni_str!("get"),
                         jni_sig!("(I)Ljava/lang/Object;"),
                         &[JValue::Int(i)],
                     )?
                     .l()?;
 
+                let activity_info = env
+                    .get_field(
+                        &resolve_info,
+                        jni_str!("activityInfo"),
+                        jni_sig!("Landroid/content/pm/ActivityInfo;"),
+                    )?
+                    .l()?;
+
+                if activity_info.is_null() {
+                    continue;
+                }
+
                 let package_name_obj = env
                     .get_field(
-                        &package_info,
+                        &activity_info,
                         jni_str!("packageName"),
                         jni_sig!("Ljava/lang/String;"),
                     )?
                     .l()?;
 
-                // Launcher check: filter out hidden services without a home screen icon
-                let launch_intent = env
-                    .call_method(
-                        &package_manager,
-                        jni_str!("getLaunchIntentForPackage"),
-                        jni_sig!("(Ljava/lang/String;)Landroid/content/Intent;"),
-                        &[JValue::Object(&package_name_obj)],
-                    )?
-                    .l()?;
-
-                if launch_intent.is_null() {
-                    continue;
-                }
-
-                let app_info_obj = env
-                    .get_field(
-                        &package_info,
-                        jni_str!("applicationInfo"),
-                        jni_sig!("Landroid/content/pm/ApplicationInfo;"),
-                    )?
-                    .l()?;
-
                 let label_char_seq = env
                     .call_method(
-                        &package_manager,
-                        jni_str!("getApplicationLabel"),
-                        jni_sig!("(Landroid/content/pm/ApplicationInfo;)Ljava/lang/CharSequence;"),
-                        &[JValue::Object(&app_info_obj)],
+                        &resolve_info,
+                        jni_str!("loadLabel"),
+                        jni_sig!("(Landroid/content/pm/PackageManager;)Ljava/lang/CharSequence;"),
+                        &[JValue::Object(&package_manager)],
                     )?
                     .l()?;
 
@@ -217,16 +234,21 @@ pub fn request_permissions(permissions: &[String]) -> Result<Vec<String>, String
     let jvm = vm();
     let granted = jvm
         .attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
-            let ctx = context(env);
-            let permission_array =
-                env.new_string_array(permissions.len().try_into().unwrap_or(0))?;
+            let _ctx = context(env);
+            let empty_str = env.new_string("")?;
+            let string_class = env.find_class(jni_str!("java/lang/String"))?;
+            let permission_array = env.new_object_array(
+                permissions.len().try_into().unwrap_or(0),
+                string_class,
+                &empty_str,
+            )?;
 
             for (index, permission) in permissions.iter().enumerate() {
                 let j_permission = env.new_string(permission)?;
-                env.set_string_array_element(
-                    &permission_array,
+                permission_array.set_element(
+                    env,
                     index.try_into().unwrap_or(0),
-                    j_permission,
+                    &j_permission,
                 )?;
             }
 

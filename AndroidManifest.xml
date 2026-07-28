@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.greenkod.snifferlauncher"
+    android:versionCode="1"
+    android:versionName="0.1.0">
+
+    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="35"/>
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+
+    <application
+        android:label="Sniffer Launcher"
+        android:icon="@mipmap/icon"
+        android:roundIcon="@mipmap/icon"
+        android:hasCode="false"
+        android:debuggable="true">
+        
+        <activity
+            android:name="android.app.NativeActivity"
+            android:label="Sniffer Launcher"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="snifferlauncher" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

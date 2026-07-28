@@ -6,11 +6,8 @@
   "main": "main.js",
   "scripts": [
     "state.js",
-    "components/header.js",
-    "components/search_bar.js",
-    "components/actions_grid.js",
-    "components/module_list.js",
-    "components/fab.js",
+    "components/layout.js",
+    "components/app_grid.js",
     "main.js"
   ],
   "preload": [
@@ -18,6 +15,8 @@
   ],
   "permissions": [
     "plugin.permission.UI",
-    "plugin.permission.IPC"
+    "plugin.permission.IPC",
+    "plugin.permission.INPUT",
+    "android.permission.QUERY_ALL_PACKAGES"
   ]
 }

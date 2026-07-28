@@ -367,78 +367,96 @@ impl PluginLoader {
                             for preload_rel in &manifest.preload {
                                 // Resolve the path relative to the plugin folder:
                                 // e.g. "../_framework/sniffer_ui.js" -> "_framework/sniffer_ui.js"
-                                let resolved = std::path::Path::new(&plugin_folder)
-                                    .join(preload_rel)
-                                    .to_string_lossy()
-                                    .replace('\\', "/");
-                                // Normalise: remove leading "./" or "../" components naively
-                                let resolved = resolved.trim_start_matches("../").to_string();
-                                if let Ok(cstr) = std::ffi::CString::new(resolved.clone()) {
-                                    if let Some(mut pa) = asset_manager.open(cstr.as_c_str()) {
-                                        let mut src = String::new();
-                                        if pa.read_to_string(&mut src).is_ok() {
-                                            println!(
-                                                "Android: preloading '{}' for plugin '{}'",
-                                                resolved, manifest.name
-                                            );
-                                            preload_scripts.push(src);
+                                 let resolved = if let Some(stripped) = preload_rel.strip_prefix("../") {
+                                     stripped.to_string()
+                                 } else {
+                                     format!("{plugin_folder}/{preload_rel}")
+                                 };
+                                 let alt_resolved = resolved.replace("_framework/", "framework/");
+                                 let asset_opt = std::ffi::CString::new(resolved.clone())
+                                     .ok()
+                                     .and_then(|c| asset_manager.open(c.as_c_str()))
+                                     .or_else(|| {
+                                         std::ffi::CString::new(alt_resolved)
+                                             .ok()
+                                             .and_then(|c| asset_manager.open(c.as_c_str()))
+                                     });
+
+                                 if let Some(mut pa) = asset_opt {
+                                     let mut src = String::new();
+                                     if pa.read_to_string(&mut src).is_ok() {
+                                         println!(
+                                             "Android: preloading '{}' for plugin '{}'",
+                                             resolved, manifest.name
+                                         );
+                                         preload_scripts.push(src);
+                                     }
+                                 } else {
+                                     eprintln!("Android: preload asset '{resolved}' not found");
+                                 }
+                            }
+
+                            let files_to_read = if !manifest.scripts.is_empty() {
+                                manifest.scripts.clone()
+                            } else {
+                                vec![manifest.main.clone()]
+                            };
+
+                            let mut plugin_code = String::new();
+                            for script_rel in &files_to_read {
+                                let script_path = format!("{plugin_folder}/{script_rel}");
+                                if let Ok(script_cstr) = std::ffi::CString::new(script_path) {
+                                    if let Some(mut asset) = asset_manager.open(script_cstr.as_c_str()) {
+                                        let mut content = String::new();
+                                        if asset.read_to_string(&mut content).is_ok() {
+                                            if !plugin_code.is_empty() {
+                                                plugin_code.push('\n');
+                                            }
+                                            plugin_code.push_str(&content);
                                         }
-                                    } else {
-                                        eprintln!("Android: preload asset '{resolved}' not found");
                                     }
                                 }
                             }
 
-                            let main_js_path = format!("{plugin_folder}/{}", manifest.main);
-                            if let Ok(main_cstr) = std::ffi::CString::new(main_js_path.clone()) {
-                                if let Some(mut main_asset) =
-                                    asset_manager.open(main_cstr.as_c_str())
-                                {
-                                    let mut main_content = String::new();
-                                    if main_asset.read_to_string(&mut main_content).is_ok() {
-                                        // Bundle preload + main
-                                        let mut full_script = preload_scripts.join("\n");
-                                        if !full_script.is_empty() {
-                                            full_script.push('\n');
-                                        }
-                                        full_script.push_str(&main_content);
+                            if !plugin_code.is_empty() {
+                                // Bundle preload + plugin_code
+                                let mut full_script = preload_scripts.join("\n");
+                                if !full_script.is_empty() {
+                                    full_script.push('\n');
+                                }
+                                full_script.push_str(&plugin_code);
 
-                                        match crate::plugin::JsPlugin::new(
-                                            full_script,
-                                            manifest.id.clone(),
-                                            action_queue.clone(),
-                                            api_map.clone(),
-                                            broadcast_queue.clone(),
-                                            manifest.permissions.clone(),
-                                            None,
-                                            None,
-                                        ) {
-                                            Ok(plugin) => {
-                                                registry.register(
-                                                    &(Arc::new(plugin)
-                                                        as Arc<dyn crate::plugin::UiPlugin>),
-                                                );
-                                                println!(
-                                                    "Successfully loaded JS plugin '{}' ({}) from Android Assets",
-                                                    manifest.name, manifest.id
-                                                );
-                                            }
-                                            Err(e) => eprintln!(
-                                                "Failed to instantiate JS plugin '{}' on Android: {e}",
-                                                manifest.name
-                                            ),
-                                        }
-                                    } else {
-                                        eprintln!(
-                                            "Failed to read content of {main_js_path} from Android assets"
+                                match crate::plugin::JsPlugin::new(crate::plugin::js::JsPluginConfig {
+                                    script_content: full_script,
+                                    plugin_id: manifest.id.clone(),
+                                    action_queue: action_queue.clone(),
+                                    api_map: api_map.clone(),
+                                    broadcast_queue: broadcast_queue.clone(),
+                                    permissions: manifest.permissions.clone(),
+                                    default_settings: manifest.default_settings.clone(),
+                                    cached_ui: None,
+                                    cache_path: None,
+                                }) {
+                                    Ok(plugin) => {
+                                        registry.register(
+                                            &(Arc::new(plugin)
+                                                as Arc<dyn crate::plugin::UiPlugin>),
+                                        );
+                                        println!(
+                                            "Successfully loaded JS plugin '{}' ({}) from Android Assets",
+                                            manifest.name, manifest.id
                                         );
                                     }
-                                } else {
-                                    eprintln!(
-                                        "Main script '{}' not found for plugin '{}' in Android assets",
-                                        manifest.main, manifest.name
-                                    );
+                                    Err(e) => eprintln!(
+                                        "Failed to instantiate JS plugin '{}' on Android: {e}",
+                                        manifest.name
+                                    ),
                                 }
+                            } else {
+                                eprintln!(
+                                    "Failed to read scripts for plugin '{}' from Android assets",
+                                    manifest.name
+                                );
                             }
                         } else {
                             eprintln!(

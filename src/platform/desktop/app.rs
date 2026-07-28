@@ -144,6 +144,10 @@ pub fn run_loop(
                     }
                     winit::event::WindowEvent::Resized(size) => {
                         desktop.resize_surface(size.width, size.height);
+                        app.event_bus.push(UiEvent::WindowResized(
+                            size.width as f32,
+                            size.height as f32,
+                        ));
                         desktop.window.request_redraw();
                     }
                     winit::event::WindowEvent::ScaleFactorChanged { .. } => {

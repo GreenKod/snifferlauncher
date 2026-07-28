@@ -23,7 +23,7 @@ impl EglContextState {
         egl.initialize(display)
             .map_err(|e| format!("Failed to initialize EGL: {e:?}"))?;
 
-        let attribs = [
+        let attribs_es3 = [
             khronos_egl::SURFACE_TYPE,
             khronos_egl::WINDOW_BIT,
             khronos_egl::RENDERABLE_TYPE,
@@ -39,20 +39,39 @@ impl EglContextState {
             khronos_egl::NONE,
         ];
 
-        let config = egl
-            .choose_first_config(display, &attribs)
-            .map_err(|e| format!("Failed to choose EGL config: {e:?}"))?
-            .ok_or_else(|| "No EGL config found".to_string())?;
+        let (config, version) = match egl.choose_first_config(display, &attribs_es3) {
+            Ok(Some(cfg)) => (cfg, 3),
+            _ => {
+                let attribs_es2 = [
+                    khronos_egl::SURFACE_TYPE,
+                    khronos_egl::WINDOW_BIT,
+                    khronos_egl::RENDERABLE_TYPE,
+                    khronos_egl::OPENGL_ES2_BIT,
+                    khronos_egl::BLUE_SIZE,
+                    8,
+                    khronos_egl::GREEN_SIZE,
+                    8,
+                    khronos_egl::RED_SIZE,
+                    8,
+                    khronos_egl::NONE,
+                ];
+                let cfg = egl
+                    .choose_first_config(display, &attribs_es2)
+                    .map_err(|e| format!("Failed to choose EGL config: {e:?}"))?
+                    .ok_or_else(|| "No EGL config found".to_string())?;
+                (cfg, 2)
+            }
+        };
 
         let context_attribs = [
             khronos_egl::CONTEXT_CLIENT_VERSION,
-            3, // Request ES 3.0 context
+            version,
             khronos_egl::NONE,
         ];
 
         let context = egl
             .create_context(display, config, None, &context_attribs)
-            .map_err(|e| format!("Failed to create EGL context: {e:?}"))?;
+            .map_err(|e| format!("Failed to create EGL context (version {version}): {e:?}"))?;
 
         Ok(Self {
             egl,

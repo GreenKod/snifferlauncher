@@ -94,12 +94,19 @@ pub fn android_main(app: AndroidApp) {
                 PollEvent::Main(main_event) => match main_event {
                     MainEvent::InitWindow { .. } => {
                         if egl_state.is_none() {
-                            egl_state = EglContextState::new().ok();
+                            match EglContextState::new() {
+                                Ok(s) => egl_state = Some(s),
+                                Err(e) => eprintln!("[EGL Error] Failed to create EGL state: {e}"),
+                            }
                         }
                         if let Some(ref mut egl) = egl_state
                             && let Some(window) = app.native_window()
                         {
-                            let _ = egl.bind_window(&window);
+                            if let Err(e) = egl.bind_window(&window) {
+                                eprintln!("[EGL Error] Failed to bind window: {e}");
+                            } else {
+                                println!("[EGL] Window successfully bound to EGL");
+                            }
                             let width = f32::from(u16::try_from(window.width()).unwrap_or(0));
                             let height = f32::from(u16::try_from(window.height()).unwrap_or(0));
                             state.event_bus.push(UiEvent::WindowResized(width, height));
