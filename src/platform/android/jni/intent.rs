@@ -89,8 +89,114 @@ pub fn launch_action(action: crate::core::types::Action) -> Result<(), String> {
         Action::OpenSettings => start_action("android.settings.SETTINGS"),
         Action::OpenContacts => start_view_uri("content://contacts/people"),
         Action::OpenCamera => start_action("android.media.action.STILL_IMAGE_CAMERA"),
+        Action::LaunchApp { package_name } => launch_app(&package_name),
+        Action::RequestDefaultLauncher => request_default_launcher(),
         Action::LoadImage { .. } | Action::FocusTextInput(_) | Action::BlurTextInput => Ok(()),
     }
+}
+
+/// Requests default launcher role via RoleManager (Android 10+) or Home Settings intent (Android 9 and below).
+pub fn request_default_launcher() -> Result<(), String> {
+    use jni::{jni_sig, jni_str, objects::JValue};
+
+    let jvm = vm();
+
+    jvm.attach_current_thread_for_scope::<_, _, jni::errors::Error>(|env: &mut Env| {
+        let ctx = context(env);
+
+        let sdk_version = env
+            .get_static_field(
+                jni_str!("android/os/Build$VERSION"),
+                jni_str!("SDK_INT"),
+                jni_sig!("I"),
+            )?
+            .i()?;
+
+        if sdk_version >= 29 {
+            let role_service_str = env.new_string("role")?;
+            let role_mgr = env
+                .call_method(
+                    &ctx,
+                    jni_str!("getSystemService"),
+                    jni_sig!("(Ljava/lang/String;)Ljava/lang/Object;"),
+                    &[JValue::Object(&role_service_str)],
+                )?
+                .l()?;
+
+            if !role_mgr.is_null() {
+                let role_home_str = env.new_string("android.app.role.HOME")?;
+                let intent = env
+                    .call_method(
+                        &role_mgr,
+                        jni_str!("createRequestRoleIntent"),
+                        jni_sig!("(Ljava/lang/String;)Landroid/content/Intent;"),
+                        &[JValue::Object(&role_home_str)],
+                    )?
+                    .l()?;
+
+                if !intent.is_null() {
+                    add_new_task_flag(env, &intent).map_err(|_| jni::errors::Error::JavaException)?;
+                    start_activity(env, &ctx, &intent).map_err(|_| jni::errors::Error::JavaException)?;
+                    return Ok(());
+                }
+            }
+        }
+
+        // Fallback for Android 9 and lower or if RoleManager intent creation failed
+        let action_str = env.new_string("android.settings.HOME_SETTINGS")?;
+        let intent = env.new_object(
+            jni_str!("android/content/Intent"),
+            jni_sig!("(Ljava/lang/String;)V"),
+            &[(&action_str).into()],
+        )?;
+
+        add_new_task_flag(env, &intent).map_err(|_| jni::errors::Error::JavaException)?;
+        start_activity(env, &ctx, &intent).map_err(|_| jni::errors::Error::JavaException)?;
+
+        Ok(())
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// Launches an Android application using its package name via `getLaunchIntentForPackage`.
+pub fn launch_app(package_name: &str) -> Result<(), String> {
+    use jni::{jni_sig, jni_str, objects::JValue};
+
+    let jvm = vm();
+
+    jvm.attach_current_thread_for_scope::<_, _, jni::errors::Error>(|env: &mut Env| {
+        let ctx = context(env);
+
+        let pm = env
+            .call_method(
+                &ctx,
+                jni_str!("getPackageManager"),
+                jni_sig!("()Landroid/content/pm/PackageManager;"),
+                &[],
+            )?
+            .l()?;
+
+        let pkg_string = env.new_string(package_name)?;
+
+        let intent = env
+            .call_method(
+                &pm,
+                jni_str!("getLaunchIntentForPackage"),
+                jni_sig!("(Ljava/lang/String;)Landroid/content/Intent;"),
+                &[JValue::Object(&pkg_string)],
+            )?
+            .l()?;
+
+        if intent.is_null() {
+            return Err(jni::errors::Error::JavaException);
+        }
+
+        add_new_task_flag(env, &intent).map_err(|_| jni::errors::Error::JavaException)?;
+        start_activity(env, &ctx, &intent).map_err(|_| jni::errors::Error::JavaException)?;
+
+        Ok(())
+    })
+    .map_err(|e| e.to_string())
 }
 
 fn start_action(action: &str) -> Result<(), String> {

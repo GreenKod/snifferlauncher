@@ -13,6 +13,9 @@ pub enum UiEvent {
     PointerUp(Option<u64>),
     Scroll(Option<u64>, f32, f32, f32, f32),
     WindowResized(f32, f32),
+    /// Rust scroll physics: bir sayfa snap animasyonu tamamlandı.
+    /// widget_id: scroll view'un FNV-1a ID'si, page: 0-tabanlı sayfa indeksi.
+    PageSnapped { widget_id: u64, page: i32 },
 }
 
 #[derive(Default)]

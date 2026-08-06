@@ -1,3 +1,5 @@
+use crate::{dev_err};
+use obfstr::obfstr;
 use std::sync::Mutex;
 
 /// Check if the plugin declared and was granted the requested permission.
@@ -9,9 +11,11 @@ pub fn permission_granted(
     let permission_string = permission.to_string();
 
     if !plugin_permissions.contains(&permission_string) {
-        eprintln!(
-            "Plugin is not authorized for '{}' because it is not declared in manifest permissions.",
-            permission
+        dev_err!(
+            "{} '{}' {}.",
+            obfstr!("Plugin is not authorized for"),
+            permission,
+            obfstr!("because it is not declared in manifest permissions")
         );
         return false;
     }
@@ -21,15 +25,23 @@ pub fn permission_granted(
             if lock.contains(&permission_string) {
                 true
             } else {
-                eprintln!(
-                    "Plugin does not have granted permission '{}'. Call requestPermissions([{}]) first.",
-                    permission, permission
+                dev_err!(
+                    "{} '{}'. {} requestPermissions([{}]) {}.",
+                    obfstr!("Plugin does not have granted permission"),
+                    permission,
+                    obfstr!("Call"),
+                    permission,
+                    obfstr!("first")
                 );
                 false
             }
         }
         Err(_) => {
-            eprintln!("Failed to check granted permissions for '{}'.", permission);
+            dev_err!(
+                "{} '{}'.",
+                obfstr!("Failed to check granted permissions for"),
+                permission
+            );
             false
         }
     }

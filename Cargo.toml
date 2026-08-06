@@ -16,6 +16,7 @@ crate-type = ["rlib", "cdylib"]
 
 [features]
 default = []
+devkit = []
 
 [dependencies]
 glow = "0.17.0"
@@ -30,6 +31,7 @@ postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 image = { version = "0.25.1", default-features = false, features = ["png", "jpeg"] }
 taffy = "0.5"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+obfstr = "0.4"
 
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6.1", features = ["native-activity"] }
@@ -46,7 +48,8 @@ resources = "res"
 aapt_ignore_assets = "!.svn:!.git:!.ds_store:!*.scc:.*:!_*:!_"
 
 [package.metadata.android.application]
-icon = "@drawable/icon"
+icon = "@mipmap/ic_launcher"
+round_icon = "@mipmap/ic_launcher_round"
 label = "Sniffer Launcher"
 
 [package.metadata.android.sdk]
@@ -54,7 +57,17 @@ min_sdk_version = 30
 target_sdk_version = 35
 compile_sdk_version = 35
 
-# Dev modunda kendi kodun hızlı derlenir, ağır bağımlılıklar kasmadan çalışır
+[package.metadata.android.signing.release]
+path = "debug.keystore"
+keystore_password = "android"
+key_alias = "androiddebugkey"
+key_password = "android"
+
+[profile.dev]
+opt-level = 3
+strip = true
+lto = "fat"
+
 [profile.dev.package."*"]
 opt-level = 3
 
@@ -80,6 +93,12 @@ workspace = true
 
 [[package.metadata.android.uses_permission]]
 name = "android.permission.QUERY_ALL_PACKAGES"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.READ_EXTERNAL_STORAGE"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.READ_MEDIA_IMAGES"
 
 [workspace]
 exclude = [".plugins"]

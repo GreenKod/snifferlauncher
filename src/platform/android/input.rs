@@ -14,51 +14,35 @@ pub fn handle_input_event(
     layout_tree: &crate::core::layout::LayoutNode,
 ) -> InputStatus {
     let get_max_scroll = |target_id: Option<u64>| -> f32 {
-        target_id.map_or(0.0, |target| {
-            let mut found_max = 0.0;
-            let mut search = vec![(root_element, layout_tree)];
-            while let Some((el, lay)) = search.pop() {
-                if let crate::core::types::Element::ScrollView { id, .. } = el
-                    && id
-                        .as_deref()
-                        .map(|s| crate::core::ui::widget::fnv1a(s.as_bytes()))
-                        == Some(target)
-                {
-                    let view_height = lay.rect.height;
-                    let mut min_y = f32::MAX;
-                    let mut max_y = f32::MIN;
-                    for child in &lay.children {
-                        if child.rect.y < min_y {
-                            min_y = child.rect.y;
-                        }
-                        if child.rect.y + child.rect.height > max_y {
-                            max_y = child.rect.y + child.rect.height;
-                        }
-                    }
-                    if min_y <= max_y {
-                        found_max = (max_y - min_y - view_height).max(0.0);
-                    }
-                    break;
-                }
-                if let crate::core::types::Element::Container { children, .. }
-                | crate::core::types::Element::ScrollView { children, .. } = el
-                {
-                    for (child, child_lay) in children.iter().zip(lay.children.iter()) {
-                        search.push((child, child_lay));
-                    }
-                }
-            }
-            found_max
-        })
+        target_id.and_then(|id| state.cached_max_scroll.get(&id).copied()).unwrap_or(0.0)
     };
 
     match input_event {
         InputEvent::MotionEvent(motion_event) => {
             let pointer = motion_event.pointer_at_index(motion_event.pointer_index());
-            let point = Point::new(pointer.raw_x(), pointer.raw_y());
-            let delta_x = -(point.x - state.last_touch_pos.x);
-            let delta_y = -(point.y - state.last_touch_pos.y);
-            state.last_touch_pos = point;
+            let point = Point::new(pointer.x(), pointer.y());
+
+            let (delta_x, delta_y) = match motion_event.action() {
+                MotionAction::Down | MotionAction::PointerDown => {
+                    state.last_touch_pos = point;
+                    state.last_drag_delta = (0.0, 0.0);
+                    state.total_touch_drag_distance = 0.0;
+                    (0.0, 0.0)
+                }
+                _ => {
+                    let raw_delta_x = -(point.x - state.last_touch_pos.x);
+                    let raw_delta_y = -(point.y - state.last_touch_pos.y);
+                    state.last_touch_pos = point;
+
+                    // Exponential moving average (EMA) smoothing for high-responsiveness 1:1 touch tracking.
+                    // alpha=0.85: eliminates input lag while rejecting digitizer noise.
+                    let alpha = 0.85_f32;
+                    let dx = alpha.mul_add(raw_delta_x, (1.0 - alpha) * state.last_drag_delta.0);
+                    let dy = alpha.mul_add(raw_delta_y, (1.0 - alpha) * state.last_drag_delta.1);
+                    state.total_touch_drag_distance += dx.abs() + dy.abs();
+                    (dx, dy)
+                }
+            };
 
             match motion_event.action() {
                 MotionAction::Down | MotionAction::Move | MotionAction::PointerDown => {
@@ -77,7 +61,9 @@ pub fn handle_input_event(
                                 .as_deref()
                                 .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
                         }
+                        // FIX (Sorun 3): Yeni dokunuşta geçmiş velocity tamponunu sıfırla
                         state.kinetic_scrolls.clear();
+                        state.drag_history.clear();
 
                         if let Some((clicked_btn, _)) =
                             find_clicked_button(root_element, layout_tree, point)
@@ -108,38 +94,49 @@ pub fn handle_input_event(
                     }
                     if motion_event.action() == MotionAction::Move {
                         state.last_drag_delta = (delta_x, delta_y);
-                        if let Some(sv_id) = state.active_scrollview_drag {
-                            state.event_bus.push(UiEvent::Scroll(
-                                Some(sv_id),
-                                delta_x,
-                                delta_y,
-                                999_999.0,
-                                get_max_scroll(Some(sv_id)),
-                            ));
-                        } else if let Some((
-                            crate::core::types::Element::ScrollView {
-                                id, capture_drag, ..
-                            },
-                            _,
-                        )) = find_hovered_scrollview(root_element, layout_tree, point)
-                        {
-                            if capture_drag.unwrap_or(true)
-                                && state.active_scrollview_drag.is_none()
+
+                        // FIX (Sorun 3): Velocity geçmişini kaydet (son ~8 frame).
+                        // Parmak yavaşlayarak bırakıldığında son tek delta yerine
+                        // rolling average kullanarak tutarlı momentum sağlar.
+                        state
+                            .drag_history
+                            .push_back((delta_x, delta_y, std::time::Instant::now()));
+                        if state.drag_history.len() > 8 {
+                            state.drag_history.pop_front();
+                        }
+
+                        if state.active_scrollview_drag.is_none() {
+                            if let Some((
+                                crate::core::types::Element::ScrollView {
+                                    id, capture_drag, ..
+                                },
+                                _,
+                            )) = find_hovered_scrollview(root_element, layout_tree, point)
                             {
-                                state.active_scrollview_drag = id.as_deref().map(|id_str| {
-                                    crate::core::ui::widget::fnv1a(id_str.as_bytes())
-                                });
+                                if capture_drag.unwrap_or(true) {
+                                    state.active_scrollview_drag = id.as_deref().map(|id_str| {
+                                        crate::core::ui::widget::fnv1a(id_str.as_bytes())
+                                    });
+                                }
                             }
-                            let sv_id = id
-                                .as_deref()
-                                .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
-                            state.event_bus.push(UiEvent::Scroll(
-                                sv_id,
-                                delta_x,
-                                delta_y,
-                                999_999.0,
-                                get_max_scroll(sv_id),
-                            ));
+                        }
+
+                        if let Some(sv_id) = state.active_scrollview_drag {
+                            // Rust-managed mı? Varsa fizik motoruna doğrudan uygula, JS'i bypass et
+                            if let Some(phys) = state.scroll_physics.get_mut(&sv_id) {
+                                phys.apply_drag(delta_x); // Yatay pager: sadece X
+                                phys.is_dragging = true;
+                                phys.snap_target_x = None; // Sürüklerken snap'i iptal et
+                            } else {
+                                // Klasik ScrollView: JS'e event gönder
+                                state.event_bus.push(UiEvent::Scroll(
+                                    Some(sv_id),
+                                    delta_x,
+                                    delta_y,
+                                    999_999.0,
+                                    get_max_scroll(Some(sv_id)),
+                                ));
+                            }
                         } else {
                             state.event_bus.push(UiEvent::Scroll(
                                 state.hovered_btn,
@@ -153,34 +150,87 @@ pub fn handle_input_event(
                     InputStatus::Handled
                 }
                 MotionAction::Up | MotionAction::PointerUp => {
-                    if let Some(sv_id) = state.active_scrollview_drag
-                        && (state.last_drag_delta.0.abs() > 0.5
-                            || state.last_drag_delta.1.abs() > 0.5)
-                    {
-                        let momentum_enabled = if let Some((
-                            crate::core::types::Element::ScrollView {
-                                momentum_scrolling, ..
-                            },
-                            _,
-                        )) =
-                            find_hovered_scrollview(root_element, layout_tree, point)
-                        {
-                            momentum_scrolling.unwrap_or(true)
-                        } else {
-                            true
-                        };
+                    if let Some(sv_id) = state.active_scrollview_drag {
+                        // Rust-managed mı? Varsa velocity'yi fizik motoruna ver
+                        if state.scroll_physics.contains_key(&sv_id) {
+                            let now = std::time::Instant::now();
+                            let cutoff = now
+                                .checked_sub(std::time::Duration::from_millis(150))
+                                .unwrap_or(now);
+                            let recent: Vec<_> = state
+                                .drag_history
+                                .iter()
+                                .filter(|(_, _, t)| *t >= cutoff)
+                                .collect();
 
-                        if momentum_enabled {
-                            state.kinetic_scrolls.push(super::app::KineticScroll {
-                                sv_id,
-                                velocity_x: state.last_drag_delta.0,
-                                velocity_y: state.last_drag_delta.1,
-                            });
+                            // Frame-rate bağımsız dinamik fling hız hesabı (v = dx / dt)
+                            // max(0.001) sıfıra bölünmeyi ve yüksek digitizer yenileme gürültüsünü önler.
+                            let vel_x = if recent.len() >= 2 {
+                                let first = recent.first().unwrap();
+                                let last = recent.last().unwrap();
+                                let dt = last.2.duration_since(first.2).as_secs_f32().max(0.001);
+                                let total_dx: f32 = recent.iter().map(|(dx, _, _)| *dx).sum();
+                                total_dx / dt
+                            } else if let Some(last) = recent.last() {
+                                let dt = now.duration_since(last.2).as_secs_f32().max(0.001);
+                                state.last_drag_delta.0 / dt
+                            } else {
+                                0.0
+                            };
+
+                            if let Some(phys) = state.scroll_physics.get_mut(&sv_id) {
+                                phys.release_drag(vel_x);
+                            }
+                            // Kinetic scroll ve JS event yok: fizik motoru devretti
+                        } else {
+                            // Klasik ScrollView: eski momentum sistemi
+                            let momentum_enabled = if let Some((
+                                crate::core::types::Element::ScrollView {
+                                    momentum_scrolling, ..
+                                },
+                                _,
+                            )) =
+                                find_hovered_scrollview(root_element, layout_tree, point)
+                            {
+                                momentum_scrolling.unwrap_or(true)
+                            } else {
+                                true
+                            };
+
+                            if momentum_enabled {
+                                // Use last 150ms of drag history for fling velocity
+                                let cutoff = std::time::Instant::now()
+                                    .checked_sub(std::time::Duration::from_millis(150))
+                                    .unwrap_or_else(std::time::Instant::now);
+                                let recent: Vec<_> = state
+                                    .drag_history
+                                    .iter()
+                                    .filter(|(_, _, t)| *t >= cutoff)
+                                    .collect();
+
+                                let (vel_x, vel_y) = if recent.is_empty() {
+                                    state.last_drag_delta
+                                } else {
+                                    let n = recent.len() as f32;
+                                    let vx = recent.iter().map(|(dx, _, _)| *dx).sum::<f32>() / n;
+                                    let vy = recent.iter().map(|(_, dy, _)| *dy).sum::<f32>() / n;
+                                    (vx, vy)
+                                };
+
+                                // Always push kinetic scroll — velocity gate is handled by retain_mut
+                                state.kinetic_scrolls.push(super::app::KineticScroll {
+                                    sv_id,
+                                    velocity_x: vel_x,
+                                    velocity_y: vel_y,
+                                });
+                            }
                         }
                     }
 
                     state.active_scrollview_drag = None;
                     state.last_drag_delta = (0.0, 0.0);
+                    state.drag_history.clear();
+
                     let prev_hovered = state.hovered_btn;
                     let hovered_data = find_hovered_button(root_element, layout_tree, point);
                     state.hovered_btn = hovered_data.map(|(id, _)| id);
@@ -190,12 +240,18 @@ pub fn handle_input_event(
 
                     state.event_bus.push(UiEvent::PointerUp(state.hovered_btn));
 
-                    if let Some((clicked_btn, rect)) =
-                        find_clicked_button(root_element, layout_tree, point)
-                    {
-                        state
-                            .event_bus
-                            .push(UiEvent::Click(clicked_btn, rect.width, rect.height));
+                    // Gate Click event on touch slop (< 12.0px drag distance) so scrolling/swiping never launches apps
+                    let is_static_tap = state.total_touch_drag_distance < 12.0;
+                    if is_static_tap {
+                        if let Some((clicked_btn, rect)) =
+                            find_clicked_button(root_element, layout_tree, point)
+                        {
+                            state
+                                .event_bus
+                                .push(UiEvent::Click(clicked_btn, rect.width, rect.height));
+                        } else {
+                            state.event_bus.push(UiEvent::ClickOutside);
+                        }
                     } else {
                         state.event_bus.push(UiEvent::ClickOutside);
                     }
@@ -203,6 +259,7 @@ pub fn handle_input_event(
                 }
                 MotionAction::Cancel => {
                     state.active_scrollview_drag = None;
+                    state.drag_history.clear();
                     let prev_hovered = state.hovered_btn;
                     state.hovered_btn = None;
                     if let Some(prev) = prev_hovered {

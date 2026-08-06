@@ -14,3 +14,4 @@
 .plugins/*.cargo/
 .plugins/*.extensions/
 .plugins/.cache/
+release.*

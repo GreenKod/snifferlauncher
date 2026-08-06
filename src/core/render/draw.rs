@@ -134,6 +134,8 @@ pub fn draw_ui(
     data_map: &DataMap,
     transition_manager: &crate::core::anim::TransitionManager,
     alpha_multiplier: f32,
+    accumulated_scroll_x: f32,
+    accumulated_scroll_y: f32,
 ) {
     use crate::core::ui::data_map::DataValue;
     use crate::core::ui::data_map::DrawCommand;
@@ -158,14 +160,49 @@ pub fn draw_ui(
 
     let final_alpha = alpha_multiplier * base_style.opacity.clamp(0.0, 1.0);
 
+    let screen_w = metrics.physical_width;
+    let screen_h = metrics.physical_height;
+
+    // Sanitize transform offsets against NaN / Infinity
+    let mut tx = base_style.transform.translate_x;
+    let mut ty = base_style.transform.translate_y;
+    if tx.is_nan() || tx.is_infinite() { tx = 0.0; }
+    if ty.is_nan() || ty.is_infinite() { ty = 0.0; }
+
+    // ScrollView-aware effective screen bounds calculation
+    let screen_x = rect.x + tx - accumulated_scroll_x;
+    let screen_y = rect.y + ty - accumulated_scroll_y;
+    let eff_w = rect.width * base_style.transform.scale;
+    let eff_h = rect.height * base_style.transform.scale;
+
+    let is_animating = transition_manager.states.values().any(|s| s.is_active);
+
+    // Prefetch margin: margin_x expands to cover adjacent horizontal pages so cards render and scroll smoothly
+    let margin_x = (screen_w * 3.0).max(2000.0);
+    let margin_y = 200.0_f32;
+    let is_offscreen = if is_animating {
+        false
+    } else {
+        screen_w > 0.0 && screen_h > 0.0 && (
+            screen_x + eff_w < -margin_x
+                || screen_x > screen_w + margin_x
+                || screen_y + eff_h < -margin_y
+                || screen_y > screen_h + margin_y
+        )
+    };
+
+    if is_offscreen {
+        return;
+    }
+
     // Apply transforms (scale, rotate, translate)
     renderer.push_transform(
         rect.x + rect.width / 2.0,
         rect.y + rect.height / 2.0,
         base_style.transform.scale,
         base_style.transform.rotate,
-        base_style.transform.translate_x,
-        base_style.transform.translate_y,
+        tx,
+        ty,
     );
 
     renderer.set_global_alpha(final_alpha);
@@ -252,6 +289,8 @@ pub fn draw_ui(
                     data_map,
                     transition_manager,
                     final_alpha,
+                    accumulated_scroll_x,
+                    accumulated_scroll_y,
                 );
             }
         }
@@ -262,34 +301,40 @@ pub fn draw_ui(
             ..
         } => {
             renderer.push_clip_rect(rect, base_style.border_radius);
-            let mut max_y = 0.0_f32;
+
+            // Correct content_height: span of child rects (not offset from rect.y)
+            let mut min_y = f32::MAX;
+            let mut max_y = f32::MIN;
             for child_lay in layout.children.iter() {
-                let child_bottom = child_lay.rect.y + child_lay.rect.height;
-                if child_bottom > max_y {
-                    max_y = child_bottom;
-                }
+                if child_lay.rect.y < min_y { min_y = child_lay.rect.y; }
+                let bottom = child_lay.rect.y + child_lay.rect.height;
+                if bottom > max_y { max_y = bottom; }
             }
-
-            let content_height = max_y - rect.y;
+            let content_height = if min_y <= max_y { max_y - min_y } else { 0.0 };
             let max_scroll_y = (content_height - rect.height).max(0.0);
-            let actual_scroll_y = scroll_y.clamp(0.0, max_scroll_y);
+            // Sanitize scroll_y against NaN/Infinity before clamping
+            let safe_scroll_y = if scroll_y.is_nan() || scroll_y.is_infinite() { 0.0 } else { *scroll_y };
+            let actual_scroll_y = safe_scroll_y.clamp(0.0, max_scroll_y);
+            let safe_scroll_x = if scroll_x.is_nan() || scroll_x.is_infinite() { 0.0 } else { *scroll_x };
+            let actual_scroll_x = safe_scroll_x.max(0.0);
 
+
+            renderer.push_transform(0.0, 0.0, 1.0, 0.0, -actual_scroll_x, -actual_scroll_y);
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                let mut offset_lay = child_lay.clone();
-
-                // Shift rects recursively so children draw with scroll offset
-                shift_layout(&mut offset_lay, -*scroll_x, -actual_scroll_y);
                 draw_ui(
                     renderer,
                     child_el,
-                    &offset_lay,
+                    child_lay,
                     metrics,
                     style_map,
                     data_map,
                     transition_manager,
                     final_alpha,
+                    accumulated_scroll_x + actual_scroll_x,
+                    accumulated_scroll_y + actual_scroll_y,
                 );
             }
+            renderer.pop_transform();
             renderer.pop_clip_rect();
 
             // Draw visual scrollbar if content exceeds container
@@ -300,7 +345,7 @@ pub fn draw_ui(
 
                 // Max scroll distance
                 let max_scroll = content_height - rect.height;
-                let scroll_pct = (scroll_y / max_scroll).clamp(0.0, 1.0);
+                let scroll_pct = (safe_scroll_y / max_scroll).clamp(0.0, 1.0);
 
                 let scrollbar_y = rect.y + (rect.height - scrollbar_height) * scroll_pct;
                 let scrollbar_rect = Rect::new(
@@ -333,6 +378,30 @@ pub fn draw_ui(
         }
         Element::Image { id, src, .. } => {
             let img_id = id.as_deref().unwrap_or(src.as_str());
+
+            if !renderer.has_image(img_id) {
+                if let Some(pkg_name) = src.strip_prefix("app-icon://") {
+                    #[cfg(target_os = "android")]
+                    {
+                        if let Some((pixels, w, h)) =
+                            crate::platform::android::jni::bridge::get_app_icon_pixels(pkg_name)
+                        {
+                            renderer.load_image(img_id, &pixels, w, h);
+                        } else {
+                            // Insert a 1x1 transparent dummy texture to cache failure and prevent redundant JNI calls
+                            let dummy_pixel = [0u8, 0u8, 0u8, 0u8];
+                            renderer.load_image(img_id, &dummy_pixel, 1, 1);
+                        }
+                    }
+                    #[cfg(not(target_os = "android"))]
+                    {
+                        let _ = pkg_name;
+                        let dummy_pixel = [0u8, 0u8, 0u8, 0u8];
+                        renderer.load_image(img_id, &dummy_pixel, 1, 1);
+                    }
+                }
+            }
+
             renderer.draw_image(
                 img_id,
                 rect,
@@ -421,6 +490,7 @@ pub fn draw_ui(
     renderer.pop_transform();
 }
 
+#[allow(dead_code)]
 fn shift_layout(layout: &mut LayoutNode, dx: f32, dy: f32) {
     layout.rect.x += dx;
     layout.rect.y += dy;

@@ -1,10 +1,12 @@
 pub mod anim;
 pub mod layout;
+pub mod log;
 pub mod render;
 pub mod style;
 pub mod text_measure;
 pub mod types;
 pub mod ui;
+pub mod virtualization;
 
 // Convenience re-exports — keeps all call sites working without path changes.
 pub use layout::{LayoutNode, calculate_layout};

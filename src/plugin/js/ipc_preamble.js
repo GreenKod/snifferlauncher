@@ -1,0 +1,272 @@
+// --- SnifferLauncher Inter-Plugin API ---
+
+// Internal map: API name -> JS handler function
+globalThis._apis = {};
+
+/**
+ * Register a named API endpoint for this plugin.
+ * Other plugins can call it by name using callApi().
+ *
+ * @param {string} name - Unique dot-namespaced name, e.g. "store.get"
+ * @param {function} handler - (payload: object) => any
+ */
+globalThis.registerApi = function(name, handler) {
+    globalThis._apis[name] = handler;
+    host_register_api(name);
+};
+
+/**
+ * Call a named API exposed by any registered plugin (synchronous).
+ *
+ * @param {string} name - API name, e.g. "store.get"
+ * @param {object} payload - JSON-serializable payload
+ * @returns {object|null} - JSON-parsed response or null on failure/missing API
+ */
+globalThis.callApi = function(name, payload) {
+    const json = host_call_api(name, JSON.stringify(payload ?? {}));
+    if (json === null || json === undefined) return null;
+    try { return JSON.parse(json); } catch(e) { return null; }
+};
+
+/**
+ * Broadcast an event to ALL registered plugins (delivered next frame).
+ *
+ * @param {string} channel - Channel name, e.g. "theme.changed"
+ * @param {object} data - JSON-serializable data
+ */
+globalThis.broadcastEvent = function(channel, data) {
+    host_broadcast(channel, JSON.stringify(data ?? {}));
+};
+
+/**
+ * Request runtime permissions for this plugin.
+ *
+ * @param {string[]} permissions
+ * @returns {string[]} - Granted permission names.
+ */
+globalThis.requestPermissions = function(permissions) {
+    return JSON.parse(host_request_permissions(permissions));
+};
+
+/**
+ * Check whether a permission has already been granted.
+ *
+ * @param {string} permission
+ * @returns {boolean}
+ */
+globalThis.hasPermission = function(permission) {
+    return host_has_permission(permission);
+};
+
+/**
+ * Fetch the installed application list.
+ *
+ * Requires the plugin to declare the appropriate permission in its manifest.
+ * @returns {Array<{name:string, package_name:string}>}
+ */
+globalThis.getApplicationList = function() {
+    return JSON.parse(host_get_application_list());
+};
+
+/**
+ * Fetch the exact OS local system time.
+ *
+ * @returns {{ time: string, date: string, hours: number, minutes: number, seconds: number, timestamp: number }}
+ */
+globalThis.getLocalTime = function() {
+    try {
+        return JSON.parse(host_get_local_time());
+    } catch(e) {
+        const d = new Date();
+        return {
+            time: d.toLocaleTimeString("tr-TR"),
+            date: d.toLocaleDateString("tr-TR"),
+            hours: d.getHours(),
+            minutes: d.getMinutes(),
+            seconds: d.getSeconds(),
+            timestamp: d.getTime()
+        };
+    }
+};
+
+/**
+ * Default settings loaded from manifest.json ("defaultSettings" key).
+ */
+try {
+    var defaultSettings = JSON.parse(host_get_default_settings());
+    globalThis.defaultSettings = defaultSettings;
+} catch(e) {
+    var defaultSettings = {};
+    globalThis.defaultSettings = defaultSettings;
+}
+
+// Timers Polyfill (setInterval, setTimeout, clearInterval, clearTimeout)
+globalThis._timers = {};
+globalThis._timerId = 1;
+
+globalThis.setInterval = function(callback, delayMs) {
+    const id = globalThis._timerId++;
+    globalThis._timers[id] = {
+        callback: callback,
+        delay: (typeof delayMs === 'number' && delayMs >= 0) ? delayMs : 1000,
+        lastRun: Date.now(),
+        once: false
+    };
+    return id;
+};
+
+globalThis.clearInterval = function(id) {
+    delete globalThis._timers[id];
+};
+
+globalThis.setTimeout = function(callback, delayMs) {
+    const id = globalThis._timerId++;
+    globalThis._timers[id] = {
+        callback: callback,
+        delay: (typeof delayMs === 'number' && delayMs >= 0) ? delayMs : 0,
+        lastRun: Date.now(),
+        once: true
+    };
+    return id;
+};
+
+globalThis.clearTimeout = function(id) {
+    delete globalThis._timers[id];
+};
+
+globalThis._onTimerTick = function() {
+    const now = Date.now();
+    for (const id in globalThis._timers) {
+        const timer = globalThis._timers[id];
+        if (now - timer.lastRun >= timer.delay) {
+            timer.lastRun = now;
+            try { timer.callback(); } catch(e) {}
+            if (timer.once) {
+                delete globalThis._timers[id];
+            }
+        }
+    }
+};
+
+/**
+ * Override this in your plugin to receive broadcasts from other plugins.
+ *
+ * @param {string} channel
+ * @param {object} data
+ */
+globalThis.onBroadcast = function(channel, data) {};
+
+// SharedView Handshake Protocol & Pending Invitations Storage
+globalThis._sharedViewPending = {};
+
+/**
+ * Request another plugin to draw inside a SharedView slot or invite another plugin to draw inside yours.
+ *
+ * @param {string} targetPluginId - Target plugin ID
+ * @param {string} slotName - SharedView slot identifier
+ * @param {object} payload - Custom data/parameters
+ * @param {number} timeoutMs - Response timeout in milliseconds (default 3000ms)
+ * @returns {Promise<{accepted: boolean, status: string, reason?: string, uiTree?: object}>}
+ */
+globalThis.requestSharedView = function(targetPluginId, slotName, payload, timeoutMs) {
+    const tMs = (typeof timeoutMs === 'number' && timeoutMs > 0) ? timeoutMs : 3000;
+    return new Promise(function(resolve) {
+        const invitationId = "inv_" + Math.random().toString(36).substring(2, 10);
+        
+        const timer = setTimeout(function() {
+            if (globalThis._sharedViewPending[invitationId]) {
+                delete globalThis._sharedViewPending[invitationId];
+                resolve({
+                    accepted: false,
+                    status: "timed_out",
+                    reason: "Response timeout exceeded (" + tMs + "ms)"
+                });
+            }
+        }, tMs);
+
+        globalThis._sharedViewPending[invitationId] = { resolve: resolve, timer: timer };
+
+        const payloadStr = JSON.stringify(payload ?? {});
+        broadcastEvent("shared_view_invite", {
+            invitationId: invitationId,
+            targetPluginId: targetPluginId,
+            slotName: slotName,
+            payload: payloadStr,
+            timeoutMs: tMs
+        });
+    });
+};
+
+/**
+ * Accept a SharedView invitation and return the UI tree to draw in the slot.
+ */
+globalThis.acceptSharedView = function(invitationId, uiTree) {
+    broadcastEvent("shared_view_response", {
+        invitationId: invitationId,
+        accepted: true,
+        status: "accepted",
+        uiTree: uiTree ?? null
+    });
+};
+
+/**
+ * Reject a SharedView invitation with a reason.
+ */
+globalThis.rejectSharedView = function(invitationId, reason) {
+    broadcastEvent("shared_view_response", {
+        invitationId: invitationId,
+        accepted: false,
+        status: "rejected",
+        reason: reason ?? "Invitation rejected"
+    });
+};
+
+/**
+ * Override this callback in your plugin to handle incoming SharedView requests.
+ */
+globalThis.onRequestSharedView = function(invitation) {
+    globalThis.rejectSharedView(invitation.invitationId, "No handler registered");
+};
+
+// Internal — Rust calls this to deliver a broadcast to this plugin.
+globalThis._dispatchBroadcast = function(channel, payload_json) {
+    try {
+        const data = JSON.parse(payload_json);
+        
+        if (channel === "shared_view_invite") {
+            if (data.targetPluginId && typeof globalThis.onRequestSharedView === 'function') {
+                globalThis.onRequestSharedView({
+                    invitationId: data.invitationId,
+                    slotName: data.slotName,
+                    payload: JSON.parse(data.payload ?? "{}")
+                });
+            }
+        } else if (channel === "shared_view_response") {
+            const pending = globalThis._sharedViewPending[data.invitationId];
+            if (pending) {
+                clearTimeout(pending.timer);
+                delete globalThis._sharedViewPending[data.invitationId];
+                pending.resolve({
+                    accepted: !!data.accepted,
+                    status: data.status,
+                    reason: data.reason,
+                    uiTree: data.uiTree
+                });
+            }
+        }
+
+        globalThis.onBroadcast(channel, data);
+    } catch(e) {}
+};
+
+// Internal — Rust calls this when another plugin invokes one of our APIs.
+globalThis._handleApiCall = function(name, payload_json) {
+    if (!globalThis._apis[name]) return null;
+    try {
+        const payload = JSON.parse(payload_json);
+        const result = globalThis._apis[name](payload);
+        return JSON.stringify(result ?? null);
+    } catch(e) {
+        return null;
+    }
+};

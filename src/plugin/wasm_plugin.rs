@@ -2,7 +2,10 @@ use crate::core::ui::data_map::{DataMap, DataValue, DrawCommand};
 use crate::core::ui::event::UiEvent;
 use crate::core::ui::style_map::StyleMap;
 use crate::core::ui::widget::WidgetId;
+use crate::dev_err;
+use crate::plugin::registry::PluginRegistry;
 use crate::plugin::r#trait::UiPlugin;
+use obfstr::obfstr;
 use std::sync::Mutex;
 use wasmi::{Caller, Engine, Func, Linker, Module, Store};
 
@@ -290,7 +293,7 @@ impl UiPlugin for WasmPlugin {
         let json_str = String::from_utf8(json_bytes).ok()?;
         
         serde_json::from_str(&json_str).map_err(|e| {
-            eprintln!("Failed to parse UI JSON from Wasm: {}", e);
+            dev_err!("{}: {}", obfstr!("Failed to parse UI JSON from Wasm"), e);
         }).ok()
     }
 
