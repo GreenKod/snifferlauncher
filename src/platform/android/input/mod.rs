@@ -1,3 +1,5 @@
+pub mod gestures;
+
 use crate::core::Point;
 use crate::core::render::draw::{
     find_clicked_button, find_hovered_button, find_hovered_scrollview,
@@ -34,8 +36,6 @@ pub fn handle_input_event(
                     let raw_delta_y = -(point.y - state.last_touch_pos.y);
                     state.last_touch_pos = point;
 
-                    // Exponential moving average (EMA) smoothing for high-responsiveness 1:1 touch tracking.
-                    // alpha=0.85: eliminates input lag while rejecting digitizer noise.
                     let alpha = 0.85_f32;
                     let dx = alpha.mul_add(raw_delta_x, (1.0 - alpha) * state.last_drag_delta.0);
                     let dy = alpha.mul_add(raw_delta_y, (1.0 - alpha) * state.last_drag_delta.1);
@@ -61,7 +61,6 @@ pub fn handle_input_event(
                                 .as_deref()
                                 .map(|id_str| crate::core::ui::widget::fnv1a(id_str.as_bytes()));
                         }
-                        // FIX (Sorun 3): Yeni dokunuşta geçmiş velocity tamponunu sıfırla
                         state.kinetic_scrolls.clear();
                         state.drag_history.clear();
 
@@ -95,9 +94,6 @@ pub fn handle_input_event(
                     if motion_event.action() == MotionAction::Move {
                         state.last_drag_delta = (delta_x, delta_y);
 
-                        // FIX (Sorun 3): Velocity geçmişini kaydet (son ~8 frame).
-                        // Parmak yavaşlayarak bırakıldığında son tek delta yerine
-                        // rolling average kullanarak tutarlı momentum sağlar.
                         state
                             .drag_history
                             .push_back((delta_x, delta_y, std::time::Instant::now()));
@@ -122,13 +118,11 @@ pub fn handle_input_event(
                         }
 
                         if let Some(sv_id) = state.active_scrollview_drag {
-                            // Rust-managed mı? Varsa fizik motoruna doğrudan uygula, JS'i bypass et
                             if let Some(phys) = state.scroll_physics.get_mut(&sv_id) {
-                                phys.apply_drag(delta_x); // Yatay pager: sadece X
+                                phys.apply_drag(delta_x);
                                 phys.is_dragging = true;
-                                phys.snap_target_x = None; // Sürüklerken snap'i iptal et
+                                phys.snap_target_x = None;
                             } else {
-                                // Klasik ScrollView: JS'e event gönder
                                 state.event_bus.push(UiEvent::Scroll(
                                     Some(sv_id),
                                     delta_x,
@@ -151,7 +145,6 @@ pub fn handle_input_event(
                 }
                 MotionAction::Up | MotionAction::PointerUp => {
                     if let Some(sv_id) = state.active_scrollview_drag {
-                        // Rust-managed mı? Varsa velocity'yi fizik motoruna ver
                         if state.scroll_physics.contains_key(&sv_id) {
                             let now = std::time::Instant::now();
                             let cutoff = now
@@ -163,8 +156,6 @@ pub fn handle_input_event(
                                 .filter(|(_, _, t)| *t >= cutoff)
                                 .collect();
 
-                            // Frame-rate bağımsız dinamik fling hız hesabı (v = dx / dt)
-                            // max(0.001) sıfıra bölünmeyi ve yüksek digitizer yenileme gürültüsünü önler.
                             let vel_x = if recent.len() >= 2 {
                                 let first = recent.first().unwrap();
                                 let last = recent.last().unwrap();
@@ -181,9 +172,7 @@ pub fn handle_input_event(
                             if let Some(phys) = state.scroll_physics.get_mut(&sv_id) {
                                 phys.release_drag(vel_x);
                             }
-                            // Kinetic scroll ve JS event yok: fizik motoru devretti
                         } else {
-                            // Klasik ScrollView: eski momentum sistemi
                             let momentum_enabled = if let Some((
                                 crate::core::types::Element::ScrollView {
                                     momentum_scrolling, ..
@@ -198,7 +187,6 @@ pub fn handle_input_event(
                             };
 
                             if momentum_enabled {
-                                // Use last 150ms of drag history for fling velocity
                                 let cutoff = std::time::Instant::now()
                                     .checked_sub(std::time::Duration::from_millis(150))
                                     .unwrap_or_else(std::time::Instant::now);
@@ -217,7 +205,6 @@ pub fn handle_input_event(
                                     (vx, vy)
                                 };
 
-                                // Always push kinetic scroll — velocity gate is handled by retain_mut
                                 state.kinetic_scrolls.push(super::app::KineticScroll {
                                     sv_id,
                                     velocity_x: vel_x,
@@ -240,7 +227,6 @@ pub fn handle_input_event(
 
                     state.event_bus.push(UiEvent::PointerUp(state.hovered_btn));
 
-                    // Gate Click event on touch slop (< 12.0px drag distance) so scrolling/swiping never launches apps
                     let is_static_tap = state.total_touch_drag_distance < 12.0;
                     if is_static_tap {
                         if let Some((clicked_btn, rect)) =
@@ -318,57 +304,11 @@ pub fn handle_input_event(
         }
         InputEvent::KeyEvent(key_event) => {
             if key_event.action() == android_activity::input::KeyAction::Down {
-                use android_activity::input::Keycode;
                 let keycode = key_event.key_code();
-                if keycode == Keycode::Del {
+                if keycode == android_activity::input::Keycode::Del {
                     state.event_bus.push(UiEvent::Backspace);
-                } else {
-                    let ch = match keycode {
-                        Keycode::A => Some('a'),
-                        Keycode::B => Some('b'),
-                        Keycode::C => Some('c'),
-                        Keycode::D => Some('d'),
-                        Keycode::E => Some('e'),
-                        Keycode::F => Some('f'),
-                        Keycode::G => Some('g'),
-                        Keycode::H => Some('h'),
-                        Keycode::I => Some('i'),
-                        Keycode::J => Some('j'),
-                        Keycode::K => Some('k'),
-                        Keycode::L => Some('l'),
-                        Keycode::M => Some('m'),
-                        Keycode::N => Some('n'),
-                        Keycode::O => Some('o'),
-                        Keycode::P => Some('p'),
-                        Keycode::Q => Some('q'),
-                        Keycode::R => Some('r'),
-                        Keycode::S => Some('s'),
-                        Keycode::T => Some('t'),
-                        Keycode::U => Some('u'),
-                        Keycode::V => Some('v'),
-                        Keycode::W => Some('w'),
-                        Keycode::X => Some('x'),
-                        Keycode::Y => Some('y'),
-                        Keycode::Z => Some('z'),
-                        Keycode::Keycode0 => Some('0'),
-                        Keycode::Keycode1 => Some('1'),
-                        Keycode::Keycode2 => Some('2'),
-                        Keycode::Keycode3 => Some('3'),
-                        Keycode::Keycode4 => Some('4'),
-                        Keycode::Keycode5 => Some('5'),
-                        Keycode::Keycode6 => Some('6'),
-                        Keycode::Keycode7 => Some('7'),
-                        Keycode::Keycode8 => Some('8'),
-                        Keycode::Keycode9 => Some('9'),
-                        Keycode::Space => Some(' '),
-                        Keycode::Period => Some('.'),
-                        Keycode::Comma => Some(','),
-                        Keycode::Minus => Some('-'),
-                        _ => None,
-                    };
-                    if let Some(c) = ch {
-                        state.event_bus.push(UiEvent::TextInput(c.to_string()));
-                    }
+                } else if let Some(c) = gestures::keycode_to_char(keycode) {
+                    state.event_bus.push(UiEvent::TextInput(c.to_string()));
                 }
             }
             InputStatus::Handled

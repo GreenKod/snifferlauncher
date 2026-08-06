@@ -1,3 +1,5 @@
+use super::batching::unpack_color;
+use super::GlowRenderer;
 use crate::core::render::text::font::{FONT_DATA, FONT_HEIGHT, FONT_WIDTH};
 use crate::core::render::text::font_atlas::FontAtlas;
 use glow::HasContext;
@@ -58,5 +60,132 @@ pub(crate) unsafe fn create_bitmap_font_atlas(
             i32::try_from(96 * FONT_WIDTH).expect("bitmap atlas width fits in i32"),
             i32::try_from(FONT_HEIGHT).expect("font height fits in i32"),
         ))
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+pub(crate) fn draw_text_impl(renderer: &mut GlowRenderer, text: &str, x: f32, y: f32, size: f32, color: u32) {
+    let mut col = unpack_color(color);
+    col[3] *= renderer.global_alpha;
+    unsafe {
+        renderer.gl.use_program(Some(renderer.text_program));
+        renderer.gl.bind_vertex_array(Some(renderer.quad_vertex_array));
+        renderer.gl.active_texture(glow::TEXTURE0);
+        renderer.gl
+            .bind_texture(glow::TEXTURE_2D, Some(renderer.font_texture));
+
+        let loc_res = renderer
+            .gl
+            .get_uniform_location(renderer.text_program, "u_resolution");
+        let loc_rect_pos = renderer
+            .gl
+            .get_uniform_location(renderer.text_program, "u_rect_pos");
+        let loc_rect_size = renderer
+            .gl
+            .get_uniform_location(renderer.text_program, "u_rect_size");
+        let loc_color = renderer.gl.get_uniform_location(renderer.text_program, "u_color");
+        let loc_uv_start = renderer
+            .gl
+            .get_uniform_location(renderer.text_program, "u_uv_start");
+        let loc_uv_end = renderer.gl.get_uniform_location(renderer.text_program, "u_uv_end");
+
+        renderer.gl
+            .uniform_2_f32(loc_res.as_ref(), renderer.resolution.0, renderer.resolution.1);
+        renderer.gl
+            .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
+
+        if let Some(ref atlas) = renderer.font_atlas {
+            let scale = size / atlas.rasterize_size;
+            let mut curr_x = x;
+            let baseline_y = atlas.ascent.mul_add(scale, y);
+
+            let aw =
+                f32::from(u16::try_from(renderer.atlas_width).expect("atlas width fits in u16"));
+            let ah =
+                f32::from(u16::try_from(renderer.atlas_height).expect("atlas height fits in u16"));
+
+            for c in text.chars() {
+                if c == ' ' {
+                    curr_x = atlas.space_advance.mul_add(scale, curr_x);
+                    continue;
+                }
+
+                let glyph = atlas
+                    .glyphs
+                    .get(&c)
+                    .unwrap_or_else(|| atlas.glyphs.get(&'?').unwrap());
+                if glyph.width == 0 || glyph.height == 0 {
+                    curr_x = glyph.advance_width.mul_add(scale, curr_x);
+                    continue;
+                }
+
+                let gw =
+                    f32::from(u16::try_from(glyph.width).expect("glyph width fits in u16"))
+                        * scale;
+                let gh =
+                    f32::from(u16::try_from(glyph.height).expect("glyph height fits in u16"))
+                        * scale;
+
+                let draw_x = glyph.bearing_x.mul_add(scale, curr_x);
+                let draw_y = glyph.bearing_y.mul_add(-scale, baseline_y);
+
+                let u_min_x =
+                    f32::from(u16::try_from(glyph.atlas_x).expect("atlas x fits in u16")) / aw;
+                let u_min_y =
+                    f32::from(u16::try_from(glyph.atlas_y).expect("atlas y fits in u16")) / ah;
+                let u_max_x = f32::from(
+                    u16::try_from(glyph.atlas_x + glyph.width).expect("atlas x fits in u16"),
+                ) / aw;
+                let u_max_y = f32::from(
+                    u16::try_from(glyph.atlas_y + glyph.height).expect("atlas y fits in u16"),
+                ) / ah;
+
+                renderer.gl.uniform_2_f32(loc_rect_pos.as_ref(), draw_x, draw_y);
+                renderer.gl.uniform_2_f32(loc_rect_size.as_ref(), gw, gh);
+                renderer.gl
+                    .uniform_2_f32(loc_uv_start.as_ref(), u_min_x, u_min_y);
+                renderer.gl.uniform_2_f32(loc_uv_end.as_ref(), u_max_x, u_max_y);
+
+                let loc_transform = renderer
+                    .gl
+                    .get_uniform_location(renderer.text_program, "u_transform");
+                let t = renderer.transform_stack.last().unwrap();
+                renderer.gl
+                    .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
+                renderer.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+                curr_x = glyph.advance_width.mul_add(scale, curr_x);
+            }
+        } else {
+            let char_width = size;
+            let char_height = size;
+            let gap = size * 0.1;
+
+            let mut curr_x = x;
+            for c in text.chars() {
+                let ascii_code = c as u32;
+                let idx = if (32..=127).contains(&ascii_code) {
+                    f32::from(u16::try_from(ascii_code - 32).expect("ASCII index fits in u16"))
+                } else {
+                    95.0
+                };
+
+                renderer.gl.uniform_2_f32(loc_rect_pos.as_ref(), curr_x, y);
+                renderer.gl
+                    .uniform_2_f32(loc_rect_size.as_ref(), char_width, char_height);
+                renderer.gl
+                    .uniform_2_f32(loc_uv_start.as_ref(), idx / 96.0, 0.0);
+                renderer.gl
+                    .uniform_2_f32(loc_uv_end.as_ref(), (idx + 1.0) / 96.0, 1.0);
+
+                let loc_transform = renderer
+                    .gl
+                    .get_uniform_location(renderer.text_program, "u_transform");
+                let t = renderer.transform_stack.last().unwrap();
+                renderer.gl
+                    .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
+                renderer.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+                curr_x += char_width + gap;
+            }
+        }
     }
 }
