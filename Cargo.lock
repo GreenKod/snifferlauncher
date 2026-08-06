@@ -369,6 +369,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-channel"
+version = "0.5.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d85363c37faeca707aef026efa9f3b34d077bce547e48f770770625c6013679e"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-utils"
 version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1812,6 +1821,7 @@ version = "0.1.0"
 dependencies = [
  "android-activity",
  "chrono",
+ "crossbeam-channel",
  "glow",
  "glutin",
  "glutin-winit",

@@ -1,36 +1,13 @@
+pub mod manifest;
+
+pub use manifest::{PluginManifest, PluginsConfig};
+
 use crate::plugin::registry::PluginRegistry;
 use crate::{dev_err, dev_log};
 use obfstr::obfstr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-
-use serde::Deserialize;
-
-#[derive(Deserialize, Debug)]
-pub struct PluginsConfig {
-    #[serde(default)]
-    pub master_plugin: Option<String>,
-    pub active_plugins: Vec<String>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct PluginManifest {
-    pub id: String,
-    pub name: String,
-    pub version: String,
-    pub main: String,
-    #[serde(default)]
-    pub scripts: Vec<String>,
-    #[serde(default, rename = "isMaster")]
-    pub is_master: bool,
-    #[serde(default)]
-    pub preload: Vec<String>,
-    #[serde(default)]
-    pub permissions: Vec<String>,
-    #[serde(default, rename = "defaultSettings")]
-    pub default_settings: serde_json::Value,
-}
 
 /// Loads and registers JavaScript plugins from the assets directory.
 pub struct PluginLoader {
@@ -49,25 +26,7 @@ impl PluginLoader {
     /// Validate a manifest and return a list of human-readable issues.
     #[must_use]
     pub fn validate_manifest(manifest: &PluginManifest) -> Vec<String> {
-        let mut issues = Vec::new();
-
-        if manifest.id.trim().is_empty() {
-            issues.push(obfstr!("manifest id must not be empty").to_string());
-        }
-        if manifest.name.trim().is_empty() {
-            issues.push(obfstr!("manifest name must not be empty").to_string());
-        }
-        if manifest.version.trim().is_empty() {
-            issues.push(obfstr!("manifest version must not be empty").to_string());
-        }
-        if manifest.main.trim().is_empty() {
-            issues.push(obfstr!("manifest main entry must not be empty").to_string());
-        }
-        if manifest.permissions.iter().any(|p| p.trim().is_empty()) {
-            issues.push(obfstr!("manifest permissions must not contain empty values").to_string());
-        }
-
-        issues
+        manifest.validate()
     }
 
     /// Instantiate and register all plugins defined in `plugins.json`.
@@ -320,28 +279,6 @@ mod tests {
 
         let issues = PluginLoader::validate_manifest(&manifest);
         assert!(issues.is_empty());
-    }
-
-    #[test]
-    fn validate_manifest_reports_missing_required_fields() {
-        let manifest = PluginManifest {
-            id: "   ".to_string(),
-            name: String::new(),
-            version: " ".to_string(),
-            main: String::new(),
-            scripts: vec![],
-            is_master: false,
-            preload: vec![],
-            permissions: vec![String::new()],
-            default_settings: serde_json::Value::Null,
-        };
-
-        let issues = PluginLoader::validate_manifest(&manifest);
-        assert!(issues.iter().any(|issue| issue.contains("id")));
-        assert!(issues.iter().any(|issue| issue.contains("name")));
-        assert!(issues.iter().any(|issue| issue.contains("version")));
-        assert!(issues.iter().any(|issue| issue.contains("main")));
-        assert!(issues.iter().any(|issue| issue.contains("permission")));
     }
 }
 

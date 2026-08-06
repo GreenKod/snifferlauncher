@@ -25,7 +25,7 @@ impl DesktopWindow {
     pub fn new() -> Result<(EventLoop<()>, Self, glow::Context), Box<dyn std::error::Error>> {
         let event_loop = EventLoop::new()?;
         let window_icon = {
-            let icon_bytes = include_bytes!("../../../res/drawable/icon.png");
+            let icon_bytes = include_bytes!("../../../android/res/drawable/icon.png");
             if let Ok(img) = image::load_from_memory(icon_bytes) {
                 let rgba = img.to_rgba8();
                 let (width, height) = rgba.dimensions();
