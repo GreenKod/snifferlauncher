@@ -162,9 +162,21 @@ function Image(id, src, style) {
 
 /**
  * Build a ScrollView element.
+ *
+ * Temel parametreler:
  * @param {string} id
- * @param {object} opts  - { scroll_x, scroll_y, scroll_sensitivity, dynamic_sensitivity,
- *                           momentum_scrolling, capture_drag, style }
+ * @param {object} opts  - {
+ *   scroll_x, scroll_y,
+ *   scroll_sensitivity, dynamic_sensitivity,
+ *   momentum_scrolling, capture_drag,
+ *   style,
+ *   --- Rust-managed scroll physics ---
+ *   snap_x: number|null,      // Yatay snap aralığı px (pager modu). null = serbest
+ *   snap_y: number|null,      // Dikey snap aralığı px. null = serbest
+ *   rubber_band: number|null, // Kenar elastikiyeti 0.0–1.0. null = sert kenar
+ *   page_count: number|null,  // Toplam sayfa sayısı (snap_x ile)
+ *   on_snap: string|null,     // Snap tamamlanınca JS callback adı
+ * }
  * @param {Array}  children
  */
 function ScrollView(id, opts, children) {
@@ -176,6 +188,12 @@ function ScrollView(id, opts, children) {
         momentum_scrolling = true,
         capture_drag = true,
         style = {},
+        // Rust-managed physics params
+        snap_x = null,
+        snap_y = null,
+        rubber_band = null,
+        page_count = null,
+        on_snap = null,
     } = opts ?? {};
     return {
         ScrollView: {
@@ -188,6 +206,11 @@ function ScrollView(id, opts, children) {
             capture_drag,
             style,
             children: children ?? [],
+            snap_x,
+            snap_y,
+            rubber_band,
+            page_count,
+            on_snap,
         },
     };
 }
@@ -287,6 +310,33 @@ function vmin(percent) {
 /** The larger of vw or vh */
 function vmax(percent) {
     return Math.max(vw(percent), vh(percent));
+}
+
+/** Launches an installed Android application by package name */
+function launchApp(packageName) {
+    if (typeof host_launch_app === "function" && packageName) {
+        host_launch_app(String(packageName));
+    }
+}
+
+/** Requests default home/launcher application role from Android system */
+function requestDefaultLauncher() {
+    if (typeof host_request_default_launcher === "function") {
+        host_request_default_launcher();
+    }
+}
+
+/** Retrieves the list of installed Android applications from the host system */
+function getApplicationList() {
+    if (typeof host_get_application_list === "function") {
+        try {
+            const jsonStr = host_get_application_list();
+            return JSON.parse(jsonStr);
+        } catch (e) {
+            return [];
+        }
+    }
+    return [];
 }
 
 // =============================================================================

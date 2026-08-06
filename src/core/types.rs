@@ -1,10 +1,11 @@
 use crate::core::style::Style;
 
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU32, AtomicU64};
 
 pub static SCREEN_WIDTH: AtomicU32 = AtomicU32::new(0);
 pub static SCREEN_HEIGHT: AtomicU32 = AtomicU32::new(0);
+pub static UI_VERSION: AtomicU64 = AtomicU64::new(0);
 
 /// Metadata about an installed application.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -46,9 +47,11 @@ pub enum Action {
     OpenSettings,
     OpenContacts,
     OpenCamera,
+    LaunchApp { package_name: String },
     LoadImage { id: String, src: String },
     FocusTextInput(String),
     BlurTextInput,
+    RequestDefaultLauncher,
 }
 
 /// A sample state structure to demonstrate `Bincode` / `ArrayBuffer` passing.
@@ -93,6 +96,22 @@ pub enum Element {
         dynamic_sensitivity: Option<bool>,
         momentum_scrolling: Option<bool>,
         capture_drag: Option<bool>,
+        // ── Rust-managed scroll physics (eklenti yazarı sadece bunları tanımlar) ──
+        /// Yatay snap aralığı (px). Some(pageWidthPx) = pager modu. None = serbest.
+        #[serde(default)]
+        snap_x: Option<f32>,
+        /// Dikey snap aralığı (px). None = serbest.
+        #[serde(default)]
+        snap_y: Option<f32>,
+        /// Kenar lastik-bant elastikiyet oranı 0.0–1.0. None = sert kenar.
+        #[serde(default)]
+        rubber_band: Option<f32>,
+        /// Toplam sayfa sayısı (snap_x ile birlikte kullanılır).
+        #[serde(default)]
+        page_count: Option<u32>,
+        /// Snap tamamlanınca JS'de çağrılacak callback fonksiyon adı.
+        #[serde(default)]
+        on_snap: Option<String>,
     },
     Checkbox {
         id: Option<String>,

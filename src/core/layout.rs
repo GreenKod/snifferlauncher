@@ -220,6 +220,12 @@ fn resolve_layout(
     }
 }
 
+use std::sync::LazyLock;
+
+pub static GLOBAL_TEXT_MEASURER: LazyLock<TextMeasurer<'static>> = LazyLock::new(|| {
+    TextMeasurer::new(DEFAULT_FONT).expect("Failed to load default font for measuring")
+});
+
 /// Calculates the layout for the entire UI tree.
 ///
 /// # Panics
@@ -233,10 +239,7 @@ pub fn calculate_layout(
     y_offset: f32,
 ) -> LayoutNode {
     let mut taffy = TaffyTree::new();
-    let measurer =
-        TextMeasurer::new(DEFAULT_FONT).expect("Failed to load default font for measuring");
-
-    let root = build_taffy_tree(&mut taffy, element, &measurer);
+    let root = build_taffy_tree(&mut taffy, element, &GLOBAL_TEXT_MEASURER);
 
     // Create an invisible root style to enforce parent size
     let root_style = Style {

@@ -4,7 +4,13 @@ use std::collections::HashMap;
 /// Interpolates between two f32 values based on t (0.0 to 1.0).
 #[must_use]
 pub fn lerp(start: f32, end: f32, t: f32) -> f32 {
-    (end - start).mul_add(t, start)
+    let t_safe = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
+    let val = (end - start).mul_add(t_safe, start);
+    if val.is_nan() || val.is_infinite() {
+        end
+    } else {
+        val
+    }
 }
 
 /// Interpolates between two ARGB colors.
@@ -57,7 +63,7 @@ pub fn evaluate_easing(easing: &Easing, mut t: f32) -> f32 {
     match easing {
         Easing::Linear => t,
         Easing::EaseIn => t * t,
-        Easing::EaseOut => t * (2.0 - t),
+        Easing::EaseOut => 1.0 - (1.0 - t) * (1.0 - t) * (1.0 - t),
         Easing::EaseInOut => {
             if t < 0.5 {
                 2.0 * t * t

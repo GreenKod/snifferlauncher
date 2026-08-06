@@ -1,22 +1,16 @@
-// App Grid Component — 4x7 Dynamic Grid Layout
-
-function AppCardComponent(app, index, cfg) {
-    const gradient = GRID_COLORS[index % GRID_COLORS.length];
+function AppCardComponent(app, pageIndex, index, cfg) {
+    const gradient = GRID_COLORS[(pageIndex * cfg.totalSlots + index) % GRID_COLORS.length];
     const letter = app.name ? app.name.charAt(0).toUpperCase() : "?";
 
     const cardW = vw(cfg ? cfg.cardW : CARD_W_VW);
     const cardH = vh(cfg ? cfg.cardH : CARD_H_VH);
 
-    // İkonun / Kartın dikeyde esnemesini önlemek için kare bazlı min-size:
     const maxSide = Math.min(cardW, cardH);
     const iconSize = maxSide * 0.48;
     const iconRadius = iconSize / 2.0;
     const iconFontSize = iconSize * 0.50;
     const nameFontSize = Math.min(cardH * 0.16, cardW * 0.16);
 
-    // Dinamik Metin Kısaltma Math Hesabı:
-    // Kart genişliğinin %82'si metin alanı olarak ayrılır.
-    // Karakter başına ortalama genişlik = font_size * 0.52
     const approxCharWidth = nameFontSize * 0.52;
     const maxAvailableWidth = cardW * 0.82;
     const maxChars = Math.max(3, Math.floor(maxAvailableWidth / approxCharWidth));
@@ -26,7 +20,9 @@ function AppCardComponent(app, index, cfg) {
         displayName = displayName.substring(0, Math.max(1, maxChars - 2)) + "..";
     }
 
-    return Container("card_" + index, {
+    const uniqueId = "p" + pageIndex + "_card_" + index;
+
+    return Container(uniqueId, {
         width: px(cardW),
         height: px(cardH),
         background_color: hex("#15151F"),
@@ -39,7 +35,7 @@ function AppCardComponent(app, index, cfg) {
         shadow_offset_y: vmin(0.2),
         shadow_spread: vmin(0.3),
     }, [
-        Container("icon_" + index, {
+        Container("p" + pageIndex + "_icon_" + index, {
             width: px(iconSize),
             height: px(iconSize),
             border_radius: iconRadius,
@@ -47,13 +43,18 @@ function AppCardComponent(app, index, cfg) {
             justify_content: "Center",
             align_items: "Center",
         }, [
-            Label("letter_" + index, letter, {
+            app.package_name ? Image("p" + pageIndex + "_img_" + index, "app-icon://" + app.package_name, {
+                width: px(iconSize),
+                height: px(iconSize),
+                border_radius: iconRadius,
+                object_fit: "Cover"
+            }) : Label("p" + pageIndex + "_letter_" + index, letter, {
                 text_color: hex("#FFFFFF"),
                 text_size: iconFontSize,
                 width: "Auto",
             })
         ]),
-        Label("name_" + index, displayName, {
+        Label("p" + pageIndex + "_name_" + index, displayName, {
             text_color: hex("#DDDDDD"),
             text_size: nameFontSize,
             width: "Auto",
@@ -61,15 +62,108 @@ function AppCardComponent(app, index, cfg) {
     ]);
 }
 
-function EmptySlotComponent(index, cfg) {
+function EmptySlotComponent(pageIndex, index, cfg) {
     const cardW = vw(cfg ? cfg.cardW : CARD_W_VW);
     const cardH = vh(cfg ? cfg.cardH : CARD_H_VH);
 
-    return Container("empty_slot_" + index, {
+    return Container("p" + pageIndex + "_empty_slot_" + index, {
         width: px(cardW),
         height: px(cardH),
-        background_color: hex("#00000000"), // Rezerve edilmiş şeffaf boş alan
+        background_color: hex("#10101866"),
+        border_radius: vmin(1.2),
+        border_width: px(1.0),
+        border_color: hex("#ffffff0d"),
     }, []);
+}
+
+function SinglePageGridComponent(pageIndex, cfg) {
+    const pageApps = state.appsForPage(pageIndex);
+    const gridItems = [];
+
+    for (let index = 0; index < cfg.totalSlots; index++) {
+        if (index < pageApps.length) {
+            gridItems.push(AppCardComponent(pageApps[index], pageIndex, index, cfg));
+        } else {
+            gridItems.push(EmptySlotComponent(pageIndex, index, cfg));
+        }
+    }
+
+    return Container("page_grid_" + pageIndex, {
+        width: px(vw(cfg.gridW)),
+        height: px(vh(cfg.gridH)),
+        flex_shrink: 0,
+        flex_direction: "Row",
+        flex_wrap: "Wrap",
+        justify_content: "Start",
+        align_content: "Start",
+        padding: padXY(
+            vh(cfg.gapY),
+            vw(cfg.gapX)
+        ),
+        column_gap: vw(cfg.gapX),
+        row_gap: vh(cfg.gapY),
+    }, gridItems);
+}
+
+function PageIndicatorDots(totalPages, currentPage, isLandscape) {
+    if (totalPages <= 1) return null;
+
+    const dots = [];
+    for (let p = 0; p < totalPages; p++) {
+        const isActive = p === currentPage;
+        if (isLandscape) {
+            // Yatay Ekranda: Sağ tarafta Dikey Gösterge Noktaları
+            dots.push(Container("page_dot_" + p, {
+                width: px(vmin(1.6)),
+                height: px(isActive ? vmin(3.6) : vmin(1.6)),
+                border_radius: vmin(0.8),
+                background_color: hex(isActive ? "#00E5FF" : "#ffffff44"),
+                transition: { duration: 0.2 },
+            }, []));
+        } else {
+            // Dikey Ekranda: Alt tarafta Yatay Gösterge Noktaları
+            dots.push(Container("page_dot_" + p, {
+                width: px(isActive ? vmin(3.6) : vmin(1.6)),
+                height: px(vmin(1.6)),
+                border_radius: vmin(0.8),
+                background_color: hex(isActive ? "#00E5FF" : "#ffffff44"),
+                transition: { duration: 0.2 },
+            }, []));
+        }
+    }
+
+    if (isLandscape) {
+        return Container("page_indicator_container", {
+            position: "Absolute",
+            right: px(vmin(1.2)),
+            top: px(0.0),
+            height: pct(100),
+            width: "Auto",
+            flex_direction: "Column",
+            justify_content: "Center",
+            align_items: "Center",
+            gap: vmin(1.2),
+        }, dots);
+    } else {
+        return Container("page_indicator_container", {
+            position: "Absolute",
+            bottom: px(vmin(1.5)),
+            width: pct(100),
+            height: "Auto",
+            flex_direction: "Row",
+            justify_content: "Center",
+            align_items: "Center",
+            gap: vmin(1.2),
+        }, dots);
+    }
+}
+
+function getPageGrids(totalPages, cfg, isLandscape) {
+    const grids = [];
+    for (let p = 0; p < totalPages; p++) {
+        grids.push(SinglePageGridComponent(p, cfg));
+    }
+    return grids;
 }
 
 function AppGridComponent() {
@@ -86,31 +180,40 @@ function AppGridComponent() {
             gapY: GAP_Y_VH,
         };
 
-    const pageApps = state.apps; // Seçili sayfadaki (maksimum 28) uygulamalar
+    const totalPages = state.totalPages;
+    const pageWidthPx = vw(cfg.gridW);
+    const trackWidthPx = pageWidthPx * totalPages;
 
-    const gridItems = [];
-    for (let index = 0; index < cfg.totalSlots; index++) {
-        if (index < pageApps.length) {
-            gridItems.push(AppCardComponent(pageApps[index], index, cfg));
-        } else {
-            gridItems.push(EmptySlotComponent(index, cfg));
-        }
-    }
+    const pageGrids = getPageGrids(totalPages, cfg, isLandscape);
+    const indicator = PageIndicatorDots(totalPages, state.currentPage, isLandscape);
 
     return [
-        Container("app_grid", {
-            width: px(vw(cfg.gridW)),
+        Container("app_grid_wrapper", {
+            width: px(pageWidthPx),
             height: px(vh(cfg.gridH)),
-            flex_direction: "Row",
-            flex_wrap: "Wrap",
-            justify_content: "Start",
-            align_content: "Start",
-            padding: padXY(
-                vh(cfg.gapY),
-                vw(cfg.gapX)
-            ),
-            column_gap: vw(cfg.gapX),
-            row_gap: vh(cfg.gapY),
-        }, gridItems)
+            position: "Relative",
+        }, [
+            ScrollView("app_grid_pager", {
+                snap_x: pageWidthPx,     // Yatay snap aralığı
+                rubber_band: 0.20,        // Kenar lastik bant (%20)
+                page_count: totalPages,
+                on_snap: "onPageChanged", // Snap tamamlanınca JS callback
+                momentum_scrolling: false, // Rust fizik motoru yönetiyor
+                style: {
+                    width: px(pageWidthPx),
+                    height: px(vh(cfg.gridH)),
+                    overflow_hidden: true,
+                }
+            }, [
+                Container("app_grid_track", {
+                    width: px(trackWidthPx),
+                    height: px(vh(cfg.gridH)),
+                    flex_shrink: 0,
+                    flex_direction: "Row",
+                }, pageGrids)
+            ]),
+
+            ...(indicator ? [indicator] : [])
+        ])
     ];
 }

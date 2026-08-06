@@ -6,6 +6,8 @@ use crate::core::ui::style_map::StyleMap;
 use crate::core::{Action, GlowRenderer, Point, Renderer, ScreenMetrics, Size, calculate_layout};
 use crate::plugin::registry::PluginRegistry;
 
+use crate::{dev_err, dev_log};
+use obfstr::obfstr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -501,21 +503,21 @@ pub fn run_loop(
                             for action in q.drain(..) {
                                 match action {
                                     Action::OpenSettings => {
-                                        println!("Desktop Preview: Open Settings triggered");
+                                        dev_log!("{}", obfstr!("Desktop Preview: Open Settings triggered"));
                                     }
                                     Action::OpenContacts => {
-                                        println!("Desktop Preview: Open Contacts triggered");
+                                        dev_log!("{}", obfstr!("Desktop Preview: Open Contacts triggered"));
                                     }
                                     Action::OpenCamera => {
-                                        println!("Desktop Preview: Open Camera triggered");
+                                        dev_log!("{}", obfstr!("Desktop Preview: Open Camera triggered"));
                                     }
                                     Action::LoadImage { id, src } => {
-                                        if src.starts_with("app-icon://") {
+                                        if src.starts_with(obfstr!("app-icon://")) {
                                             let w = 64;
                                             let h = 64;
                                             let pixels = [0, 255, 0, 255].repeat((w * h) as usize);
                                             renderer.load_image(&id, &pixels, w, h);
-                                            println!("Loaded dummy app icon for {src}");
+                                            dev_log!("{} {src}", obfstr!("Loaded dummy app icon for"));
                                         } else {
                                             let result = image::open(&src);
                                             match result {
@@ -524,13 +526,19 @@ pub fn run_loop(
                                                     let (w, h) = rgba.dimensions();
                                                     renderer.load_image(&id, rgba.as_raw(), w, h);
                                                 }
-                                                Err(e) => eprintln!("Failed to load image: {e}"),
+                                                Err(e) => dev_err!("{}: {e}", obfstr!("Failed to load image")),
                                             }
                                         }
+                                    }
+                                    Action::LaunchApp { package_name } => {
+                                        dev_log!("{}: {package_name}", obfstr!("Desktop Preview: Launch App triggered"));
                                     }
                                     Action::FocusTextInput(id) => {
                                         desktop.window.set_ime_allowed(true);
                                         app.focused_input_id = Some(id);
+                                    }
+                                    Action::RequestDefaultLauncher => {
+                                        dev_log!("{}", obfstr!("Desktop Preview: Request Default Launcher triggered"));
                                     }
                                     Action::BlurTextInput => {
                                         desktop.window.set_ime_allowed(false);
@@ -552,6 +560,8 @@ pub fn run_loop(
                             &app.data_map,
                             &app.transition_manager,
                             1.0,
+                            0.0,
+                            0.0,
                         );
 
                         renderer.end_frame();

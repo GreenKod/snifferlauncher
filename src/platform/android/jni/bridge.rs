@@ -1,9 +1,11 @@
+use crate::dev_log;
 use jni::errors::Error as JniError;
 use jni::{Env, jni_sig, jni_str};
 use jni::{
     JavaVM,
     objects::{JObject, JString, JValue},
 };
+use obfstr::obfstr;
 use std::sync::{Arc, OnceLock};
 
 static JVM: OnceLock<Arc<JavaVM>> = OnceLock::new();
@@ -204,16 +206,18 @@ pub fn get_application_list() -> Result<Vec<crate::core::types::AppInfo>, String
         .map_err(|e: JniError| e.to_string())?;
 
     if cfg!(debug_assertions) {
-        println!(
-            "[DEBUG] Number of apps to display in the launcher: {}",
+        dev_log!(
+            "{} {}",
+            obfstr!("[DEBUG] Number of apps to display in the launcher:"),
             app_list.len()
         );
         for app in &app_list {
-            println!("[DEBUG] - {} ({})", app.name, app.package_name);
+            dev_log!("{} - {} ({})", obfstr!("[DEBUG]"), app.name, app.package_name);
         }
-        for app in AppInfo::search_by_name(&app_list, "sett") {
-            println!(
-                "[DEBUG] Search result: \n - {} ({})",
+        for app in AppInfo::search_by_name(&app_list, obfstr!("sett")) {
+            dev_log!(
+                "{} \n - {} ({})",
+                obfstr!("[DEBUG] Search result:"),
                 app.name, app.package_name
             );
         }
@@ -403,6 +407,7 @@ fn extract_drawable_pixels(
 }
 
 /// Retrieves the application icon for a given package name and returns it as a raw RGBA pixel buffer.
+/// Retrieves the application icon for a given package name and returns it as a raw RGBA pixel buffer.
 /// Returns `Option<(pixels, width, height)>`.
 #[must_use]
 pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
@@ -411,36 +416,65 @@ pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
     jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
         let ctx = context(env);
 
-        let pm = env
-            .call_method(
-                &ctx,
-                jni_str!("getPackageManager"),
-                jni_sig!("()Landroid/content/pm/PackageManager;"),
-                &[],
-            )?
-            .l()?;
+        let pm = match env.call_method(
+            &ctx,
+            jni_str!("getPackageManager"),
+            jni_sig!("()Landroid/content/pm/PackageManager;"),
+            &[],
+        ) {
+            Ok(val) => val.l()?,
+            Err(e) => {
+                let _ = env.exception_clear();
+                return Err(e);
+            }
+        };
 
         let pkg_str = env.new_string(package_name)?;
 
-        let app_info = env
-            .call_method(
-                &pm,
-                jni_str!("getApplicationInfo"),
-                jni_sig!("(Ljava/lang/String;I)Landroid/content/pm/ApplicationInfo;"),
-                &[JValue::Object(&pkg_str)],
-            )?
-            .l()?;
+        let drawable = match env.call_method(
+            &pm,
+            jni_str!("getApplicationIcon"),
+            jni_sig!("(Ljava/lang/String;)Landroid/graphics/drawable/Drawable;"),
+            &[JValue::Object(&pkg_str)],
+        ) {
+            Ok(val) => val.l()?,
+            Err(_) => {
+                let _ = env.exception_clear();
+                // Fallback: try getApplicationInfo -> getApplicationIcon
+                let app_info = match env.call_method(
+                    &pm,
+                    jni_str!("getApplicationInfo"),
+                    jni_sig!("(Ljava/lang/String;I)Landroid/content/pm/ApplicationInfo;"),
+                    &[JValue::Object(&pkg_str), JValue::Int(0)],
+                ) {
+                    Ok(val) => val.l()?,
+                    Err(e2) => {
+                        let _ = env.exception_clear();
+                        return Err(e2);
+                    }
+                };
 
-        let drawable = env
-            .call_method(
-                &pm,
-                jni_str!("getApplicationIcon"),
-                jni_sig!(
-                    "(Landroid/content/pm/ApplicationInfo;)Landroid/graphics/drawable/Drawable;"
-                ),
-                &[JValue::Object(&app_info)],
-            )?
-            .l()?;
+                match env.call_method(
+                    &pm,
+                    jni_str!("getApplicationIcon"),
+                    jni_sig!(
+                        "(Landroid/content/pm/ApplicationInfo;)Landroid/graphics/drawable/Drawable;"
+                    ),
+                    &[JValue::Object(&app_info)],
+                ) {
+                    Ok(val) => val.l()?,
+                    Err(e3) => {
+                        let _ = env.exception_clear();
+                        return Err(e3);
+                    }
+                }
+            }
+        };
+
+        if drawable.is_null() {
+            let _ = env.exception_clear();
+            return Err(JniError::JavaException);
+        }
 
         let width = env
             .call_method(
@@ -448,27 +482,108 @@ pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
                 jni_str!("getIntrinsicWidth"),
                 jni_sig!("()I"),
                 &[],
-            )?
-            .i()?;
+            )
+            .map_or(96, |v| v.i().unwrap_or(96));
+
         let height = env
             .call_method(
                 &drawable,
                 jni_str!("getIntrinsicHeight"),
                 jni_sig!("()I"),
                 &[],
-            )?
-            .i()?;
+            )
+            .map_or(96, |v| v.i().unwrap_or(96));
 
-        // If dimensions are invalid, fallback to standard icon size (e.g., 96x96)
         let (width, height) = if width <= 0 || height <= 0 {
             (96, 96)
         } else {
             (width, height)
         };
 
-        let rgba_bytes = extract_drawable_pixels(env, &drawable, width, height)?;
+        let rgba_bytes = match extract_drawable_pixels(env, &drawable, width, height) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                let _ = env.exception_clear();
+                return Err(e);
+            }
+        };
 
         Ok((rgba_bytes, width.cast_unsigned(), height.cast_unsigned()))
+    })
+    .ok()
+}
+
+/// Retrieves the system wallpaper from Android WallpaperManager as a raw RGBA pixel buffer.
+/// Returns `Option<(pixels, width, height)>`.
+#[must_use]
+pub fn get_system_wallpaper_pixels(target_w: u32, target_h: u32) -> Option<(Vec<u8>, u32, u32)> {
+    let jvm = vm();
+
+    jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
+        let ctx = context(env);
+
+        let wp_mgr_cls = match env.find_class(jni_str!("android/app/WallpaperManager")) {
+            Ok(cls) => cls,
+            Err(e) => {
+                let _ = env.exception_clear();
+                return Err(e);
+            }
+        };
+
+        let wp_mgr = match env.call_static_method(
+            wp_mgr_cls,
+            jni_str!("getInstance"),
+            jni_sig!("(Landroid/content/Context;)Landroid/app/WallpaperManager;"),
+            &[JValue::Object(&ctx)],
+        ) {
+            Ok(val) => val.l()?,
+            Err(e) => {
+                let _ = env.exception_clear();
+                return Err(e);
+            }
+        };
+
+        let drawable = match env.call_method(
+            &wp_mgr,
+            jni_str!("getDrawable"),
+            jni_sig!("()Landroid/graphics/drawable/Drawable;"),
+            &[],
+        ) {
+            Ok(val) => val.l()?,
+            Err(_) => {
+                let _ = env.exception_clear();
+                match env.call_method(
+                    &wp_mgr,
+                    jni_str!("peekDrawable"),
+                    jni_sig!("()Landroid/graphics/drawable/Drawable;"),
+                    &[],
+                ) {
+                    Ok(val) => val.l()?,
+                    Err(e2) => {
+                        let _ = env.exception_clear();
+                        return Err(e2);
+                    }
+                }
+            }
+        };
+
+        if drawable.is_null() {
+            let _ = env.exception_clear();
+            return Err(JniError::JavaException);
+        }
+
+        let w = if target_w == 0 { 540 } else { (target_w / 2).clamp(360, 720) };
+        let h = if target_h == 0 { 960 } else { (target_h / 2).clamp(640, 1280) };
+
+        let rgba_bytes = match extract_drawable_pixels(env, &drawable, w.cast_signed(), h.cast_signed()) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                let _ = env.exception_clear();
+                return Err(e);
+            }
+        };
+
+        Ok((rgba_bytes, w, h))
     })
     .ok()
 }

@@ -47,6 +47,7 @@ pub trait Renderer {
     fn pop_transform(&mut self) {}
     fn set_global_alpha(&mut self, alpha: f32);
     fn load_image(&mut self, id: &str, rgba_pixels: &[u8], width: u32, height: u32);
+    fn has_image(&self, id: &str) -> bool;
     fn draw_image(
         &mut self,
         id: &str,
@@ -54,6 +55,8 @@ pub trait Renderer {
         radius: f32,
         object_fit: crate::core::style::ObjectFit,
     );
+    fn load_wallpaper(&mut self, _rgba_pixels: &[u8], _width: u32, _height: u32) {}
+    fn draw_wallpaper(&mut self, _width: f32, _height: f32) {}
     fn measure_text(&self, text: &str, size: f32) -> f32;
     /// Returns the ascent (distance from the top of the text box to the baseline)
     /// at the given size. Used to correctly center text vertically within a rect.

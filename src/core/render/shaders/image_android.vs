@@ -2,7 +2,7 @@
 precision mediump float;
 layout(location = 0) in vec2 position;
 out vec2 v_uv;
-out vec2 v_pos;
+out vec2 v_local_pos;
 
 uniform vec2 u_resolution;
 uniform vec2 u_rect_pos;
@@ -14,7 +14,7 @@ uniform mat3 u_transform;
 void main() {
     vec3 pixel_pos_3 = u_transform * vec3(position * u_rect_size + u_rect_pos, 1.0);
     vec2 pixel_pos = pixel_pos_3.xy;
-    v_pos = pixel_pos;
+    v_local_pos = position * u_rect_size;
     v_uv = position * u_uv_scale + u_uv_offset;
     
     vec2 zero_to_one = pixel_pos / u_resolution;

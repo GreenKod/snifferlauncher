@@ -1,10 +1,11 @@
 // Default Interface - Main Entry Point
+// Rust scroll fizik motorunu kullanır.
+// JS'in isDragging / dragOffset / kinetic scroll takip etmesine gerek yok.
 
 function Root() {
     const isLandscape = vw(100) > vh(100);
 
     if (isLandscape) {
-        // Yatay Ekran (Landscape): Sol taraf %84 Grid, Sağ taraf %16 Dikey Görev Yöneticisi Şeridi
         return Container("root", {
             width: pct(100),
             height: pct(100),
@@ -16,7 +17,6 @@ function Root() {
         }, [
             ...AppGridComponent(),
 
-            // Dikey (Yukarıdan Aşağı) Görev Yöneticisi Alanı
             Container("task_manager_reserved_area", {
                 width: px(vw(16.0)),
                 height: pct(100),
@@ -50,7 +50,6 @@ function Root() {
         ]);
     }
 
-    // Dikey Ekran (Portrait): Üst taraf %84 Grid, Alt taraf %16 Yatay Görev Yöneticisi Şeridi
     return Container("root", {
         width: pct(100),
         height: pct(100),
@@ -80,14 +79,50 @@ function Root() {
 
 subscribeChannel("clock.secondChanged", function(eventData) {});
 
+let _hasInitialRefreshed = false;
+
+// Rust tarafından snap tamamlandığında çağrılır.
+// Sayfa indicator dots'unu güncellemek için kullanılır.
+function onPageChanged(pageData) {
+    const data = typeof pageData === "string" ? JSON.parse(pageData) : pageData;
+    if (typeof data.page === "number") {
+        state.currentPage = data.page;
+        SnifferUI.forceUpdate();
+    }
+}
+
 globalThis.onEvent = function (eventJsonString) {
+    if (!_hasInitialRefreshed) {
+        _hasInitialRefreshed = true;
+        state.refreshApps();
+    }
+
     const e = JSON.parse(eventJsonString);
 
     if (e.type === "WindowResized") {
+        state.refreshApps();
         SnifferUI.forceUpdate();
         return "[]";
     }
 
+    // PageSnapped: Rust fizik motoru snap tamamlandığını bildirdi
+    if (e.type === "PageSnapped") {
+        if (typeof onPageChanged === "function") {
+            onPageChanged({ page: e.page });
+        }
+        return "[]";
+    }
+
+    if (e.type === "Click" && e.id) {
+        const pkg = state.getAppPackageByHash(String(e.id));
+        if (pkg) {
+            launchApp(pkg);
+        }
+        return "[]";
+    }
+
+    // Scroll, PointerDown, PointerUp: app_grid_pager için Rust handles,
+    // diğer scroll view'lar için normal akış devam eder.
     return "[]";
 };
 

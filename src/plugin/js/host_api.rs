@@ -1,6 +1,8 @@
 use crate::core::types::Element;
 use crate::plugin::js::permission_manager::permission_granted;
 use crate::plugin::registry::{ApiEntry, ApiMap, BroadcastQueue};
+use crate::{dev_err, dev_log};
+use obfstr::obfstr;
 use rquickjs::Function;
 use std::sync::{Arc, Mutex};
 
@@ -66,7 +68,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let get_default_settings_func =
         Function::new(ctx.clone(), move || -> String { default_settings_json.clone() }).unwrap();
     globals
-        .set("host_get_default_settings", get_default_settings_func)
+        .set(obfstr!("host_get_default_settings"), get_default_settings_func)
         .unwrap();
 
     // ------------------------------------------------------------------
@@ -76,9 +78,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let plugin_permissions_ui = plugin_permissions_vec.clone();
     let granted_permissions_ui = granted_permissions_arc.clone();
     let set_ui_func = Function::new(ctx.clone(), move |json_str: String| {
-        let required_permission = "plugin.permission.UI";
         if !permission_granted(
-            required_permission,
+            obfstr!("plugin.permission.UI"),
             &plugin_permissions_ui,
             &granted_permissions_ui,
         ) {
@@ -89,25 +90,23 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
             Ok(parsed) => {
                 if let Ok(mut lock) = tree_set_ui.lock() {
                     *lock = Some(parsed.clone());
+                    crate::core::types::UI_VERSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
-                if let Some(path) = &cache_path
+                if let Some(path) = cache_path.clone()
                     && let Ok(bytes) = postcard::to_allocvec(&parsed)
                 {
-                    match std::fs::write(path, bytes) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            println!("host_set_ui cache write failed: {e}");
-                        }
-                    }
+                    std::thread::spawn(move || {
+                        let _ = std::fs::write(path, bytes);
+                    });
                 }
             }
             Err(e) => {
-                println!("JS Error: Failed to parse host_set_ui JSON: {e}");
+                dev_err!("{}: {e}", obfstr!("JS Error: Failed to parse host_set_ui JSON"));
             }
         }
     })
     .unwrap();
-    globals.set("host_set_ui", set_ui_func).unwrap();
+    globals.set(obfstr!("host_set_ui"), set_ui_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_update_style
@@ -118,9 +117,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let update_style_func = Function::new(
         ctx.clone(),
         move |id: String, property: String, value: String| {
-            let required_permission = "plugin.permission.UI";
             if !permission_granted(
-                required_permission,
+                obfstr!("plugin.permission.UI"),
                 &plugin_permissions_style,
                 &granted_permissions_style,
             ) {
@@ -135,7 +133,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         },
     )
     .unwrap();
-    globals.set("host_update_style", update_style_func).unwrap();
+    globals.set(obfstr!("host_update_style"), update_style_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_set_text
@@ -144,9 +142,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let plugin_permissions_text = plugin_permissions_vec.clone();
     let granted_permissions_text = granted_permissions_arc.clone();
     let set_text_func = Function::new(ctx.clone(), move |id: String, text: String| {
-        let required_permission = "plugin.permission.UI";
         if !permission_granted(
-            required_permission,
+            obfstr!("plugin.permission.UI"),
             &plugin_permissions_text,
             &granted_permissions_text,
         ) {
@@ -160,7 +157,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         }
     })
     .unwrap();
-    globals.set("host_set_text", set_text_func).unwrap();
+    globals.set(obfstr!("host_set_text"), set_text_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_insert_child
@@ -170,9 +167,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let granted_permissions_insert = granted_permissions_arc.clone();
     let insert_child_func =
         Function::new(ctx.clone(), move |parent_id: String, child_json: String| {
-            let required_permission = "plugin.permission.UI";
             if !permission_granted(
-                required_permission,
+                obfstr!("plugin.permission.UI"),
                 &plugin_permissions_insert,
                 &granted_permissions_insert,
             ) {
@@ -186,11 +182,11 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
                     root.insert_child(&parent_id, parsed_child);
                 }
             } else {
-                println!("JS Error: Failed to parse child JSON in host_insert_child");
+                dev_err!("{}", obfstr!("JS Error: Failed to parse child JSON in host_insert_child"));
             }
         })
         .unwrap();
-    globals.set("host_insert_child", insert_child_func).unwrap();
+    globals.set(obfstr!("host_insert_child"), insert_child_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_remove_node
@@ -199,9 +195,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let plugin_permissions_remove = plugin_permissions_vec.clone();
     let granted_permissions_remove = granted_permissions_arc.clone();
     let remove_node_func = Function::new(ctx.clone(), move |id: String| {
-        let required_permission = "plugin.permission.UI";
         if !permission_granted(
-            required_permission,
+            obfstr!("plugin.permission.UI"),
             &plugin_permissions_remove,
             &granted_permissions_remove,
         ) {
@@ -215,7 +210,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         }
     })
     .unwrap();
-    globals.set("host_remove_node", remove_node_func).unwrap();
+    globals.set(obfstr!("host_remove_node"), remove_node_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_get_binary_state (Phase 2)
@@ -237,7 +232,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     }
     let get_binary_state_func = Function::new(ctx.clone(), get_binary_state).unwrap();
     globals
-        .set("host_get_binary_state", get_binary_state_func)
+        .set(obfstr!("host_get_binary_state"), get_binary_state_func)
         .unwrap();
 
     // ------------------------------------------------------------------
@@ -246,25 +241,25 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let send_binary_event_func = Function::new(ctx.clone(), |buffer: rquickjs::ArrayBuffer<'_>| {
         if let Some(bytes) = buffer.as_bytes() {
             if let Ok(state) = postcard::from_bytes::<crate::core::types::AppState>(bytes) {
-                println!("JS sent binary state via ArrayBuffer: {state:?}");
+                dev_log!("{}: {state:?}", obfstr!("JS sent binary state via ArrayBuffer"));
             } else {
-                println!("Failed to deserialize binary event from JS.");
+                dev_err!("{}", obfstr!("Failed to deserialize binary event from JS."));
             }
         }
     })
     .unwrap();
     globals
-        .set("host_send_binary_event", send_binary_event_func)
+        .set(obfstr!("host_send_binary_event"), send_binary_event_func)
         .unwrap();
 
     // ------------------------------------------------------------------
     // host_log
     // ------------------------------------------------------------------
     let log_func = Function::new(ctx.clone(), |msg: String| {
-        println!("JS Log: {msg}");
+        dev_log!("{}: {msg}", obfstr!("JS Log"));
     })
     .unwrap();
-    globals.set("host_log", log_func).unwrap();
+    globals.set(obfstr!("host_log"), log_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_hash
@@ -273,7 +268,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         crate::core::ui::widget::fnv1a(s.as_bytes()).to_string()
     })
     .unwrap();
-    globals.set("host_hash", hash_func).unwrap();
+    globals.set(obfstr!("host_hash"), hash_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_screen_width
@@ -282,7 +277,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         f32::from_bits(crate::core::types::SCREEN_WIDTH.load(std::sync::atomic::Ordering::Relaxed))
     })
     .unwrap();
-    globals.set("host_screen_width", get_width_func).unwrap();
+    globals.set(obfstr!("host_screen_width"), get_width_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_screen_height
@@ -291,7 +286,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         f32::from_bits(crate::core::types::SCREEN_HEIGHT.load(std::sync::atomic::Ordering::Relaxed))
     })
     .unwrap();
-    globals.set("host_screen_height", get_height_func).unwrap();
+    globals.set(obfstr!("host_screen_height"), get_height_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_get_local_time
@@ -310,7 +305,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     })
     .unwrap();
     globals
-        .set("host_get_local_time", get_local_time_func)
+        .set(obfstr!("host_get_local_time"), get_local_time_func)
         .unwrap();
 
     // ------------------------------------------------------------------
@@ -320,9 +315,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let plugin_permissions_image = plugin_permissions_vec.clone();
     let granted_permissions_image = granted_permissions_arc.clone();
     let create_image_func = Function::new(ctx.clone(), move |id: String, src: String| {
-        let required_permission = "plugin.permission.IMAGE";
         if !permission_granted(
-            required_permission,
+            obfstr!("plugin.permission.IMAGE"),
             &plugin_permissions_image,
             &granted_permissions_image,
         ) {
@@ -334,7 +328,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         }
     })
     .unwrap();
-    globals.set("host_create_image", create_image_func).unwrap();
+    globals.set(obfstr!("host_create_image"), create_image_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_focus_input
@@ -343,9 +337,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let plugin_permissions_focus = plugin_permissions_vec.clone();
     let granted_permissions_focus = granted_permissions_arc.clone();
     let focus_input_func = Function::new(ctx.clone(), move |id: String| {
-        let required_permission = "plugin.permission.INPUT";
         if !permission_granted(
-            required_permission,
+            obfstr!("plugin.permission.INPUT"),
             &plugin_permissions_focus,
             &granted_permissions_focus,
         ) {
@@ -357,7 +350,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         }
     })
     .unwrap();
-    globals.set("host_focus_input", focus_input_func).unwrap();
+    globals.set(obfstr!("host_focus_input"), focus_input_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_blur_input
@@ -366,9 +359,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let plugin_permissions_blur = plugin_permissions_vec.clone();
     let granted_permissions_blur = granted_permissions_arc.clone();
     let blur_input_func = Function::new(ctx.clone(), move || {
-        let required_permission = "plugin.permission.INPUT";
         if !permission_granted(
-            required_permission,
+            obfstr!("plugin.permission.INPUT"),
             &plugin_permissions_blur,
             &granted_permissions_blur,
         ) {
@@ -380,7 +372,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         }
     })
     .unwrap();
-    globals.set("host_blur_input", blur_input_func).unwrap();
+    globals.set(obfstr!("host_blur_input"), blur_input_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_get_application_list
@@ -388,9 +380,8 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let plugin_permissions_app_list = plugin_permissions_vec.clone();
     let granted_permissions_app_list = Arc::clone(&granted_permissions_arc);
     let get_app_list_func = Function::new(ctx.clone(), move || -> String {
-        let required_permission = "android.permission.QUERY_ALL_PACKAGES";
         if !permission_granted(
-            required_permission,
+            obfstr!("android.permission.QUERY_ALL_PACKAGES"),
             &plugin_permissions_app_list,
             &granted_permissions_app_list,
         ) {
@@ -412,14 +403,40 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         match result {
             Ok(apps) => serde_json::to_string(&apps).unwrap_or_else(|_| "[]".to_string()),
             Err(e) => {
-                eprintln!("Failed to get application list: {e}");
+                dev_err!("{}: {e}", obfstr!("Failed to get application list"));
                 "[]".to_string()
             }
         }
     })
     .unwrap();
     globals
-        .set("host_get_application_list", get_app_list_func)
+        .set(obfstr!("host_get_application_list"), get_app_list_func)
+        .unwrap();
+
+    // ------------------------------------------------------------------
+    // host_launch_app(package_name: String)
+    // ------------------------------------------------------------------
+    let aq_launch = action_queue.clone();
+    let launch_app_func = Function::new(ctx.clone(), move |package_name: String| {
+        if let Ok(mut q) = aq_launch.lock() {
+            q.push(crate::core::types::Action::LaunchApp { package_name });
+        }
+    })
+    .unwrap();
+    globals.set(obfstr!("host_launch_app"), launch_app_func).unwrap();
+
+    // ------------------------------------------------------------------
+    // host_request_default_launcher()
+    // ------------------------------------------------------------------
+    let aq_req_home = action_queue.clone();
+    let req_home_func = Function::new(ctx.clone(), move || {
+        if let Ok(mut q) = aq_req_home.lock() {
+            q.push(crate::core::types::Action::RequestDefaultLauncher);
+        }
+    })
+    .unwrap();
+    globals
+        .set(obfstr!("host_request_default_launcher"), req_home_func)
         .unwrap();
 
     // ------------------------------------------------------------------
@@ -435,7 +452,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     })
     .unwrap();
     globals
-        .set("host_has_permission", has_permission_func)
+        .set(obfstr!("host_has_permission"), has_permission_func)
         .unwrap();
 
     // ------------------------------------------------------------------
@@ -451,7 +468,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
                 .collect();
 
             if valid_permissions.is_empty() {
-                eprintln!("Plugin requested permissions it did not declare or are invalid.");
+                dev_err!("{}", obfstr!("Plugin requested permissions it did not declare or are invalid."));
                 return "[]".to_string();
             }
 
@@ -474,14 +491,14 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
                     serde_json::to_string(&granted).unwrap_or_else(|_| "[]".to_string())
                 }
                 Err(e) => {
-                    eprintln!("Failed to request permissions: {e}");
+                    dev_err!("{}: {e}", obfstr!("Failed to request permissions"));
                     "[]".to_string()
                 }
             }
         })
         .unwrap();
     globals
-        .set("host_request_permissions", request_permissions_func)
+        .set(obfstr!("host_request_permissions"), request_permissions_func)
         .unwrap();
 
     // ==================================================================
@@ -490,11 +507,6 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
 
     // ------------------------------------------------------------------
     // host_register_api(name: String)
-    //
-    // Called by a plugin's `registerApi(name, handler)` JS shim.
-    // Registers a Rust closure in the ApiMap. When another plugin calls
-    // this API, the closure re-enters THIS plugin's QuickJS context and
-    // invokes `globalThis._handleApiCall(name, payload_json)`.
     // ------------------------------------------------------------------
     let safe_ctx = SafeContext(context);
     let safe_ctx = Arc::new(safe_ctx);
@@ -505,7 +517,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let granted_permissions_ipc = Arc::clone(&granted_permissions_arc);
     let register_api_func = Function::new(ctx.clone(), move |name: String| {
         if !permission_granted(
-            "plugin.permission.IPC",
+            obfstr!("plugin.permission.IPC"),
             &plugin_permissions_ipc,
             &granted_permissions_ipc,
         ) {
@@ -521,7 +533,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
                 let mut result: Option<String> = None;
                 ctx_clone.0.with(|ctx| {
                     if let Ok(handler) =
-                        ctx.globals().get::<_, rquickjs::Function>("_handleApiCall")
+                        ctx.globals().get::<_, rquickjs::Function>(obfstr!("_handleApiCall"))
                         && let Ok(ret) = handler
                             .call::<_, rquickjs::Value>((api_name_clone.clone(), payload_json))
                         && ret.is_string()
@@ -534,8 +546,12 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
 
         if let Ok(mut map) = api_map_register.lock() {
             if map.contains_key(&name) {
-                println!(
-                    "[IPC] Warning: API '{name}' is already registered. Overwriting with plugin '{owning_id}'."
+                dev_log!(
+                    "{} '{}' {} '{}'.",
+                    obfstr!("[IPC] Warning: API"),
+                    name,
+                    obfstr!("is already registered. Overwriting with plugin"),
+                    owning_id
                 );
             }
             map.insert(
@@ -545,18 +561,14 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
                     callback,
                 },
             );
-            println!("[IPC] Plugin '{owning_id}' registered API '{name}'.");
+            dev_log!("{} '{}' {} '{}'.", obfstr!("[IPC] Plugin"), owning_id, obfstr!("registered API"), name);
         }
     })
     .unwrap();
-    globals.set("host_register_api", register_api_func).unwrap();
+    globals.set(obfstr!("host_register_api"), register_api_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_call_api(name: String, payload_json: String) -> Option<String>
-    //
-    // Called by a plugin's `callApi(name, payload)` JS shim.
-    // Looks up the API in the ApiMap and invokes the registered closure.
-    // Returns the JSON-string result, or JS `null` if the API is absent.
     // ------------------------------------------------------------------
     let api_map_call = api_map.clone();
     let calling_plugin_id = plugin_id.clone();
@@ -567,46 +579,57 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
             let map = match api_map_call.lock() {
                 Ok(m) => m,
                 Err(_) => {
-                    eprintln!("[IPC] Failed to lock ApiMap for call to '{name}'.");
+                    dev_err!("{} '{name}'.", obfstr!("[IPC] Failed to lock ApiMap for call to"));
                     return None;
                 }
             };
 
             if let Some(entry) = map.get(&name) {
-                println!(
-                    "[IPC] Plugin '{calling_plugin_id}' calling API '{name}' (owned by '{}').",
+                dev_log!(
+                    "{} '{}' {} '{}' ({} '{}').",
+                    obfstr!("[IPC] Plugin"),
+                    calling_plugin_id,
+                    obfstr!("calling API"),
+                    name,
+                    obfstr!("owned by"),
                     entry.plugin_id
                 );
-                // Release the lock before invoking the callback to avoid deadlock
-                // when the callee itself tries to lock the map.
                 let callback = Arc::clone(&entry.callback);
                 drop(map);
                 callback(payload_json)
             } else {
-                eprintln!("[IPC] Plugin '{calling_plugin_id}' tried to call unknown API '{name}'.");
+                dev_err!(
+                    "{} '{}' {} '{}'.",
+                    obfstr!("[IPC] Plugin"),
+                    calling_plugin_id,
+                    obfstr!("tried to call unknown API"),
+                    name
+                );
                 None
             }
         },
     )
     .unwrap();
-    globals.set("host_call_api", call_api_func).unwrap();
+    globals.set(obfstr!("host_call_api"), call_api_func).unwrap();
 
     // ------------------------------------------------------------------
     // host_broadcast(channel: String, payload_json: String)
-    //
-    // Called by a plugin's `broadcastEvent(channel, data)` JS shim.
-    // Pushes the event into the broadcast queue; it is drained and
-    // dispatched to all plugins by PluginRegistry::dispatch() each frame.
     // ------------------------------------------------------------------
     let bq = broadcast_queue;
     let broadcast_plugin_id = plugin_id;
     let broadcast_func =
         Function::new(ctx.clone(), move |channel: String, payload_json: String| {
-            println!("[IPC] Plugin '{broadcast_plugin_id}' broadcasting on channel '{channel}'.");
+            dev_log!(
+                "{} '{}' {} '{}'.",
+                obfstr!("[IPC] Plugin"),
+                broadcast_plugin_id,
+                obfstr!("broadcasting on channel"),
+                channel
+            );
             if let Ok(mut q) = bq.lock() {
                 q.push((channel, payload_json));
             }
         })
         .unwrap();
-    globals.set("host_broadcast", broadcast_func).unwrap();
+    globals.set(obfstr!("host_broadcast"), broadcast_func).unwrap();
 }

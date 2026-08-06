@@ -1,4 +1,6 @@
 use crate::plugin::registry::PluginRegistry;
+use crate::{dev_err, dev_log};
+use obfstr::obfstr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -50,19 +52,19 @@ impl PluginLoader {
         let mut issues = Vec::new();
 
         if manifest.id.trim().is_empty() {
-            issues.push("manifest id must not be empty".to_string());
+            issues.push(obfstr!("manifest id must not be empty").to_string());
         }
         if manifest.name.trim().is_empty() {
-            issues.push("manifest name must not be empty".to_string());
+            issues.push(obfstr!("manifest name must not be empty").to_string());
         }
         if manifest.version.trim().is_empty() {
-            issues.push("manifest version must not be empty".to_string());
+            issues.push(obfstr!("manifest version must not be empty").to_string());
         }
         if manifest.main.trim().is_empty() {
-            issues.push("manifest main entry must not be empty".to_string());
+            issues.push(obfstr!("manifest main entry must not be empty").to_string());
         }
         if manifest.permissions.iter().any(|p| p.trim().is_empty()) {
-            issues.push("manifest permissions must not contain empty values".to_string());
+            issues.push(obfstr!("manifest permissions must not contain empty values").to_string());
         }
 
         issues
@@ -76,23 +78,28 @@ impl PluginLoader {
         action_queue: &Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
     ) {
         if !self.assets_dir.exists() {
-            println!(
-                "Plugin directory {} does not exist.",
+            dev_log!(
+                "{} {}",
+                obfstr!("Plugin directory does not exist:"),
                 self.assets_dir.display()
             );
             return;
         }
 
-        let plugins_json_path = self.assets_dir.join("plugins.json");
+        let plugins_json_path = self.assets_dir.join(obfstr!("plugins.json"));
         if !plugins_json_path.exists() {
-            println!("plugins.json not found in {}", self.assets_dir.display());
+            dev_log!(
+                "{} {}",
+                obfstr!("plugins.json not found in"),
+                self.assets_dir.display()
+            );
             return;
         }
 
         let config_str = match fs::read_to_string(&plugins_json_path) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("Failed to read plugins.json: {e}");
+                dev_err!("{}: {e}", obfstr!("Failed to read plugins.json"));
                 return;
             }
         };
@@ -100,13 +107,13 @@ impl PluginLoader {
         let config: PluginsConfig = match serde_json::from_str(&config_str) {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("Failed to parse plugins.json: {e}");
+                dev_err!("{}: {e}", obfstr!("Failed to parse plugins.json"));
                 return;
             }
         };
 
         if let Some(ref master) = config.master_plugin {
-            println!("[PluginLoader] Master plugin designated: '{master}'");
+            dev_log!("{} '{master}'", obfstr!("[PluginLoader] Master plugin designated:"));
         }
 
         let api_map = registry.api_registry();
@@ -114,17 +121,23 @@ impl PluginLoader {
 
         for plugin_folder in config.active_plugins {
             let plugin_dir = self.assets_dir.join(&plugin_folder);
-            let manifest_path = plugin_dir.join("manifest.json");
+            let manifest_path = plugin_dir.join(obfstr!("manifest.json"));
 
             if !manifest_path.exists() {
-                eprintln!("manifest.json not found for plugin '{plugin_folder}'");
+                dev_err!(
+                    "{} '{plugin_folder}'",
+                    obfstr!("manifest.json not found for plugin")
+                );
                 continue;
             }
 
             let manifest_str = match fs::read_to_string(&manifest_path) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("Failed to read manifest.json for plugin '{plugin_folder}': {e}");
+                    dev_err!(
+                        "{} '{plugin_folder}': {e}",
+                        obfstr!("Failed to read manifest.json for plugin")
+                    );
                     continue;
                 }
             };
@@ -132,15 +145,19 @@ impl PluginLoader {
             let manifest: PluginManifest = match serde_json::from_str(&manifest_str) {
                 Ok(m) => m,
                 Err(e) => {
-                    eprintln!("Failed to parse manifest.json for plugin '{plugin_folder}': {e}");
+                    dev_err!(
+                        "{} '{plugin_folder}': {e}",
+                        obfstr!("Failed to parse manifest.json for plugin")
+                    );
                     continue;
                 }
             };
 
             let manifest_issues = Self::validate_manifest(&manifest);
             if !manifest_issues.is_empty() {
-                eprintln!(
-                    "Manifest validation failed for plugin '{}': {}",
+                dev_err!(
+                    "{} '{}': {}",
+                    obfstr!("Manifest validation failed for plugin"),
                     plugin_folder,
                     manifest_issues.join(", ")
                 );
@@ -150,19 +167,24 @@ impl PluginLoader {
             // Collect preload scripts (e.g. framework JS) before the main plugin code.
             let mut preload_scripts: Vec<String> = Vec::new();
             for preload_path in &manifest.preload {
-                // Paths are relative to the .plugins root (e.g. "../_framework/sniffer_ui.js")
                 let resolved = plugin_dir.join(preload_path);
                 match fs::read_to_string(&resolved) {
                     Ok(src) => {
-                        println!(
-                            "Preloading '{}' for plugin '{}'",
-                            preload_path, manifest.name
+                        dev_log!(
+                            "{} '{}' {} '{}'",
+                            obfstr!("Preloading"),
+                            preload_path,
+                            obfstr!("for plugin"),
+                            manifest.name
                         );
                         preload_scripts.push(src);
                     }
-                    Err(e) => eprintln!(
-                        "Could not read preload '{}' for plugin '{}': {e}",
-                        preload_path, manifest.name
+                    Err(e) => dev_err!(
+                        "{} '{}' {} '{}': {e}",
+                        obfstr!("Could not read preload"),
+                        preload_path,
+                        obfstr!("for plugin"),
+                        manifest.name
                     ),
                 }
             }
@@ -184,8 +206,10 @@ impl PluginLoader {
                             }
                             plugin_code.push_str(&content);
                         }
-                        Err(e) => eprintln!(
-                            "Could not read script '{script_rel_path}' for plugin '{}': {e}",
+                        Err(e) => dev_err!(
+                            "{} '{script_rel_path}' {} '{}': {e}",
+                            obfstr!("Could not read script"),
+                            obfstr!("for plugin"),
                             manifest.name
                         ),
                     }
@@ -193,76 +217,82 @@ impl PluginLoader {
             }
 
             if !plugin_code.is_empty() {
-                // Concatenate preload scripts + plugin script code into one bundle.
                 let mut full_script = preload_scripts.join("\n");
                 if !full_script.is_empty() {
                     full_script.push('\n');
                 }
                 full_script.push_str(&plugin_code);
 
-                        let hash = crate::core::ui::widget::fnv1a(full_script.as_bytes());
-                        let cache_dir = self.assets_dir.join(".cache");
-                        let _ = fs::create_dir_all(&cache_dir);
-                        let cache_file = cache_dir.join(format!("{}_{}_ui.bin", manifest.id, hash));
+                let hash = crate::core::ui::widget::fnv1a(full_script.as_bytes());
+                let cache_dir = self.assets_dir.join(obfstr!(".cache"));
+                let _ = fs::create_dir_all(&cache_dir);
+                let cache_file = cache_dir.join(format!("{}_{}_ui.bin", manifest.id, hash));
 
-                        let mut cached_ui = None;
-                        if cache_file.exists() {
-                            println!(
-                                "Cache file found for {}: {}",
-                                manifest.id,
-                                cache_file.display()
-                            );
-                            if let Ok(bytes) = fs::read(&cache_file) {
-                                if let Ok(ui) =
-                                    postcard::from_bytes::<crate::core::types::Element>(&bytes)
-                                {
-                                    println!(
-                                        "Successfully deserialized UI from cache for {}",
-                                        manifest.id
-                                    );
-                                    cached_ui = Some(ui);
-                                } else {
-                                    println!("Failed to deserialize postcard for {}", manifest.id);
-                                }
-                            }
-                        } else {
-                            println!(
-                                "No cache file found for {}. Will be created upon host_set_ui.",
+                let mut cached_ui = None;
+                if cache_file.exists() {
+                    dev_log!(
+                        "{} {}: {}",
+                        obfstr!("Cache file found for"),
+                        manifest.id,
+                        cache_file.display()
+                    );
+                    if let Ok(bytes) = fs::read(&cache_file) {
+                        if let Ok(ui) =
+                            postcard::from_bytes::<crate::core::types::Element>(&bytes)
+                        {
+                            dev_log!(
+                                "{}: {}",
+                                obfstr!("Successfully deserialized UI from cache for"),
                                 manifest.id
                             );
+                            cached_ui = Some(ui);
+                        } else {
+                            dev_log!("{} {}", obfstr!("Failed to deserialize postcard for"), manifest.id);
                         }
+                    }
+                } else {
+                    dev_log!(
+                        "{} {}. {}",
+                        obfstr!("No cache file found for"),
+                        manifest.id,
+                        obfstr!("Will be created upon host_set_ui.")
+                    );
+                }
 
-                        match crate::plugin::JsPlugin::new(crate::plugin::js::JsPluginConfig {
-                            script_content: full_script,
-                            plugin_id: manifest.id.clone(),
-                            action_queue: action_queue.clone(),
-                            api_map: api_map.clone(),
-                            broadcast_queue: broadcast_queue.clone(),
-                            permissions: manifest.permissions.clone(),
-                            default_settings: manifest.default_settings.clone(),
-                            cached_ui,
-                            cache_path: Some(cache_file),
-                        }) {
-                            Ok(plugin) => {
-                                registry.register(
-                                    &(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>),
-                                );
-                                println!(
-                                    "Successfully loaded JS plugin '{}' ({})",
-                                    manifest.name,
-                                    manifest.id
-                                );
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "Failed to instantiate JS plugin '{}': {e}",
-                                    manifest.name
-                                );
-                            }
-                        }
+                match crate::plugin::JsPlugin::new(crate::plugin::js::JsPluginConfig {
+                    script_content: full_script,
+                    plugin_id: manifest.id.clone(),
+                    action_queue: action_queue.clone(),
+                    api_map: api_map.clone(),
+                    broadcast_queue: broadcast_queue.clone(),
+                    permissions: manifest.permissions.clone(),
+                    default_settings: manifest.default_settings.clone(),
+                    cached_ui,
+                    cache_path: Some(cache_file),
+                }) {
+                    Ok(plugin) => {
+                        registry.register(
+                            &(Arc::new(plugin) as Arc<dyn crate::plugin::UiPlugin>),
+                        );
+                        dev_log!(
+                            "{} '{}' ({})",
+                            obfstr!("Successfully loaded JS plugin"),
+                            manifest.name,
+                            manifest.id
+                        );
+                    }
+                    Err(e) => {
+                        dev_err!(
+                            "{} '{}': {e}",
+                            obfstr!("Failed to instantiate JS plugin"),
+                            manifest.name
+                        );
+                    }
+                }
             } else {
-                eprintln!(
-                    "No script content found for plugin '{}'",
+                dev_err!(
+                    "{} '{}'",
+                    obfstr!("No script content found for plugin"),
                     manifest.name
                 );
             }
@@ -318,9 +348,6 @@ mod tests {
 #[cfg(target_os = "android")]
 impl PluginLoader {
     /// Read plugins from Android Assets instead of the filesystem.
-    ///
-    /// # Panics
-    /// Instantiate and register all plugins defined in `plugins.json` from Android assets.
     #[allow(clippy::too_many_lines)]
     pub fn register_all_from_assets(
         registry: &mut PluginRegistry,
@@ -328,25 +355,25 @@ impl PluginLoader {
         action_queue: &Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
     ) {
         use std::io::Read;
-        let config_cstr = std::ffi::CString::new("plugins.json").unwrap();
+        let config_cstr = std::ffi::CString::new(obfstr!("plugins.json")).unwrap();
 
         let config_string = if let Some(mut asset) = asset_manager.open(config_cstr.as_c_str()) {
             let mut content = String::new();
             if asset.read_to_string(&mut content).is_ok() {
                 content
             } else {
-                eprintln!("Failed to read plugins.json from assets");
+                dev_err!("{}", obfstr!("Failed to read plugins.json from assets"));
                 return;
             }
         } else {
-            eprintln!("plugins.json not found in Android assets");
+            dev_err!("{}", obfstr!("plugins.json not found in Android assets"));
             return;
         };
 
         let config: PluginsConfig = match serde_json::from_str(&config_string) {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("Failed to parse plugins.json on Android: {e}");
+                dev_err!("{}: {e}", obfstr!("Failed to parse plugins.json on Android"));
                 return;
             }
         };
@@ -362,11 +389,8 @@ impl PluginLoader {
                     if asset.read_to_string(&mut manifest_str).is_ok() {
                         if let Ok(manifest) = serde_json::from_str::<PluginManifest>(&manifest_str)
                         {
-                            // Collect preload scripts from Android assets.
                             let mut preload_scripts: Vec<String> = Vec::new();
                             for preload_rel in &manifest.preload {
-                                // Resolve the path relative to the plugin folder:
-                                // e.g. "../_framework/sniffer_ui.js" -> "_framework/sniffer_ui.js"
                                  let resolved = if let Some(stripped) = preload_rel.strip_prefix("../") {
                                      stripped.to_string()
                                  } else {
@@ -385,14 +409,21 @@ impl PluginLoader {
                                  if let Some(mut pa) = asset_opt {
                                      let mut src = String::new();
                                      if pa.read_to_string(&mut src).is_ok() {
-                                         println!(
-                                             "Android: preloading '{}' for plugin '{}'",
-                                             resolved, manifest.name
+                                         dev_log!(
+                                             "{} '{}' {} '{}'",
+                                             obfstr!("Android: preloading"),
+                                             resolved,
+                                             obfstr!("for plugin"),
+                                             manifest.name
                                          );
                                          preload_scripts.push(src);
                                      }
                                  } else {
-                                     eprintln!("Android: preload asset '{resolved}' not found");
+                                     dev_err!(
+                                         "{} '{resolved}' {}",
+                                         obfstr!("Android: preload asset"),
+                                         obfstr!("not found")
+                                     );
                                  }
                             }
 
@@ -419,7 +450,6 @@ impl PluginLoader {
                             }
 
                             if !plugin_code.is_empty() {
-                                // Bundle preload + plugin_code
                                 let mut full_script = preload_scripts.join("\n");
                                 if !full_script.is_empty() {
                                     full_script.push('\n');
@@ -442,34 +472,49 @@ impl PluginLoader {
                                             &(Arc::new(plugin)
                                                 as Arc<dyn crate::plugin::UiPlugin>),
                                         );
-                                        println!(
-                                            "Successfully loaded JS plugin '{}' ({}) from Android Assets",
-                                            manifest.name, manifest.id
+                                        dev_log!(
+                                            "{} '{}' ({}) {}",
+                                            obfstr!("Successfully loaded JS plugin"),
+                                            manifest.name,
+                                            manifest.id,
+                                            obfstr!("from Android Assets")
                                         );
                                     }
-                                    Err(e) => eprintln!(
-                                        "Failed to instantiate JS plugin '{}' on Android: {e}",
-                                        manifest.name
+                                    Err(e) => dev_err!(
+                                        "{} '{}' {}: {e}",
+                                        obfstr!("Failed to instantiate JS plugin"),
+                                        manifest.name,
+                                        obfstr!("on Android")
                                     ),
                                 }
                             } else {
-                                eprintln!(
-                                    "Failed to read scripts for plugin '{}' from Android assets",
-                                    manifest.name
+                                dev_err!(
+                                    "{} '{}' {}",
+                                    obfstr!("Failed to read scripts for plugin"),
+                                    manifest.name,
+                                    obfstr!("from Android assets")
                                 );
                             }
                         } else {
-                            eprintln!(
-                                "Failed to parse manifest.json for plugin '{plugin_folder}' on Android"
+                            dev_err!(
+                                "{} '{plugin_folder}' {}",
+                                obfstr!("Failed to parse manifest.json for plugin"),
+                                obfstr!("on Android")
                             );
                         }
                     } else {
-                        eprintln!(
-                            "Failed to read manifest.json for plugin '{plugin_folder}' on Android"
+                        dev_err!(
+                            "{} '{plugin_folder}' {}",
+                            obfstr!("Failed to read manifest.json for plugin"),
+                            obfstr!("on Android")
                         );
                     }
                 } else {
-                    eprintln!("manifest.json not found for plugin '{plugin_folder}' on Android");
+                    dev_err!(
+                        "{} '{plugin_folder}' {}",
+                        obfstr!("manifest.json not found for plugin"),
+                        obfstr!("on Android")
+                    );
                 }
             }
         }

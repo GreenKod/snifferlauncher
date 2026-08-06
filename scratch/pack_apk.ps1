@@ -1,0 +1,147 @@
+Add-Type -AssemblyName "System.IO.Compression.FileSystem"
+
+$rawApkPath = "target/release/apk/snifferlauncher.apk"
+if (-not (Test-Path $rawApkPath)) {
+    $rawApkPath = "target/release/apk/snifferlauncher-unsigned.apk"
+}
+if (-not (Test-Path $rawApkPath)) {
+    $foundApk = Get-ChildItem -Path "target" -Filter "*.apk" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notlike "*release-unsigned.apk*" -and $_.FullName -notlike "*release-signed.apk*" -and $_.FullName -notlike "*release-aligned.apk*" } | Select-Object -First 1
+    if ($foundApk) {
+        $rawApkPath = $foundApk.FullName
+    }
+}
+$unsignedApkPath = "target/release/apk/snifferlauncher-android-arm64-release-unsigned.apk"
+$signedApkPath = "target/release/apk/snifferlauncher-android-arm64-release-signed.apk"
+$soPath = "target/aarch64-linux-android/release/libsnifferlauncher.so"
+$pluginsDir = ".plugins"
+
+if (-not (Test-Path $rawApkPath)) {
+    Write-Host "Error: Raw APK $rawApkPath not found!" -ForegroundColor Red
+    exit 1
+}
+
+$zip = [System.IO.Compression.ZipFile]::Open($rawApkPath, [System.IO.Compression.ZipArchiveMode]::Update)
+
+# 1. Inject compiled .so library
+$existingSo = $zip.GetEntry("lib/arm64-v8a/libsnifferlauncher.so")
+if ($existingSo -ne $null) {
+    $existingSo.Delete()
+}
+[System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $soPath, "lib/arm64-v8a/libsnifferlauncher.so")
+Write-Host "Successfully injected lib/arm64-v8a/libsnifferlauncher.so into APK!" -ForegroundColor Green
+
+# 2. Inject all plugin & UI assets from .plugins/ into assets/ in the APK
+if (Test-Path $pluginsDir) {
+    $pluginsItem = Get-Item $pluginsDir
+    Get-ChildItem -Path $pluginsDir -Recurse -File | ForEach-Object {
+        $relPath = $_.FullName.Substring($pluginsItem.FullName.Length + 1).Replace('\', '/')
+        if (-not $relPath.StartsWith(".cache")) {
+            $zipEntryPath = "assets/$relPath"
+            $existingEntry = $zip.GetEntry($zipEntryPath)
+            if ($existingEntry -ne $null) {
+                $existingEntry.Delete()
+            }
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $zipEntryPath)
+            Write-Host "Injected asset: $zipEntryPath" -ForegroundColor DarkGray
+        }
+    }
+    Write-Host "Successfully injected all plugin assets into APK assets/ folder!" -ForegroundColor Green
+}
+
+$zip.Dispose()
+
+# 3. Save unsigned APK
+Copy-Item -Path $rawApkPath -Destination $unsignedApkPath -Force
+Remove-Item -Path $rawApkPath -Force -ErrorAction SilentlyContinue
+
+# 4. Locate zipalign and apksigner tools in Android SDK or PATH
+$sdkBuildTools = "$env:LOCALAPPDATA\Android\Sdk\build-tools"
+$zipalign = Get-Command "zipalign" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+if (-not $zipalign -and (Test-Path $sdkBuildTools)) {
+    $zipalign = Get-ChildItem -Path $sdkBuildTools -Filter "zipalign.exe" -Recurse | Select-Object -ExpandProperty FullName | Select-Object -Last 1
+}
+
+$apksigner = Get-Command "apksigner" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+if (-not $apksigner -and (Test-Path $sdkBuildTools)) {
+    $apksigner = Get-ChildItem -Path $sdkBuildTools -Filter "apksigner.bat" -Recurse | Select-Object -ExpandProperty FullName | Select-Object -Last 1
+}
+
+# 5. Perform zipalign (Aligns AndroidManifest.xml and assets to 4-byte boundaries, required for Android PackageParser)
+$alignedApkPath = "target/release/apk/snifferlauncher-android-arm64-release-aligned.apk"
+if ($zipalign) {
+    Write-Host "Running zipalign to align AndroidManifest.xml and assets..." -ForegroundColor Cyan
+    $zipalignArgs = @("-p", "-f", "4", $unsignedApkPath, $alignedApkPath)
+    $zipProcess = Start-Process -FilePath $zipalign -ArgumentList $zipalignArgs -Wait -NoNewWindow -PassThru
+    if ($zipProcess.ExitCode -eq 0 -and (Test-Path $alignedApkPath)) {
+        Write-Host "Zipalign successful!" -ForegroundColor Green
+    } else {
+        Write-Host "Zipalign warning: Failed with exit code $($zipProcess.ExitCode). Using unsigned APK for signing." -ForegroundColor Yellow
+        Copy-Item -Path $unsignedApkPath -Destination $alignedApkPath -Force
+    }
+} else {
+    Write-Host "zipalign tool not found. Skipping zipalign." -ForegroundColor Yellow
+    Copy-Item -Path $unsignedApkPath -Destination $alignedApkPath -Force
+}
+
+# 6. Perform apksigner signing
+$keystoreFile = Get-ChildItem -Path .\* -Include "*.keystore", "*.jks" -File | Select-Object -First 1
+
+if ($keystoreFile -and $apksigner) {
+    Write-Host "`nFound keystore file: $($keystoreFile.Name) - Preparing automatic signing..." -ForegroundColor Yellow
+
+    $password = $env:KEYSTORE_PASSWORD
+    if (-not $password) {
+        $password = "android" # Fallback debug password
+    }
+
+    $alias = $env:KEYSTORE_ALIAS
+    if (-not $alias) { $alias = "snifferlauncher" }
+
+    Write-Host "Signing APK using apksigner..." -ForegroundColor Cyan
+    $signArgs = @(
+        "sign",
+        "--ks", $keystoreFile.FullName,
+        "--ks-pass", "pass:$password",
+        "--ks-key-alias", $alias,
+        "--min-sdk-version", "30",
+        "--out", $signedApkPath,
+        $alignedApkPath
+    )
+
+    $process = Start-Process -FilePath $apksigner -ArgumentList $signArgs -Wait -NoNewWindow -PassThru
+
+    if ($process.ExitCode -eq 0 -and (Test-Path $signedApkPath)) {
+        Write-Host "`n==========================================" -ForegroundColor Green
+        Write-Host "SUCCESSFULLY CREATED SIGNED & ALIGNED APK!" -ForegroundColor Green
+        Write-Host "Install with: adb install -r $signedApkPath" -ForegroundColor Yellow
+        Write-Host "==========================================" -ForegroundColor Green
+    } else {
+        Write-Host "Apksigner attempt with alias '$alias' failed. Trying debug key signing..." -ForegroundColor Yellow
+        
+        # Try signing without explicit alias or prompt if needed
+        $debugSignArgs = @(
+            "sign",
+            "--ks", $keystoreFile.FullName,
+            "--ks-pass", "pass:$password",
+            "--min-sdk-version", "30",
+            "--out", $signedApkPath,
+            $alignedApkPath
+        )
+        $process2 = Start-Process -FilePath $apksigner -ArgumentList $debugSignArgs -Wait -NoNewWindow -PassThru
+        if ($process2.ExitCode -eq 0 -and (Test-Path $signedApkPath)) {
+            Write-Host "`n==========================================" -ForegroundColor Green
+            Write-Host "SUCCESSFULLY CREATED SIGNED & ALIGNED APK!" -ForegroundColor Green
+            Write-Host "Install with: adb install -r $signedApkPath" -ForegroundColor Yellow
+            Write-Host "==========================================" -ForegroundColor Green
+        } else {
+            Write-Host "Apksigner failed with exit code $($process2.ExitCode). Verify your keystore password via \$env:KEYSTORE_PASSWORD." -ForegroundColor Red
+        }
+    }
+} else {
+    if (-not $apksigner) {
+        Write-Host "apksigner tool not found in Android SDK. Signed APK skipped." -ForegroundColor Red
+    }
+}
+
+# Clean up temporary aligned intermediate file
+Remove-Item -Path $alignedApkPath -Force -ErrorAction SilentlyContinue

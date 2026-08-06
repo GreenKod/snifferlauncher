@@ -129,8 +129,26 @@ impl PluginRegistry {
         data: &DataMap,
         actions: &std::sync::Arc<std::sync::Mutex<Vec<crate::core::types::Action>>>,
     ) {
+        // Coalesce multiple Scroll events in the same frame to prevent JS engine lag
+        let raw_events = bus.drain();
+        let mut coalesced = Vec::with_capacity(raw_events.len());
+        for event in raw_events {
+            if let crate::core::ui::event::UiEvent::Scroll(id, dx, dy, _max_x, _max_y) = &event {
+                if let Some(crate::core::ui::event::UiEvent::Scroll(last_id, last_dx, last_dy, _, _)) =
+                    coalesced.last_mut()
+                {
+                    if last_id == id {
+                        *last_dx += dx;
+                        *last_dy += dy;
+                        continue;
+                    }
+                }
+            }
+            coalesced.push(event);
+        }
+
         // Route UI events to all plugins.
-        for event in bus.drain() {
+        for event in coalesced {
             for plugin in &self.plugins {
                 plugin.on_event(&event, styles, data, actions);
             }

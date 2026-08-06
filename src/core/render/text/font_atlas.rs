@@ -1,6 +1,8 @@
 #![allow(clippy::pedantic, clippy::nursery)]
 
+use crate::dev_err;
 use glow::HasContext;
+use obfstr::obfstr;
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source, image::Content};
 
@@ -132,11 +134,15 @@ pub fn build_font_atlas(
 
     let font_texture = upload_font_texture(gl, atlas_width, atlas_height, &atlas_pixels)?;
 
-    eprintln!(
-        "[FontAtlas] Built {}x{} atlas, {} glyphs, ascent={:.1}",
+    dev_err!(
+        "{} {}x{} {}, {} {}, {}={:.1}",
+        obfstr!("[FontAtlas] Built"),
         atlas_width,
         atlas_height,
+        obfstr!("atlas,"),
         glyph_infos.len(),
+        obfstr!("glyphs,"),
+        obfstr!("ascent"),
         ascent
     );
 
