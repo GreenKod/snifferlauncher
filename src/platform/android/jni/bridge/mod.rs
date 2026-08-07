@@ -4,7 +4,8 @@ pub mod wallpaper;
 
 pub use apps::{get_application_list, request_permissions};
 pub use icons::{
-    get_app_icon_pixels, init_icon_worker_pool, poll_async_app_icon, request_async_app_icon,
+    get_app_icon_pixels, init_icon_worker_pool, poll_async_app_icon, prefetch_app_icons,
+    request_async_app_icon,
 };
 pub use wallpaper::get_system_wallpaper_pixels;
 

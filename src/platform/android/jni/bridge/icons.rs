@@ -60,6 +60,13 @@ pub fn request_async_app_icon(package_name: &str) {
     }
 }
 
+/// Enqueues a list of package names to the async JNI icon worker pool ahead of time.
+pub fn prefetch_app_icons(package_names: &[String]) {
+    for pkg in package_names {
+        request_async_app_icon(pkg);
+    }
+}
+
 /// Try to receive completed async icon decode results (non-blocking).
 pub fn poll_async_app_icon() -> Option<IconLoadResult> {
     if let Some(receiver) = ICON_RES_RECEIVER.get() {
