@@ -123,6 +123,21 @@ impl GlowRenderer {
         self.texture_cache.textures.contains_key(id)
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn load_encrypted_image_in_place(
+        &mut self,
+        id: &str,
+        encrypted_bytes: &mut [u8],
+        key: u8,
+        width: u32,
+        height: u32,
+    ) {
+        for b in encrypted_bytes.iter_mut() {
+            *b ^= key;
+        }
+        self.load_image_impl(id, encrypted_bytes, width, height);
+    }
+
     pub(crate) fn load_wallpaper_impl(&mut self, rgba_pixels: &[u8], width: u32, height: u32) {
         unsafe {
             if let Some(removed) = self.texture_cache.textures.remove("__system_wallpaper__") {

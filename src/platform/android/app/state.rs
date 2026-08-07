@@ -5,6 +5,7 @@ use crate::core::ui::event::EventBus;
 use crate::core::ui::style_map::StyleMap;
 use crate::core::{Action, Point};
 use crate::plugin::registry::PluginRegistry;
+use glow::HasContext;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
@@ -38,6 +39,7 @@ pub struct AppState {
     pub cached_max_scroll: std::collections::HashMap<u64, f32>,
     pub last_ui_version: u64,
     pub layout_dirty: bool,
+    pub memory_pressure_pending: bool,
     pub virtual_page_manager: crate::core::virtualization::VirtualPageManager,
     pub total_touch_drag_distance: f32,
 }
@@ -78,9 +80,28 @@ impl AppState {
             cached_max_scroll: std::collections::HashMap::new(),
             last_ui_version: 0,
             layout_dirty: true,
+            memory_pressure_pending: false,
             virtual_page_manager: crate::core::virtualization::VirtualPageManager::new(),
             total_touch_drag_distance: 0.0,
         }
+    }
+
+    /// Handles system `onTrimMemory` / `onLowMemory` pressure events by instantly evicting LRU textures from GPU.
+    pub fn trim_memory(&mut self, renderer: &mut crate::core::render::glow::GlowRenderer) {
+        unsafe {
+            renderer.texture_cache.textures.retain(|key, handle| {
+                if key.as_str() == "__system_wallpaper__" {
+                    true
+                } else {
+                    renderer.gl.delete_texture(handle.texture);
+                    false
+                }
+            });
+            renderer.texture_cache.total_vram_bytes = 0;
+        }
+        self.cached_layout = None;
+        self.layout_dirty = true;
+        self.memory_pressure_pending = false;
     }
 }
 

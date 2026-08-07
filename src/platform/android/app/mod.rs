@@ -141,6 +141,10 @@ pub fn android_main(app: AndroidApp) {
                             egl.unbind();
                         }
                     }
+                    MainEvent::LowMemory => {
+                        state.memory_pressure_pending = true;
+                        needs_redraw = true;
+                    }
                     MainEvent::Destroy => {
                         egl_state = None;
                         state.running = false;
@@ -156,6 +160,10 @@ pub fn android_main(app: AndroidApp) {
             && let Some(ref mut renderer) = egl.renderer
             && let Some(window) = app.native_window()
         {
+            if state.memory_pressure_pending {
+                state.trim_memory(renderer);
+            }
+
             state.plugin_registry.tick();
 
             let width =

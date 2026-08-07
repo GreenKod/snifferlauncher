@@ -123,18 +123,25 @@ impl VirtualPageManager {
     /// Kaydırma hızına (velocity) göre DINAMIK PREFETCH WINDOW uygulayan virtualization.
     /// Hızlı fling anında (|velocity| > 400) pencere yarıçapı 2 veya 3 sayfaya genişletilerek
     /// pop-in ve siyah ekran %100 önlenir.
-    pub fn virtualize_tree_with_velocity(&mut self, root: &mut Element, _velocity: f32) {
+    pub fn virtualize_tree_with_velocity(&mut self, root: &mut Element, velocity: f32) {
         let Some(track_children) = Self::find_track_children_mut(root, &mut self.total_pages) else {
             self.active = false;
             return;
         };
 
+        let radius = if velocity.abs() > 400.0 { 2 } else { PAGE_WINDOW_RADIUS };
+        let min_vis = self.current_page.saturating_sub(radius);
+        let max_vis = (self.current_page + radius).min(track_children.len().saturating_sub(1));
+
         for page_idx in 0..track_children.len() {
-            if let Some(page_el) = track_children.get_mut(page_idx) {
-                self.restore_page(page_idx, page_el);
+            if page_idx >= min_vis && page_idx <= max_vis {
+                if let Some(page_el) = track_children.get_mut(page_idx) {
+                    self.restore_page(page_idx, page_el);
+                }
+            } else if let Some(page_el) = track_children.get_mut(page_idx) {
+                self.strip_page(page_idx, page_el);
             }
         }
-        self.page_cache.clear();
         self.active = true;
     }
 
