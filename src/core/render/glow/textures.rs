@@ -95,11 +95,20 @@ impl GlowRenderer {
                 glow::UNSIGNED_BYTE,
                 glow::PixelUnpackData::Slice(Some(rgba_pixels)),
             );
-            self.gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_MIN_FILTER,
-                i32::try_from(glow::LINEAR).unwrap(),
-            );
+            if width > 256 || height > 256 {
+                self.gl.generate_mipmap(glow::TEXTURE_2D);
+                self.gl.tex_parameter_i32(
+                    glow::TEXTURE_2D,
+                    glow::TEXTURE_MIN_FILTER,
+                    i32::try_from(glow::LINEAR_MIPMAP_LINEAR).unwrap(),
+                );
+            } else {
+                self.gl.tex_parameter_i32(
+                    glow::TEXTURE_2D,
+                    glow::TEXTURE_MIN_FILTER,
+                    i32::try_from(glow::LINEAR).unwrap(),
+                );
+            }
             self.gl.tex_parameter_i32(
                 glow::TEXTURE_2D,
                 glow::TEXTURE_MAG_FILTER,
