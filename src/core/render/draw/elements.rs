@@ -22,11 +22,12 @@ pub(crate) fn draw_element_contents(
     base_style: &crate::core::style::Style,
     rect: Rect,
     widget_id: Option<u64>,
-) {
+) -> usize {
+    let mut rendered_children = 0;
     match element {
         Element::Container { children, .. } | Element::SharedView { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                draw_ui(
+                rendered_children += draw_ui(
                     renderer,
                     child_el,
                     child_lay,
@@ -64,7 +65,7 @@ pub(crate) fn draw_element_contents(
 
             renderer.push_transform(0.0, 0.0, 1.0, 0.0, -actual_scroll_x, -actual_scroll_y);
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                draw_ui(
+                rendered_children += draw_ui(
                     renderer,
                     child_el,
                     child_lay,
@@ -115,21 +116,19 @@ pub(crate) fn draw_element_contents(
 
             renderer.draw_text(&display_text, draw_x, draw_y, base_style.text_size, color);
         }
-        Element::Image { id, src, .. } => {
-            let img_id = id.as_deref().unwrap_or(src.as_str());
+        Element::Image { src, .. } => {
+            let img_id = src.as_str();
 
             if !renderer.has_image(img_id) {
                 if let Some(pkg_name) = src.strip_prefix("app-icon://") {
                     #[cfg(target_os = "android")]
                     {
-                        if let Some((pixels, w, h)) =
-                            crate::platform::android::jni::bridge::get_app_icon_pixels(pkg_name)
-                        {
-                            renderer.load_image(img_id, &pixels, w, h);
-                        } else {
-                            let dummy_pixel = [0u8, 0u8, 0u8, 0u8];
-                            renderer.load_image(img_id, &dummy_pixel, 1, 1);
-                        }
+                        // Senkron yükleme yerine asenkron havuza istek gönderip geçici şeffaf piksel yüklüyoruz.
+                        // Arka plandaki worker ikonu çözdüğünde `android_main` içerisindeki
+                        // `poll_async_app_icon` döngüsü `renderer.load_image` ile bu ID'nin üzerine yazacak!
+                        crate::platform::android::jni::bridge::request_async_app_icon(pkg_name);
+                        let dummy_pixel = [0u8, 0u8, 0u8, 0u8];
+                        renderer.load_image(img_id, &dummy_pixel, 1, 1);
                     }
                     #[cfg(not(target_os = "android"))]
                     {
@@ -137,6 +136,9 @@ pub(crate) fn draw_element_contents(
                         let dummy_pixel = [0u8, 0u8, 0u8, 0u8];
                         renderer.load_image(img_id, &dummy_pixel, 1, 1);
                     }
+                } else {
+                    let dummy_pixel = [0u8, 0u8, 0u8, 0u8];
+                    renderer.load_image(img_id, &dummy_pixel, 1, 1);
                 }
             }
 
@@ -212,4 +214,5 @@ pub(crate) fn draw_element_contents(
             );
         }
     }
+    rendered_children
 }

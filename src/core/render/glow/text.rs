@@ -74,25 +74,12 @@ pub(crate) fn draw_text_impl(renderer: &mut GlowRenderer, text: &str, x: f32, y:
         renderer.gl
             .bind_texture(glow::TEXTURE_2D, Some(renderer.font_texture));
 
-        let loc_res = renderer
-            .gl
-            .get_uniform_location(renderer.text_program, "u_resolution");
-        let loc_rect_pos = renderer
-            .gl
-            .get_uniform_location(renderer.text_program, "u_rect_pos");
-        let loc_rect_size = renderer
-            .gl
-            .get_uniform_location(renderer.text_program, "u_rect_size");
-        let loc_color = renderer.gl.get_uniform_location(renderer.text_program, "u_color");
-        let loc_uv_start = renderer
-            .gl
-            .get_uniform_location(renderer.text_program, "u_uv_start");
-        let loc_uv_end = renderer.gl.get_uniform_location(renderer.text_program, "u_uv_end");
+        let u = renderer.text_uniforms.clone();
 
         renderer.gl
-            .uniform_2_f32(loc_res.as_ref(), renderer.resolution.0, renderer.resolution.1);
+            .uniform_2_f32(u.u_resolution.as_ref(), renderer.resolution.0, renderer.resolution.1);
         renderer.gl
-            .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
+            .uniform_4_f32(u.u_color.as_ref(), col[0], col[1], col[2], col[3]);
 
         if let Some(ref atlas) = renderer.font_atlas {
             let scale = size / atlas.rasterize_size;
@@ -140,18 +127,15 @@ pub(crate) fn draw_text_impl(renderer: &mut GlowRenderer, text: &str, x: f32, y:
                     u16::try_from(glyph.atlas_y + glyph.height).expect("atlas y fits in u16"),
                 ) / ah;
 
-                renderer.gl.uniform_2_f32(loc_rect_pos.as_ref(), draw_x, draw_y);
-                renderer.gl.uniform_2_f32(loc_rect_size.as_ref(), gw, gh);
+                renderer.gl.uniform_2_f32(u.u_rect_pos.as_ref(), draw_x, draw_y);
+                renderer.gl.uniform_2_f32(u.u_rect_size.as_ref(), gw, gh);
                 renderer.gl
-                    .uniform_2_f32(loc_uv_start.as_ref(), u_min_x, u_min_y);
-                renderer.gl.uniform_2_f32(loc_uv_end.as_ref(), u_max_x, u_max_y);
+                    .uniform_2_f32(u.u_uv_start.as_ref(), u_min_x, u_min_y);
+                renderer.gl.uniform_2_f32(u.u_uv_end.as_ref(), u_max_x, u_max_y);
 
-                let loc_transform = renderer
-                    .gl
-                    .get_uniform_location(renderer.text_program, "u_transform");
                 let t = renderer.transform_stack.last().unwrap();
                 renderer.gl
-                    .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
+                    .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
                 renderer.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
                 curr_x = glyph.advance_width.mul_add(scale, curr_x);
             }
@@ -169,20 +153,17 @@ pub(crate) fn draw_text_impl(renderer: &mut GlowRenderer, text: &str, x: f32, y:
                     95.0
                 };
 
-                renderer.gl.uniform_2_f32(loc_rect_pos.as_ref(), curr_x, y);
+                renderer.gl.uniform_2_f32(u.u_rect_pos.as_ref(), curr_x, y);
                 renderer.gl
-                    .uniform_2_f32(loc_rect_size.as_ref(), char_width, char_height);
+                    .uniform_2_f32(u.u_rect_size.as_ref(), char_width, char_height);
                 renderer.gl
-                    .uniform_2_f32(loc_uv_start.as_ref(), idx / 96.0, 0.0);
+                    .uniform_2_f32(u.u_uv_start.as_ref(), idx / 96.0, 0.0);
                 renderer.gl
-                    .uniform_2_f32(loc_uv_end.as_ref(), (idx + 1.0) / 96.0, 1.0);
+                    .uniform_2_f32(u.u_uv_end.as_ref(), (idx + 1.0) / 96.0, 1.0);
 
-                let loc_transform = renderer
-                    .gl
-                    .get_uniform_location(renderer.text_program, "u_transform");
                 let t = renderer.transform_stack.last().unwrap();
                 renderer.gl
-                    .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
+                    .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
                 renderer.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
                 curr_x += char_width + gap;
             }

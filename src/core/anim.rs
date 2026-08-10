@@ -169,7 +169,7 @@ impl AnimState {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TransitionManager {
     pub states: HashMap<String, AnimState>,
 }

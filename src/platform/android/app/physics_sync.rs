@@ -56,14 +56,6 @@ impl ScrollPhysics {
             self.vel_x = vel;
             active = true;
 
-            if max_limit < f32::MAX {
-                if target == max_limit && self.pos_x > max_limit {
-                    self.pos_x = max_limit;
-                } else if target == 0.0 && self.pos_x < 0.0 {
-                    self.pos_x = 0.0;
-                }
-            }
-
             if exp_term < 0.001 || (self.pos_x - target).abs() < 0.5 {
                 self.pos_x = target;
                 self.vel_x = 0.0;
@@ -98,17 +90,21 @@ impl ScrollPhysics {
             .map(|(s, n)| s * (n as f32 - 1.0))
             .unwrap_or(f32::MAX);
 
-        let viewport_w = self.snap_x.unwrap_or(1080.0);
         let coeff = self.rubber_band.unwrap_or(RUBBER_BAND_COEFF);
 
-        let new_pos = self.pos_x + delta_x;
-        if new_pos < 0.0 {
-            self.pos_x = rubber_band_clamp(new_pos, viewport_w, coeff);
-        } else if new_pos > max_x && max_x < f32::MAX / 2.0 {
-            let overscroll = new_pos - max_x;
-            self.pos_x = max_x + rubber_band_clamp(overscroll, viewport_w, coeff);
+        if self.pos_x < 0.0 {
+            self.pos_x += delta_x * coeff;
+        } else if self.pos_x > max_x && max_x < f32::MAX / 2.0 {
+            self.pos_x += delta_x * coeff;
         } else {
-            self.pos_x = new_pos;
+            let new_pos = self.pos_x + delta_x;
+            if new_pos < 0.0 {
+                self.pos_x = new_pos * coeff;
+            } else if new_pos > max_x && max_x < f32::MAX / 2.0 {
+                self.pos_x = max_x + (new_pos - max_x) * coeff;
+            } else {
+                self.pos_x = new_pos;
+            }
         }
     }
 
@@ -121,10 +117,6 @@ impl ScrollPhysics {
             .zip(self.page_count)
             .map(|(s, n)| s * (n as f32 - 1.0))
             .unwrap_or(f32::MAX);
-
-        if max_x < f32::MAX {
-            self.pos_x = self.pos_x.clamp(0.0, max_x);
-        }
 
         if let Some(page_width) = self.snap_x {
             if page_width > 0.0 {
@@ -252,20 +244,35 @@ pub(crate) fn update_indicator_dots_in_element(
         if let Some(id_str) = id {
             if id_str == "page_indicator_container" {
                 let is_landscape = style.flex_direction == crate::core::style::FlexDirection::Column;
+                let mut changed = false;
                 for (p, child_el) in children.iter_mut().enumerate() {
                     let is_active = (p as i32) == active_page;
                     if let crate::core::types::Element::Container { style: dot_style, .. } = child_el {
-                        dot_style.background_color = Some(if is_active { 0xFF00_E5FF } else { 0x44FF_FFFF });
+                        let new_color = Some(if is_active { 0xFF00_E5FF } else { 0x44FF_FFFF });
+                        if dot_style.background_color != new_color {
+                            dot_style.background_color = new_color;
+                            changed = true;
+                        }
                         if is_landscape {
-                            dot_style.height = crate::core::style::Dimension::Pixels(if is_active { 3.6 * vmin_px } else { 1.6 * vmin_px });
-                            dot_style.width = crate::core::style::Dimension::Pixels(1.6 * vmin_px);
+                            let new_h = crate::core::style::Dimension::Pixels(if is_active { 3.6 * vmin_px } else { 1.6 * vmin_px });
+                            let new_w = crate::core::style::Dimension::Pixels(1.6 * vmin_px);
+                            if dot_style.height != new_h || dot_style.width != new_w {
+                                dot_style.height = new_h;
+                                dot_style.width = new_w;
+                                changed = true;
+                            }
                         } else {
-                            dot_style.width = crate::core::style::Dimension::Pixels(if is_active { 3.6 * vmin_px } else { 1.6 * vmin_px });
-                            dot_style.height = crate::core::style::Dimension::Pixels(1.6 * vmin_px);
+                            let new_w = crate::core::style::Dimension::Pixels(if is_active { 3.6 * vmin_px } else { 1.6 * vmin_px });
+                            let new_h = crate::core::style::Dimension::Pixels(1.6 * vmin_px);
+                            if dot_style.width != new_w || dot_style.height != new_h {
+                                dot_style.width = new_w;
+                                dot_style.height = new_h;
+                                changed = true;
+                            }
                         }
                     }
                 }
-                return true;
+                return changed;
             }
         }
         for child in children {

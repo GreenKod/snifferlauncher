@@ -46,6 +46,7 @@ package = "com.greenkod.snifferlauncher"
 build_targets = ["aarch64-linux-android"]
 assets = ".plugins"
 resources = "android/res"
+manifest = "android/AndroidManifest.xml"
 aapt_ignore_assets = "!.svn:!.git:!.ds_store:!*.scc:.*:!_*:!_"
 
 [package.metadata.android.application]
@@ -101,5 +102,18 @@ name = "android.permission.READ_EXTERNAL_STORAGE"
 [[package.metadata.android.uses_permission]]
 name = "android.permission.READ_MEDIA_IMAGES"
 
+[package.metadata.android.application.activity]
+launch_mode = "singleTask"
+state_not_needed = "true"
+clear_task_on_launch = "true"
+
 [workspace]
 exclude = [".plugins"]
+
+[[package.metadata.android.application.activity.intent_filter]]
+actions = ["android.intent.action.MAIN"]
+categories = ["android.intent.category.HOME", "android.intent.category.DEFAULT"]
+
+[[package.metadata.android.application.activity.intent_filter]]
+actions = ["android.intent.action.MAIN"]
+categories = ["android.intent.category.LAUNCHER"]

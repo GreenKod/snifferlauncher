@@ -26,7 +26,7 @@ pub fn draw_ui(
     alpha_multiplier: f32,
     accumulated_scroll_x: f32,
     accumulated_scroll_y: f32,
-) {
+) -> usize {
     use crate::core::ui::data_map::DataValue;
     use crate::core::ui::data_map::DrawCommand;
     let rect = layout.rect;
@@ -65,8 +65,8 @@ pub fn draw_ui(
 
     let is_animating = transition_manager.states.values().any(|s| s.is_active);
 
-    let margin_x = (screen_w * 3.0).max(2000.0);
-    let margin_y = 200.0_f32;
+    let margin_x = 20.0_f32;
+    let margin_y = 20.0_f32;
     let node_rect = crate::core::Rect::new(screen_x, screen_y, eff_w, eff_h);
     let viewport_rect = crate::core::Rect::new(0.0, 0.0, screen_w, screen_h);
     let is_offscreen = if is_animating {
@@ -76,7 +76,7 @@ pub fn draw_ui(
     };
 
     if is_offscreen {
-        return;
+        return 0;
     }
 
     renderer.push_transform(
@@ -155,7 +155,7 @@ pub fn draw_ui(
         renderer.push_clip_rect(rect, base_style.border_radius);
     }
 
-    elements::draw_element_contents(
+    let children_count = elements::draw_element_contents(
         renderer,
         element,
         layout,
@@ -177,4 +177,6 @@ pub fn draw_ui(
 
     renderer.set_global_alpha(alpha_multiplier);
     renderer.pop_transform();
+
+    1 + children_count
 }

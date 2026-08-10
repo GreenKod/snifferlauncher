@@ -42,6 +42,7 @@ pub struct AppState {
     pub memory_pressure_pending: bool,
     pub virtual_page_manager: crate::core::virtualization::VirtualPageManager,
     pub total_touch_drag_distance: f32,
+    pub profiler: crate::core::profiler::FrameProfiler,
 }
 
 impl AppState {
@@ -83,6 +84,7 @@ impl AppState {
             memory_pressure_pending: false,
             virtual_page_manager: crate::core::virtualization::VirtualPageManager::new(),
             total_touch_drag_distance: 0.0,
+            profiler: crate::core::profiler::FrameProfiler::default(),
         }
     }
 

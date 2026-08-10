@@ -1,5 +1,6 @@
-# Android Release Builder (Windows PowerShell)
-# Builds anonymous Android release APK with compiled native .so and packed assets.
+param(
+    [switch]$DevKit
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -33,7 +34,12 @@ $env:CXXFLAGS = $cflags
 
 Write-Host "Building anonymous Android ARM64 release binary..." -ForegroundColor Cyan
 
-cargo apk build --lib --release
+if ($DevKit) {
+    Write-Host "DevKit mode ENABLED (--features devkit)" -ForegroundColor Yellow
+    cargo apk build --lib --release --features devkit
+} else {
+    cargo apk build --lib --release
+}
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: cargo apk build failed!" -ForegroundColor Red
     exit $LASTEXITCODE

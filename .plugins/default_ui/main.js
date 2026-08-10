@@ -79,6 +79,20 @@ function Root() {
 
 subscribeChannel("clock.secondChanged", function(eventData) {});
 
+// Cihaz gerçek uygulamaları yükleyene kadar (arka plan thread'i bitene kadar) kontrol et
+let _retryInterval = setInterval(() => {
+    if (state.allApps.length > 0 && state.allApps[0].id === "mock_app_1") {
+        let realApps = getApplicationList();
+        if (realApps.length > 0) {
+            state.refreshApps();
+            SnifferUI.forceUpdate();
+            clearInterval(_retryInterval);
+        }
+    } else {
+        clearInterval(_retryInterval);
+    }
+}, 100);
+
 let _hasInitialRefreshed = false;
 
 // Rust tarafından snap tamamlandığında çağrılır.
@@ -94,13 +108,23 @@ function onPageChanged(pageData) {
 globalThis.onEvent = function (eventJsonString) {
     if (!_hasInitialRefreshed) {
         _hasInitialRefreshed = true;
-        state.refreshApps();
+        // Check if we still have mock apps before refreshing on first interaction
+        if (state.allApps.length > 0 && state.allApps[0].id === "mock_app_1") {
+            let realApps = getApplicationList();
+            if (realApps.length > 0) {
+                state.refreshApps();
+                SnifferUI.forceUpdate();
+            }
+        }
     }
 
     const e = JSON.parse(eventJsonString);
 
     if (e.type === "WindowResized") {
-        state.refreshApps();
+        // state.refreshApps() kaldırıldı! 
+        // WindowResized (uygulamayı arka plandan geri alma) durumlarında 
+        // 150+ uygulamanın JSON'unu tekrar parse edip UI ağacını baştan kurmak devasa bir LAG'a sebep oluyordu.
+        // Taffy layout motoru forceUpdate ile boyutları zaten dinamik hesaplar.
         SnifferUI.forceUpdate();
         return "[]";
     }

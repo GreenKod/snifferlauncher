@@ -7,6 +7,8 @@ pub mod text_measure;
 pub mod types;
 pub mod ui;
 pub mod virtualization;
+#[cfg(feature = "devkit")]
+pub mod profiler;
 
 // Convenience re-exports — keeps all call sites working without path changes.
 pub use layout::{LayoutNode, calculate_layout};

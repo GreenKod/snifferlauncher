@@ -82,79 +82,45 @@ impl GlowRenderer {
             self.gl.use_program(Some(self.shape_program));
             self.gl.bind_vertex_array(Some(self.quad_vertex_array));
 
-            let loc_res = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_resolution");
-            let loc_rect_pos = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_rect_pos");
-            let loc_rect_size = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_rect_size");
-            let loc_color = self.gl.get_uniform_location(self.shape_program, "u_color");
-            let loc_radius = self.gl.get_uniform_location(self.shape_program, "u_radius");
-            let loc_border_w = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_border_width");
-            let loc_border_col = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_border_color");
-            let loc_is_circle = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_is_circle");
-            let loc_is_shadow = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_is_shadow");
-            let loc_is_gradient = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_is_gradient");
-            let loc_color_bot = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_color_bottom");
-            let loc_shape_size = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_shape_size");
+            let u = self.shape_uniforms.clone();
 
             self.gl
-                .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
-            self.gl.uniform_2_f32(loc_rect_pos.as_ref(), rect.x, rect.y);
+                .uniform_2_f32(u.u_resolution.as_ref(), self.resolution.0, self.resolution.1);
+            self.gl.uniform_2_f32(u.u_rect_pos.as_ref(), rect.x, rect.y);
             self.gl
-                .uniform_2_f32(loc_rect_size.as_ref(), rect.width, rect.height);
+                .uniform_2_f32(u.u_rect_size.as_ref(), rect.width, rect.height);
             self.gl
-                .uniform_2_f32(loc_shape_size.as_ref(), rect.width, rect.height);
+                .uniform_2_f32(u.u_shape_size.as_ref(), rect.width, rect.height);
             self.gl.uniform_4_f32(
-                loc_color.as_ref(),
+                u.u_color.as_ref(),
                 col_top[0],
                 col_top[1],
                 col_top[2],
                 col_top[3],
             );
-            self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
-            self.gl.uniform_1_f32(loc_border_w.as_ref(), border_width);
+            self.gl.uniform_1_f32(u.u_radius.as_ref(), radius);
+            self.gl.uniform_1_f32(u.u_border_width.as_ref(), border_width);
             self.gl.uniform_4_f32(
-                loc_border_col.as_ref(),
+                u.u_border_color.as_ref(),
                 b_col[0],
                 b_col[1],
                 b_col[2],
                 b_col[3],
             );
-            self.gl.uniform_1_f32(loc_is_circle.as_ref(), 0.0);
-            self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 0.0);
-            self.gl.uniform_1_f32(loc_is_gradient.as_ref(), is_gradient);
+            self.gl.uniform_1_f32(u.u_is_circle.as_ref(), 0.0);
+            self.gl.uniform_1_f32(u.u_is_shadow.as_ref(), 0.0);
+            self.gl.uniform_1_f32(u.u_is_gradient.as_ref(), is_gradient);
             self.gl.uniform_4_f32(
-                loc_color_bot.as_ref(),
+                u.u_color_bottom.as_ref(),
                 col_bot[0],
                 col_bot[1],
                 col_bot[2],
                 col_bot[3],
             );
 
-            let loc_transform = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_transform");
             let t = self.transform_stack.last().unwrap();
             self.gl
-                .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
+                .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
@@ -166,29 +132,7 @@ impl GlowRenderer {
             self.gl.use_program(Some(self.shape_program));
             self.gl.bind_vertex_array(Some(self.quad_vertex_array));
 
-            let loc_res = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_resolution");
-            let loc_rect_pos = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_rect_pos");
-            let loc_rect_size = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_rect_size");
-            let loc_color = self.gl.get_uniform_location(self.shape_program, "u_color");
-            let loc_radius = self.gl.get_uniform_location(self.shape_program, "u_radius");
-            let loc_is_circle = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_is_circle");
-            let loc_is_shadow = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_is_shadow");
-            let loc_shadow_blur = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_shadow_blur");
-            let loc_shape_size = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_shape_size");
+            let u = self.shape_uniforms.clone();
 
             let blur = spread * 1.5;
             let padding = blur * 2.0;
@@ -204,29 +148,26 @@ impl GlowRenderer {
             let shape_size_y = spread.mul_add(2.0, rect.height);
 
             self.gl
-                .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
+                .uniform_2_f32(u.u_resolution.as_ref(), self.resolution.0, self.resolution.1);
             self.gl
-                .uniform_2_f32(loc_rect_pos.as_ref(), shadow_rect.x, shadow_rect.y);
+                .uniform_2_f32(u.u_rect_pos.as_ref(), shadow_rect.x, shadow_rect.y);
             self.gl.uniform_2_f32(
-                loc_rect_size.as_ref(),
+                u.u_rect_size.as_ref(),
                 shadow_rect.width,
                 shadow_rect.height,
             );
             self.gl
-                .uniform_2_f32(loc_shape_size.as_ref(), shape_size_x, shape_size_y);
+                .uniform_2_f32(u.u_shape_size.as_ref(), shape_size_x, shape_size_y);
             self.gl
-                .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
-            self.gl.uniform_1_f32(loc_radius.as_ref(), radius + spread);
-            self.gl.uniform_1_f32(loc_is_circle.as_ref(), 0.0);
-            self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 1.0);
-            self.gl.uniform_1_f32(loc_shadow_blur.as_ref(), blur);
+                .uniform_4_f32(u.u_color.as_ref(), col[0], col[1], col[2], col[3]);
+            self.gl.uniform_1_f32(u.u_radius.as_ref(), radius + spread);
+            self.gl.uniform_1_f32(u.u_is_circle.as_ref(), 0.0);
+            self.gl.uniform_1_f32(u.u_is_shadow.as_ref(), 1.0);
+            self.gl.uniform_1_f32(u.u_shadow_blur.as_ref(), blur);
 
-            let loc_transform = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_transform");
             let t = self.transform_stack.last().unwrap();
             self.gl
-                .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
+                .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
@@ -238,26 +179,7 @@ impl GlowRenderer {
             self.gl.use_program(Some(self.shape_program));
             self.gl.bind_vertex_array(Some(self.quad_vertex_array));
 
-            let loc_res = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_resolution");
-            let loc_rect_pos = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_rect_pos");
-            let loc_rect_size = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_rect_size");
-            let loc_color = self.gl.get_uniform_location(self.shape_program, "u_color");
-            let loc_radius = self.gl.get_uniform_location(self.shape_program, "u_radius");
-            let loc_is_circle = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_is_circle");
-            let loc_is_shadow = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_is_shadow");
-            let loc_shape_size = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_shape_size");
+            let u = self.shape_uniforms.clone();
 
             let rect = Rect {
                 x: cx - radius,
@@ -267,24 +189,21 @@ impl GlowRenderer {
             };
 
             self.gl
-                .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
-            self.gl.uniform_2_f32(loc_rect_pos.as_ref(), rect.x, rect.y);
+                .uniform_2_f32(u.u_resolution.as_ref(), self.resolution.0, self.resolution.1);
+            self.gl.uniform_2_f32(u.u_rect_pos.as_ref(), rect.x, rect.y);
             self.gl
-                .uniform_2_f32(loc_rect_size.as_ref(), rect.width, rect.height);
+                .uniform_2_f32(u.u_rect_size.as_ref(), rect.width, rect.height);
             self.gl
-                .uniform_2_f32(loc_shape_size.as_ref(), rect.width, rect.height);
+                .uniform_2_f32(u.u_shape_size.as_ref(), rect.width, rect.height);
             self.gl
-                .uniform_4_f32(loc_color.as_ref(), col[0], col[1], col[2], col[3]);
-            self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
-            self.gl.uniform_1_f32(loc_is_circle.as_ref(), 1.0);
-            self.gl.uniform_1_f32(loc_is_shadow.as_ref(), 0.0);
+                .uniform_4_f32(u.u_color.as_ref(), col[0], col[1], col[2], col[3]);
+            self.gl.uniform_1_f32(u.u_radius.as_ref(), radius);
+            self.gl.uniform_1_f32(u.u_is_circle.as_ref(), 1.0);
+            self.gl.uniform_1_f32(u.u_is_shadow.as_ref(), 0.0);
 
-            let loc_transform = self
-                .gl
-                .get_uniform_location(self.shape_program, "u_transform");
             let t = self.transform_stack.last().unwrap();
             self.gl
-                .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
+                .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
