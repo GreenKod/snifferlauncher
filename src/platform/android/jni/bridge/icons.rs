@@ -3,7 +3,8 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use jni::errors::Error as JniError;
 use jni::objects::JValue;
 use jni::{Env, jni_sig, jni_str};
-use std::sync::OnceLock;
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 
 pub struct IconLoadRequest {
@@ -19,8 +20,13 @@ pub struct IconLoadResult {
 
 static ICON_REQ_SENDER: OnceLock<Sender<IconLoadRequest>> = OnceLock::new();
 static ICON_RES_RECEIVER: OnceLock<Receiver<IconLoadResult>> = OnceLock::new();
+static PENDING_REQUESTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
-/// Initializes the 2-worker JNI async icon decoding channel pool.
+fn pending_requests() -> &'static Mutex<HashSet<String>> {
+    PENDING_REQUESTS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// Initializes the 4-worker JNI async icon decoding channel pool.
 pub fn init_icon_worker_pool() {
     if ICON_REQ_SENDER.get().is_some() {
         return;
@@ -32,7 +38,7 @@ pub fn init_icon_worker_pool() {
     let _ = ICON_REQ_SENDER.set(req_tx);
     let _ = ICON_RES_RECEIVER.set(res_rx);
 
-    for _ in 0..2 {
+    for _ in 0..4 {
         let req_rx_clone = req_rx.clone();
         let res_tx_clone = res_tx.clone();
 
@@ -62,6 +68,9 @@ pub fn init_icon_worker_pool() {
                         }
                         Ok::<(), JniError>(())
                     });
+                    if let Ok(mut pending) = pending_requests().lock() {
+                        pending.remove(&req.package_name);
+                    }
                 }
                 Ok(())
             });
@@ -71,6 +80,12 @@ pub fn init_icon_worker_pool() {
 
 /// Request asynchronous loading of an application icon.
 pub fn request_async_app_icon(package_name: &str) {
+    if let Ok(mut pending) = pending_requests().lock() {
+        if !pending.insert(package_name.to_string()) {
+            return;
+        }
+    }
+
     if let Some(sender) = ICON_REQ_SENDER.get() {
         let _ = sender.send(IconLoadRequest {
             package_name: package_name.to_string(),
@@ -300,29 +315,8 @@ pub(crate) fn get_app_icon_pixels_inner(env: &mut Env, package_name: &str) -> Op
             return Err(JniError::JavaException);
         }
 
-        let width = env
-            .call_method(
-                &drawable,
-                jni_str!("getIntrinsicWidth"),
-                jni_sig!("()I"),
-                &[],
-            )
-            .map_or(96, |v| v.i().unwrap_or(96));
-
-        let height = env
-            .call_method(
-                &drawable,
-                jni_str!("getIntrinsicHeight"),
-                jni_sig!("()I"),
-                &[],
-            )
-            .map_or(96, |v| v.i().unwrap_or(96));
-
-        let (width, height) = if width <= 0 || height <= 0 || width > 512 || height > 512 {
-            (96, 96)
-        } else {
-            (width, height)
-        };
+        // Target standard launcher grid resolution (96x96) for optimal VRAM usage and fast JNI extraction.
+        let (width, height) = (96, 96);
 
         let rgba_bytes = match extract_drawable_pixels(env, &drawable, width, height) {
             Ok(bytes) => bytes,
