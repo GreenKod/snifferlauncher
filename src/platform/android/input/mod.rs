@@ -150,20 +150,27 @@ pub fn handle_input_event(
                             let cutoff = now
                                 .checked_sub(std::time::Duration::from_millis(150))
                                 .unwrap_or(now);
-                            let recent: Vec<_> = state
-                                .drag_history
-                                .iter()
-                                .filter(|(_, _, t)| *t >= cutoff)
-                                .collect();
+                            let mut recent_count = 0;
+                            let mut total_dx = 0.0;
+                            let mut first_time = None;
+                            let mut last_time = None;
+                            
+                            for &(dx, _, t) in state.drag_history.iter() {
+                                if t >= cutoff {
+                                    if first_time.is_none() {
+                                        first_time = Some(t);
+                                    }
+                                    last_time = Some(t);
+                                    total_dx += dx;
+                                    recent_count += 1;
+                                }
+                            }
 
-                            let vel_x = if recent.len() >= 2 {
-                                let first = recent.first().unwrap();
-                                let last = recent.last().unwrap();
-                                let dt = last.2.duration_since(first.2).as_secs_f32().max(0.001);
-                                let total_dx: f32 = recent.iter().map(|(dx, _, _)| *dx).sum();
+                            let vel_x = if recent_count >= 2 {
+                                let dt = last_time.unwrap().duration_since(first_time.unwrap()).as_secs_f32().max(0.001);
                                 total_dx / dt
-                            } else if let Some(last) = recent.last() {
-                                let dt = now.duration_since(last.2).as_secs_f32().max(0.001);
+                            } else if let Some(last) = last_time {
+                                let dt = now.duration_since(last).as_secs_f32().max(0.001);
                                 state.last_drag_delta.0 / dt
                             } else {
                                 0.0
@@ -190,19 +197,23 @@ pub fn handle_input_event(
                                 let cutoff = std::time::Instant::now()
                                     .checked_sub(std::time::Duration::from_millis(150))
                                     .unwrap_or_else(std::time::Instant::now);
-                                let recent: Vec<_> = state
-                                    .drag_history
-                                    .iter()
-                                    .filter(|(_, _, t)| *t >= cutoff)
-                                    .collect();
+                                let mut recent_count = 0;
+                                let mut sum_dx = 0.0;
+                                let mut sum_dy = 0.0;
+                                
+                                for &(dx, dy, t) in state.drag_history.iter() {
+                                    if t >= cutoff {
+                                        sum_dx += dx;
+                                        sum_dy += dy;
+                                        recent_count += 1;
+                                    }
+                                }
 
-                                let (vel_x, vel_y) = if recent.is_empty() {
+                                let (vel_x, vel_y) = if recent_count == 0 {
                                     state.last_drag_delta
                                 } else {
-                                    let n = recent.len() as f32;
-                                    let vx = recent.iter().map(|(dx, _, _)| *dx).sum::<f32>() / n;
-                                    let vy = recent.iter().map(|(_, dy, _)| *dy).sum::<f32>() / n;
-                                    (vx, vy)
+                                    let n = recent_count as f32;
+                                    (sum_dx / n, sum_dy / n)
                                 };
 
                                 state.kinetic_scrolls.push(super::app::KineticScroll {

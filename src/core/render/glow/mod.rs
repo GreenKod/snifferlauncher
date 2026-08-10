@@ -11,6 +11,47 @@ pub mod shaders;
 pub mod text;
 pub mod textures;
 
+#[derive(Clone)]
+pub struct ShapeUniforms {
+    pub u_resolution: Option<glow::UniformLocation>,
+    pub u_rect_pos: Option<glow::UniformLocation>,
+    pub u_rect_size: Option<glow::UniformLocation>,
+    pub u_color: Option<glow::UniformLocation>,
+    pub u_radius: Option<glow::UniformLocation>,
+    pub u_border_width: Option<glow::UniformLocation>,
+    pub u_border_color: Option<glow::UniformLocation>,
+    pub u_is_circle: Option<glow::UniformLocation>,
+    pub u_is_shadow: Option<glow::UniformLocation>,
+    pub u_shadow_blur: Option<glow::UniformLocation>,
+    pub u_is_gradient: Option<glow::UniformLocation>,
+    pub u_color_bottom: Option<glow::UniformLocation>,
+    pub u_shape_size: Option<glow::UniformLocation>,
+    pub u_transform: Option<glow::UniformLocation>,
+}
+
+#[derive(Clone)]
+pub struct ImageUniforms {
+    pub u_resolution: Option<glow::UniformLocation>,
+    pub u_rect_pos: Option<glow::UniformLocation>,
+    pub u_rect_size: Option<glow::UniformLocation>,
+    pub u_uv_scale: Option<glow::UniformLocation>,
+    pub u_uv_offset: Option<glow::UniformLocation>,
+    pub u_radius: Option<glow::UniformLocation>,
+    pub u_global_alpha: Option<glow::UniformLocation>,
+    pub u_transform: Option<glow::UniformLocation>,
+}
+
+#[derive(Clone)]
+pub struct TextUniforms {
+    pub u_resolution: Option<glow::UniformLocation>,
+    pub u_rect_pos: Option<glow::UniformLocation>,
+    pub u_rect_size: Option<glow::UniformLocation>,
+    pub u_color: Option<glow::UniformLocation>,
+    pub u_uv_start: Option<glow::UniformLocation>,
+    pub u_uv_end: Option<glow::UniformLocation>,
+    pub u_transform: Option<glow::UniformLocation>,
+}
+
 pub struct GlowRenderer {
     pub(crate) gl: glow::Context,
     pub(crate) quad_vertex_array: glow::VertexArray,
@@ -27,6 +68,9 @@ pub struct GlowRenderer {
     pub(crate) global_alpha: f32,
     pub(crate) transform_stack: Vec<[f32; 9]>,
     pub(crate) clip_stack: Vec<(Rect, f32)>,
+    pub(crate) shape_uniforms: ShapeUniforms,
+    pub(crate) image_uniforms: ImageUniforms,
+    pub(crate) text_uniforms: TextUniforms,
 }
 
 #[allow(clippy::cast_possible_truncation)]
@@ -135,6 +179,44 @@ impl GlowRenderer {
             gl.enable(glow::BLEND);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
+            let shape_uniforms = ShapeUniforms {
+                u_resolution: gl.get_uniform_location(shape_program, "u_resolution"),
+                u_rect_pos: gl.get_uniform_location(shape_program, "u_rect_pos"),
+                u_rect_size: gl.get_uniform_location(shape_program, "u_rect_size"),
+                u_color: gl.get_uniform_location(shape_program, "u_color"),
+                u_radius: gl.get_uniform_location(shape_program, "u_radius"),
+                u_border_width: gl.get_uniform_location(shape_program, "u_border_width"),
+                u_border_color: gl.get_uniform_location(shape_program, "u_border_color"),
+                u_is_circle: gl.get_uniform_location(shape_program, "u_is_circle"),
+                u_is_shadow: gl.get_uniform_location(shape_program, "u_is_shadow"),
+                u_shadow_blur: gl.get_uniform_location(shape_program, "u_shadow_blur"),
+                u_is_gradient: gl.get_uniform_location(shape_program, "u_is_gradient"),
+                u_color_bottom: gl.get_uniform_location(shape_program, "u_color_bottom"),
+                u_shape_size: gl.get_uniform_location(shape_program, "u_shape_size"),
+                u_transform: gl.get_uniform_location(shape_program, "u_transform"),
+            };
+
+            let image_uniforms = ImageUniforms {
+                u_resolution: gl.get_uniform_location(image_program, "u_resolution"),
+                u_rect_pos: gl.get_uniform_location(image_program, "u_rect_pos"),
+                u_rect_size: gl.get_uniform_location(image_program, "u_rect_size"),
+                u_uv_scale: gl.get_uniform_location(image_program, "u_uv_scale"),
+                u_uv_offset: gl.get_uniform_location(image_program, "u_uv_offset"),
+                u_radius: gl.get_uniform_location(image_program, "u_radius"),
+                u_global_alpha: gl.get_uniform_location(image_program, "u_global_alpha"),
+                u_transform: gl.get_uniform_location(image_program, "u_transform"),
+            };
+
+            let text_uniforms = TextUniforms {
+                u_resolution: gl.get_uniform_location(text_program, "u_resolution"),
+                u_rect_pos: gl.get_uniform_location(text_program, "u_rect_pos"),
+                u_rect_size: gl.get_uniform_location(text_program, "u_rect_size"),
+                u_color: gl.get_uniform_location(text_program, "u_color"),
+                u_uv_start: gl.get_uniform_location(text_program, "u_uv_start"),
+                u_uv_end: gl.get_uniform_location(text_program, "u_uv_end"),
+                u_transform: gl.get_uniform_location(text_program, "u_transform"),
+            };
+
             Ok(Self {
                 gl,
                 quad_vertex_array,
@@ -151,7 +233,36 @@ impl GlowRenderer {
                 global_alpha: 1.0,
                 transform_stack: vec![[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]],
                 clip_stack: Vec::new(),
+                shape_uniforms,
+                image_uniforms,
+                text_uniforms,
             })
+        }
+    }
+
+    pub fn warm_up_shaders(&mut self) {
+        use crate::core::render::math::geometry::Rect;
+        
+        let dummy_rect = Rect::new(0.0, 0.0, 1.0, 1.0);
+        let alpha_zero = 0x00FFFFFF; // Transparent
+        
+        // Use a dummy resolution to avoid zero vectors in shaders
+        self.resolution = (1080.0, 1920.0);
+        
+        // Warm up all shader variants with a dummy zero-alpha pass
+        self.draw_rect_impl(dummy_rect, alpha_zero, 0.0, 0.0, None);
+        self.draw_rect_impl(dummy_rect, alpha_zero, 0.0, 1.0, Some(alpha_zero));
+        self.draw_rect_impl(dummy_rect, alpha_zero, 10.0, 0.0, None);
+        self.draw_rect_gradient_impl(dummy_rect, alpha_zero, alpha_zero, 0.0, 0.0, None);
+        self.draw_shadow_impl(dummy_rect, 0.0, 5.0, 10.0, alpha_zero);
+        self.draw_circle_impl(0.0, 0.0, 1.0, alpha_zero);
+        text::draw_text_impl(self, "W", 0.0, 0.0, 12.0, alpha_zero);
+        
+        // Warm up GPU state changes
+        unsafe {
+            self.gl.enable(glow::SCISSOR_TEST);
+            self.gl.scissor(0, 0, 1, 1);
+            self.gl.disable(glow::SCISSOR_TEST);
         }
     }
 }

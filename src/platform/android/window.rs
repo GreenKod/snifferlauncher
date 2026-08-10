@@ -84,12 +84,11 @@ impl EglContextState {
     }
 
     #[allow(clippy::missing_errors_doc)]
-    pub fn bind_window(&mut self, window: &ndk::native_window::NativeWindow) -> Result<(), String> {
+    pub fn bind_window(&mut self, native_window_ptr: *mut std::ffi::c_void) -> Result<(), String> {
         static FONT_BYTES: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
 
         self.unbind();
 
-        let native_window_ptr = window.ptr().as_ptr().cast::<std::ffi::c_void>();
         let surface = unsafe {
             self.egl
                 .create_window_surface(self.display, self.config, native_window_ptr, None)
@@ -104,6 +103,8 @@ impl EglContextState {
                 Some(self.context),
             )
             .map_err(|e| format!("Failed to make EGL context current: {e:?}"))?;
+
+        let _ = self.egl.swap_interval(self.display, 1);
 
         self.surface = Some(surface);
 

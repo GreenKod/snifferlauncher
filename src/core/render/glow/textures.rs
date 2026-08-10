@@ -25,20 +25,33 @@ impl Default for LruTextureCache {
             textures: std::collections::HashMap::new(),
             access_counter: 0,
             total_vram_bytes: 0,
-            max_vram_bytes: 64 * 1024 * 1024,
-            max_textures: 128,
+            max_vram_bytes: 256 * 1024 * 1024,
+            max_textures: 2048,
         }
     }
 }
 
 impl GlowRenderer {
     pub(crate) fn load_image_impl(&mut self, id: &str, rgba_pixels: &[u8], width: u32, height: u32) {
-        if self.texture_cache.textures.contains_key(id) {
-            self.texture_cache.access_counter += 1;
-            if let Some(handle) = self.texture_cache.textures.get_mut(id) {
-                handle.last_used = self.texture_cache.access_counter;
+        if let Some(existing) = self.texture_cache.textures.get(id) {
+            if existing.width as u32 == width && existing.height as u32 == height {
+                self.texture_cache.access_counter += 1;
+                if let Some(handle) = self.texture_cache.textures.get_mut(id) {
+                    handle.last_used = self.texture_cache.access_counter;
+                }
+                return;
             }
-            return;
+        }
+
+        if let Some(removed) = self.texture_cache.textures.remove(id) {
+            unsafe {
+                self.gl.delete_texture(removed.texture);
+            }
+            let old_size = removed.size_bytes;
+            self.texture_cache.total_vram_bytes = self
+                .texture_cache
+                .total_vram_bytes
+                .saturating_sub(old_size);
         }
 
         let new_size = (width as usize) * (height as usize) * 4;
@@ -225,45 +238,24 @@ impl GlowRenderer {
                 self.gl.active_texture(glow::TEXTURE0);
                 self.gl.bind_texture(glow::TEXTURE_2D, Some(tex));
 
-                let loc_res = self
-                    .gl
-                    .get_uniform_location(self.image_program, "u_resolution");
-                let loc_pos = self
-                    .gl
-                    .get_uniform_location(self.image_program, "u_rect_pos");
-                let loc_size = self
-                    .gl
-                    .get_uniform_location(self.image_program, "u_rect_size");
-                let loc_uv_s = self
-                    .gl
-                    .get_uniform_location(self.image_program, "u_uv_scale");
-                let loc_uv_o = self
-                    .gl
-                    .get_uniform_location(self.image_program, "u_uv_offset");
-                let loc_radius = self.gl.get_uniform_location(self.image_program, "u_radius");
-                let loc_alpha = self
-                    .gl
-                    .get_uniform_location(self.image_program, "u_global_alpha");
+                let u = self.image_uniforms.clone();
 
                 self.gl
-                    .uniform_2_f32(loc_res.as_ref(), self.resolution.0, self.resolution.1);
+                    .uniform_2_f32(u.u_resolution.as_ref(), self.resolution.0, self.resolution.1);
                 self.gl
-                    .uniform_2_f32(loc_pos.as_ref(), draw_rect.x, draw_rect.y);
+                    .uniform_2_f32(u.u_rect_pos.as_ref(), draw_rect.x, draw_rect.y);
                 self.gl
-                    .uniform_2_f32(loc_size.as_ref(), draw_rect.width, draw_rect.height);
+                    .uniform_2_f32(u.u_rect_size.as_ref(), draw_rect.width, draw_rect.height);
                 self.gl
-                    .uniform_2_f32(loc_uv_s.as_ref(), uv_scale.0, uv_scale.1);
+                    .uniform_2_f32(u.u_uv_scale.as_ref(), uv_scale.0, uv_scale.1);
                 self.gl
-                    .uniform_2_f32(loc_uv_o.as_ref(), uv_offset.0, uv_offset.1);
-                self.gl.uniform_1_f32(loc_radius.as_ref(), radius);
-                self.gl.uniform_1_f32(loc_alpha.as_ref(), self.global_alpha);
+                    .uniform_2_f32(u.u_uv_offset.as_ref(), uv_offset.0, uv_offset.1);
+                self.gl.uniform_1_f32(u.u_radius.as_ref(), radius);
+                self.gl.uniform_1_f32(u.u_global_alpha.as_ref(), self.global_alpha);
 
-                let loc_transform = self
-                    .gl
-                    .get_uniform_location(self.image_program, "u_transform");
                 let t = self.transform_stack.last().unwrap();
                 self.gl
-                    .uniform_matrix_3_f32_slice(loc_transform.as_ref(), false, t);
+                    .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
                 self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
             }
         }

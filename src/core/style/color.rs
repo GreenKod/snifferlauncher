@@ -9,7 +9,7 @@ pub const SHADOW_OFFSET_Y: f32 = 7.0;
 pub const SHADOW_SPREAD: f32 = 4.0;
 pub const ICON_BOX_SIZE: f32 = 56.0;
 
-pub const BACKGROUND: u32 = 0x00F9_FAFB; // Light Gray Background
+pub const BACKGROUND: u32 = 0x000B_0B0E; // Dark background instead of light gray
 pub const BUTTON_TEXT: u32 = 0x0011_1827; // Dark Charcoal
 pub const BUTTON_MUTED: u32 = 0x006B_7280; // Gray for subtitle
 pub const SHADOW: u32 = 0x0000_0000;

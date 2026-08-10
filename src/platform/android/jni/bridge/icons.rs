@@ -37,16 +37,34 @@ pub fn init_icon_worker_pool() {
         let res_tx_clone = res_tx.clone();
 
         thread::spawn(move || {
-            while let Ok(req) = req_rx_clone.recv() {
-                if let Some((pixels, width, height)) = get_app_icon_pixels(&req.package_name) {
-                    let _ = res_tx_clone.send(IconLoadResult {
-                        package_name: req.package_name,
-                        pixels,
-                        width,
-                        height,
+            let jvm = vm();
+            let _ = jvm.attach_current_thread::<_, (), JniError>(|env: &mut Env| {
+                // Prepare a Looper for this thread because some OEM's AdaptiveIconDrawables 
+                // require a Looper to run animations or resolve state.
+                if let Ok(looper_class) = env.find_class(jni_str!("android/os/Looper")) {
+                    let _ = env.call_static_method(
+                        looper_class,
+                        jni_str!("prepare"),
+                        jni_sig!("()V"),
+                        &[],
+                    );
+                }
+
+                while let Ok(req) = req_rx_clone.recv() {
+                    let _ = env.with_local_frame(128, |env| {
+                        if let Some((pixels, width, height)) = get_app_icon_pixels_inner(env, &req.package_name) {
+                            let _ = res_tx_clone.send(IconLoadResult {
+                                package_name: req.package_name.clone(),
+                                pixels,
+                                width,
+                                height,
+                            });
+                        }
+                        Ok::<(), JniError>(())
                     });
                 }
-            }
+                Ok(())
+            });
         });
     }
 }
@@ -83,6 +101,15 @@ pub(crate) fn extract_drawable_pixels(
     width: i32,
     height: i32,
 ) -> Result<Vec<u8>, JniError> {
+    // Attempt to mutate the drawable so it doesn't share state (fixes some OEM icon issues)
+    let _ = env.call_method(
+        drawable,
+        jni_str!("mutate"),
+        jni_sig!("()Landroid/graphics/drawable/Drawable;"),
+        &[],
+    );
+    let _ = env.exception_clear(); // It's fine if mutate fails
+
     let config_class = env.find_class(jni_str!("android/graphics/Bitmap$Config"))?;
     let argb8888 = env
         .get_static_field(
@@ -92,9 +119,30 @@ pub(crate) fn extract_drawable_pixels(
         )?
         .l()?;
 
+    // Get DisplayMetrics to ensure AdaptiveIconDrawable scales properly on custom ROMs
+    let ctx = super::context(env);
+    let display_metrics = env.call_method(&ctx, jni_str!("getResources"), jni_sig!("()Landroid/content/res/Resources;"), &[])
+        .and_then(|res| env.call_method(&res.l()?, jni_str!("getDisplayMetrics"), jni_sig!("()Landroid/util/DisplayMetrics;"), &[]))
+        .and_then(|dm| dm.l());
+
     let bitmap_class = env.find_class(jni_str!("android/graphics/Bitmap"))?;
-    let bitmap = env
-        .call_static_method(
+    
+    let bitmap = if let Ok(dm) = display_metrics {
+        env.call_static_method(
+            bitmap_class,
+            jni_str!("createBitmap"),
+            jni_sig!("(Landroid/util/DisplayMetrics;IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;"),
+            &[
+                JValue::Object(&dm),
+                JValue::Int(width),
+                JValue::Int(height),
+                JValue::Object(&argb8888),
+            ],
+        )?
+        .l()?
+    } else {
+        let _ = env.exception_clear();
+        env.call_static_method(
             bitmap_class,
             jni_str!("createBitmap"),
             jni_sig!("(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;"),
@@ -104,7 +152,8 @@ pub(crate) fn extract_drawable_pixels(
                 JValue::Object(&argb8888),
             ],
         )?
-        .l()?;
+        .l()?
+    };
 
     let canvas_class = env.find_class(jni_str!("android/graphics/Canvas"))?;
     let canvas = env.new_object(
@@ -112,6 +161,15 @@ pub(crate) fn extract_drawable_pixels(
         jni_sig!("(Landroid/graphics/Bitmap;)V"),
         &[JValue::Object(&bitmap)],
     )?;
+
+    // Ensure the canvas is clear
+    let _ = env.call_method(&canvas, jni_str!("drawColor"), jni_sig!("(I)V"), &[JValue::Int(0)]);
+    let _ = env.exception_clear();
+
+    // Force the drawable to be visible and fully opaque (fixes Tecno/MIUI silent draw failure)
+    let _ = env.call_method(drawable, jni_str!("setAlpha"), jni_sig!("(I)V"), &[JValue::Int(255)]);
+    let _ = env.call_method(drawable, jni_str!("setVisible"), jni_sig!("(ZZ)Z"), &[JValue::Bool(true), JValue::Bool(false)]);
+    let _ = env.exception_clear();
 
     env.call_method(
         drawable,
@@ -171,6 +229,16 @@ pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
     let jvm = vm();
 
     jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
+        match get_app_icon_pixels_inner(env, package_name) {
+            Some(res) => Ok(res),
+            None => Err(JniError::JavaException),
+        }
+    })
+    .ok()
+}
+
+pub(crate) fn get_app_icon_pixels_inner(env: &mut Env, package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
+    let result: Result<(Vec<u8>, u32, u32), JniError> = (|| {
         let ctx = context(env);
 
         let pm = match env.call_method(
@@ -201,7 +269,7 @@ pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
                     &pm,
                     jni_str!("getApplicationInfo"),
                     jni_sig!("(Ljava/lang/String;I)Landroid/content/pm/ApplicationInfo;"),
-                    &[JValue::Object(&pkg_str), JValue::Int(0)],
+                    &[JValue::Object(&pkg_str), JValue::Int(128)], // GET_META_DATA
                 ) {
                     Ok(val) => val.l()?,
                     Err(e2) => {
@@ -250,7 +318,7 @@ pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
             )
             .map_or(96, |v| v.i().unwrap_or(96));
 
-        let (width, height) = if width <= 0 || height <= 0 {
+        let (width, height) = if width <= 0 || height <= 0 || width > 512 || height > 512 {
             (96, 96)
         } else {
             (width, height)
@@ -265,6 +333,7 @@ pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
         };
 
         Ok((rgba_bytes, width.cast_unsigned(), height.cast_unsigned()))
-    })
-    .ok()
+    })();
+
+    result.ok()
 }

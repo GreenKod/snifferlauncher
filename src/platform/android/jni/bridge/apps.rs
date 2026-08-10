@@ -6,6 +6,48 @@ use jni::{Env, jni_sig, jni_str};
 use jni::objects::{JString, JValue};
 use obfstr::obfstr;
 
+use std::sync::RwLock;
+
+static APP_LIST_CACHE: RwLock<Option<Vec<AppInfo>>> = RwLock::new(None);
+
+fn get_apps_cache_path() -> Option<String> {
+    let jvm = vm();
+    jvm.attach_current_thread_for_scope::<_, _, JniError>(|env| {
+        let ctx = context(env);
+        let files_dir = env.call_method(&ctx, jni_str!("getCacheDir"), jni_sig!("()Ljava/io/File;"), &[])?.l()?;
+        let path_obj = env.call_method(&files_dir, jni_str!("getAbsolutePath"), jni_sig!("()Ljava/lang/String;"), &[])?.l()?;
+        let path_jstring = env.as_cast::<JString>(&path_obj)?;
+        let path_str = path_jstring.try_to_string(env)?;
+        Ok(format!("{}/apps_cache.json", path_str))
+    }).ok()
+}
+
+pub fn init_app_list_cache() {
+    std::thread::spawn(|| {
+        if let Ok(list) = fetch_application_list_internal() {
+            let mut changed = true;
+            if let Ok(guard) = APP_LIST_CACHE.read() {
+                if let Some(old) = &*guard {
+                    if old.len() == list.len() {
+                        changed = false;
+                    }
+                }
+            }
+            if changed {
+                if let Some(path) = get_apps_cache_path() {
+                    if let Ok(json) = serde_json::to_string(&list) {
+                        let _ = std::fs::write(&path, json);
+                    }
+                }
+                if let Ok(mut guard) = APP_LIST_CACHE.write() {
+                    *guard = Some(list);
+                }
+                crate::core::types::UI_VERSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+    });
+}
+
 /// Returns the list of installed application package names.
 ///
 /// # Errors
@@ -13,6 +55,28 @@ use obfstr::obfstr;
 /// Returns an error if JNI calls fail while querying the package manager or
 /// converting Java strings to Rust strings.
 pub fn get_application_list() -> Result<Vec<AppInfo>, String> {
+    if let Ok(guard) = APP_LIST_CACHE.read() {
+        if let Some(cached) = &*guard {
+            return Ok(cached.clone());
+        }
+    }
+    
+    // Try to load from disk synchronously on cold boot
+    if let Some(path) = get_apps_cache_path() {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Ok(list) = serde_json::from_str::<Vec<AppInfo>>(&content) {
+                if let Ok(mut guard) = APP_LIST_CACHE.write() {
+                    *guard = Some(list.clone());
+                }
+                return Ok(list);
+            }
+        }
+    }
+    
+    Ok(Vec::new())
+}
+
+fn fetch_application_list_internal() -> Result<Vec<AppInfo>, String> {
     let jvm = vm();
 
     let app_list = jvm
@@ -194,4 +258,44 @@ pub fn request_permissions(permissions: &[String]) -> Result<Vec<String>, String
         .map_err(|e: JniError| e.to_string())?;
 
     Ok(granted)
+}
+
+/// Opens the Android system settings dialog for setting the Default Home/Launcher app.
+pub fn open_default_home_picker() {
+    let jvm = vm();
+    let _ = jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
+        let ctx = context(env);
+        let intent_cls = env.find_class(jni_str!("android/content/Intent"))?;
+
+        let action_str = env.new_string("android.settings.HOME_SETTINGS")?;
+        let intent = env.new_object(
+            &intent_cls,
+            jni_sig!("(Ljava/lang/String;)V"),
+            &[JValue::Object(&action_str)],
+        )?;
+
+        let flag = env
+            .get_static_field(
+                &intent_cls,
+                jni_str!("FLAG_ACTIVITY_NEW_TASK"),
+                jni_sig!("I"),
+            )?
+            .i()?;
+
+        let _ = env.call_method(
+            &intent,
+            jni_str!("addFlags"),
+            jni_sig!("(I)Landroid/content/Intent;"),
+            &[JValue::Int(flag)],
+        );
+
+        let _ = env.call_method(
+            &ctx,
+            jni_str!("startActivity"),
+            jni_sig!("(Landroid/content/Intent;)V"),
+            &[JValue::Object(&intent)],
+        );
+
+        Ok(())
+    });
 }
