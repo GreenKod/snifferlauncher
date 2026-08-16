@@ -145,6 +145,10 @@ declare function host_vault_set(key: string, valueJson: string): boolean;
 declare function host_vault_delete(key: string): boolean;
 declare function host_vault_query_apps(paramsJson: string): string;
 declare function host_vault_keys(prefix: string): string;
+declare function host_vault_save_file(fileName: string, base64Content: string): string;
+declare function host_vault_read_file(fileName: string): string | null;
+declare function host_vault_delete_file(fileName: string): boolean;
+declare function host_vault_list_files(): string;
 
 // -----------------------------------------------------------------------------
 // Native Data Vault API
@@ -170,6 +174,11 @@ interface NativeVault {
     queryApps(params?: VaultQueryAppsParams): VaultAppQueryResult;
     keys(prefix?: string): string[];
     subscribe(key: string, callback: (data: any) => void): void;
+    saveFile(fileName: string, base64Content: string): string;
+    readFile(fileName: string): string | null;
+    deleteFile(fileName: string): boolean;
+    listFiles(): string[];
+    getFileUrl(fileName: string): string;
 }
 
 declare const Vault: NativeVault;
@@ -200,6 +209,15 @@ declare var onRequestSharedView: (invitation: { invitationId: string; slotName: 
 declare function subscribeChannel(channelName: string, callback: (data: any) => void): void;
 declare function unsubscribeChannel(channelName: string): void;
 
+export interface SystemThemeData {
+    is_dark: boolean;
+    mode: "dark" | "light";
+    accent_color: string;
+    bg_color: string;
+    text_color: string;
+    card_bg: string;
+}
+
 declare const Theme: {
     colors: {
         bgCard: number;
@@ -212,6 +230,9 @@ declare const Theme: {
     };
     spacing: { xs: number; sm: number; md: number; lg: number };
     radius: { sm: number; md: number; lg: number };
+    getSystemTheme(): SystemThemeData;
+    isDarkMode(): boolean;
+    onSystemThemeChange(callback: (theme: SystemThemeData) => void): void;
 };
 
 declare function CardWidget(opts?: {

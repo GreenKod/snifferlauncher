@@ -16,7 +16,7 @@ pub use layout::{LayoutNode, calculate_layout};
 pub use render::math::geometry::{Point, Rect, ScreenMetrics, Size};
 pub use render::{GlowRenderer, Renderer};
 pub use types::{Action, Application, Element};
-pub use vault::DataVault;
+pub use vault::{DataVault, SystemTheme};
 
 // New event-driven system re-exports
 pub use ui::widget::ids;
