@@ -5,18 +5,14 @@ use obfstr::obfstr;
 use rquickjs::{Ctx, Function, Object};
 use std::sync::{Arc, Mutex};
 
-pub struct SafeContext(pub(crate) rquickjs::Context);
-
-#[allow(clippy::non_send_fields_in_send_ty)]
-unsafe impl Send for SafeContext {}
-unsafe impl Sync for SafeContext {}
+use crossbeam_channel::Sender;
 
 #[allow(clippy::too_many_lines)]
 pub fn register_app_bindings<'js>(
     ctx: &Ctx<'js>,
     globals: &Object<'js>,
     plugin_id: String,
-    context: rquickjs::Context,
+    msg_tx: Sender<crate::plugin::js::plugin::PluginMsg>,
     action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
     api_map: ApiMap,
     broadcast_queue: BroadcastQueue,
@@ -65,6 +61,12 @@ pub fn register_app_bindings<'js>(
     // host_launch_app
     let aq_launch = action_queue.clone();
     let launch_app_func = Function::new(ctx.clone(), move |package_name: String| {
+        #[cfg(target_os = "android")]
+        {
+            if let Err(e) = crate::platform::android::jni::intent::launch_app(&package_name) {
+                crate::dev_err!("{}: {e}", obfstr!("Direct host_launch_app failed"));
+            }
+        }
         if let Ok(mut q) = aq_launch.lock() {
             q.push(crate::core::types::Action::LaunchApp { package_name });
         }
@@ -75,6 +77,10 @@ pub fn register_app_bindings<'js>(
     // host_request_default_launcher
     let aq_req_home = action_queue.clone();
     let req_home_func = Function::new(ctx.clone(), move || {
+        #[cfg(target_os = "android")]
+        {
+            let _ = crate::platform::android::jni::bridge::open_default_home_picker();
+        }
         if let Ok(mut q) = aq_req_home.lock() {
             q.push(crate::core::types::Action::RequestDefaultLauncher);
         }
@@ -203,10 +209,9 @@ pub fn register_app_bindings<'js>(
     globals.set(obfstr!("host_blur_input"), blur_input_func).unwrap();
 
     // Inter-Plugin API host functions
-    let safe_ctx = SafeContext(context);
-    let safe_ctx = Arc::new(safe_ctx);
     let api_map_register = api_map.clone();
     let owning_plugin_id = plugin_id.clone();
+    let msg_tx_api = msg_tx;
 
     let plugin_permissions_ipc = plugin_permissions_vec;
     let granted_permissions_ipc = granted_permissions;
@@ -219,24 +224,26 @@ pub fn register_app_bindings<'js>(
             return;
         }
 
-        let ctx_clone = Arc::clone(&safe_ctx);
+        let msg_tx_clone = msg_tx_api.clone();
         let api_name_clone = name.clone();
         let owning_id = owning_plugin_id.clone();
 
         let callback: Arc<dyn Fn(String) -> Option<String> + Send + Sync> =
             Arc::new(move |payload_json: String| {
-                let mut result: Option<String> = None;
-                ctx_clone.0.with(|ctx| {
-                    if let Ok(handler) =
-                        ctx.globals().get::<_, rquickjs::Function>(obfstr!("_handleApiCall"))
-                        && let Ok(ret) = handler
-                            .call::<_, rquickjs::Value>((api_name_clone.clone(), payload_json))
-                        && ret.is_string()
-                    {
-                        result = ret.as_string().and_then(|s| s.to_string().ok());
-                    }
-                });
-                result
+                let (resp_tx, resp_rx) = crossbeam_channel::bounded(1);
+                if msg_tx_clone
+                    .send(crate::plugin::js::plugin::PluginMsg::ApiCall {
+                        name: api_name_clone.clone(),
+                        payload: payload_json,
+                        responder: resp_tx,
+                    })
+                    .is_err()
+                {
+                    return None;
+                }
+                resp_rx
+                    .recv_timeout(std::time::Duration::from_millis(1500))
+                    .unwrap_or(None)
             });
 
         if let Ok(mut map) = api_map_register.lock() {

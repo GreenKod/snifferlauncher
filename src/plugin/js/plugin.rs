@@ -19,7 +19,15 @@ pub const IPC_PREAMBLE: &str = include_str!("ipc_preamble.js");
 pub enum PluginMsg {
     Event(UiEvent),
     Tick,
-    Broadcast { channel: String, payload: String },
+    Broadcast {
+        channel: String,
+        payload: String,
+    },
+    ApiCall {
+        name: String,
+        payload: String,
+        responder: Sender<Option<String>>,
+    },
 }
 
 #[allow(dead_code)]
@@ -36,6 +44,7 @@ unsafe impl Sync for JsPlugin {}
 pub struct JsPluginConfig {
     pub script_content: String,
     pub plugin_id: String,
+    pub vault: Arc<crate::core::vault::DataVault>,
     pub action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
     pub api_map: ApiMap,
     pub broadcast_queue: BroadcastQueue,
@@ -67,11 +76,13 @@ impl JsPlugin {
 
         let script_content = config.script_content;
         let plugin_id = config.plugin_id;
+        let vault = config.vault;
         let action_queue = config.action_queue;
         let api_map = config.api_map;
         let broadcast_queue = config.broadcast_queue;
         let default_settings = config.default_settings;
         let cache_path = config.cache_path;
+        let msg_tx_worker = msg_tx.clone();
 
         thread::spawn(move || {
             let (runtime, context) = match create_engine() {
@@ -82,14 +93,13 @@ impl JsPlugin {
                 }
             };
 
-            let context_clone = context.clone();
-
             let init_res = context.with(|ctx| {
                 register_host_api(
                     &ctx,
                     HostApiConfig {
                         plugin_id,
-                        context: context_clone,
+                        msg_tx: msg_tx_worker,
+                        vault,
                         ui_tree: ui_tree_worker,
                         action_queue,
                         api_map,
@@ -126,6 +136,7 @@ impl JsPlugin {
                             if let Ok(on_event_fn) = globals.get::<_, rquickjs::Function>("onEvent") {
                                 let event_json = match &event {
                                     UiEvent::Click(id, w, h) => {
+                                        crate::dev_log!("[JS Worker] Dispatching Click to JS: id={id}, w={w}, h={h}");
                                         format!(r#"{{"type":"Click","id":"{id}","w":{w},"h":{h}}}"#)
                                     }
                                     UiEvent::Hover(id, w, h, x, y) => {
@@ -182,6 +193,23 @@ impl JsPlugin {
                                 let _ = handler.call::<_, ()>((channel, payload));
                             }
                         });
+                    }
+                    PluginMsg::ApiCall {
+                        name,
+                        payload,
+                        responder,
+                    } => {
+                        let mut result: Option<String> = None;
+                        context.with(|ctx| {
+                            if let Ok(handler) =
+                                ctx.globals().get::<_, rquickjs::Function>(obfstr::obfstr!("_handleApiCall"))
+                                && let Ok(ret) = handler.call::<_, rquickjs::Value>((name, payload))
+                                && ret.is_string()
+                            {
+                                result = ret.as_string().and_then(|s| s.to_string().ok());
+                            }
+                        });
+                        let _ = responder.send(result);
                     }
                 }
             }

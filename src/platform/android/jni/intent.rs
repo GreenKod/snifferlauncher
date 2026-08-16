@@ -187,13 +187,106 @@ pub fn launch_app(package_name: &str) -> Result<(), String> {
             )?
             .l()?;
 
-        if intent.is_null() {
-            return Err(jni::errors::Error::JavaException);
-        }
+        let intent = if intent.is_null() {
+            let _ = env.exception_clear();
+            let intent_cls = env.find_class(jni_str!("android/content/Intent"))?;
+            let action_main = env
+                .get_static_field(
+                    &intent_cls,
+                    jni_str!("ACTION_MAIN"),
+                    jni_sig!("Ljava/lang/String;"),
+                )?
+                .l()?;
+            let cat_launcher = env
+                .get_static_field(
+                    &intent_cls,
+                    jni_str!("CATEGORY_LAUNCHER"),
+                    jni_sig!("Ljava/lang/String;"),
+                )?
+                .l()?;
+            let fb_intent = env.new_object(
+                &intent_cls,
+                jni_sig!("(Ljava/lang/String;)V"),
+                &[JValue::Object(&action_main)],
+            )?;
+            let _ = env.call_method(
+                &fb_intent,
+                jni_str!("addCategory"),
+                jni_sig!("(Ljava/lang/String;)Landroid/content/Intent;"),
+                &[JValue::Object(&cat_launcher)],
+            )?;
+            let _ = env.call_method(
+                &fb_intent,
+                jni_str!("setPackage"),
+                jni_sig!("(Ljava/lang/String;)Landroid/content/Intent;"),
+                &[JValue::Object(&pkg_string)],
+            )?;
 
-        add_new_task_flag(env, &intent).map_err(|_| jni::errors::Error::JavaException)?;
-        start_activity(env, &ctx, &intent).map_err(|_| jni::errors::Error::JavaException)?;
+            let resolve_infos = env
+                .call_method(
+                    &pm,
+                    jni_str!("queryIntentActivities"),
+                    jni_sig!("(Landroid/content/Intent;I)Ljava/util/List;"),
+                    &[JValue::Object(&fb_intent), JValue::Int(0)],
+                )?
+                .l()?;
+            let size = env
+                .call_method(&resolve_infos, jni_str!("size"), jni_sig!("()I"), &[])?
+                .i()?;
 
+            if size > 0 {
+                let res_info = env
+                    .call_method(
+                        &resolve_infos,
+                        jni_str!("get"),
+                        jni_sig!("(I)Ljava/lang/Object;"),
+                        &[JValue::Int(0)],
+                    )?
+                    .l()?;
+                let act_info = env
+                    .get_field(
+                        &res_info,
+                        jni_str!("activityInfo"),
+                        jni_sig!("Landroid/content/pm/ActivityInfo;"),
+                    )?
+                    .l()?;
+                let act_name = env
+                    .get_field(
+                        &act_info,
+                        jni_str!("name"),
+                        jni_sig!("Ljava/lang/String;"),
+                    )?
+                    .l()?;
+                let comp_name = env.new_object(
+                    jni_str!("android/content/ComponentName"),
+                    jni_sig!("(Ljava/lang/String;Ljava/lang/String;)V"),
+                    &[JValue::Object(&pkg_string), JValue::Object(&act_name)],
+                )?;
+                let _ = env.call_method(
+                    &fb_intent,
+                    jni_str!("setComponent"),
+                    jni_sig!("(Landroid/content/ComponentName;)Landroid/content/Intent;"),
+                    &[JValue::Object(&comp_name)],
+                )?;
+                fb_intent
+            } else {
+                return Err(jni::errors::Error::JavaException);
+            }
+        } else {
+            intent
+        };
+
+        crate::dev_log!("[JNI] Starting activity for package: {package_name}");
+        add_new_task_flag(env, &intent).map_err(|e| {
+            crate::dev_err!("[JNI] add_new_task_flag failed: {e}");
+            jni::errors::Error::JavaException
+        })?;
+        start_activity(env, &ctx, &intent).map_err(|e| {
+            crate::dev_err!("[JNI] start_activity failed: {e}");
+            jni::errors::Error::JavaException
+        })?;
+
+        crate::dev_log!("[JNI] Successfully started activity for: {package_name}");
         Ok(())
     })
     .map_err(|e| e.to_string())

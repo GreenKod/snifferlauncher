@@ -7,7 +7,9 @@ pub use icons::{
     get_app_icon_pixels, init_icon_worker_pool, poll_async_app_icon, prefetch_app_icons,
     request_async_app_icon,
 };
-pub use wallpaper::get_system_wallpaper_pixels;
+pub use wallpaper::{
+    get_system_wallpaper_pixels, poll_async_wallpaper, request_system_wallpaper_async,
+};
 
 use jni::errors::Error as JniError;
 use jni::{Env, jni_sig, jni_str};
@@ -46,14 +48,8 @@ pub(super) fn context<'local>(env: &Env<'local>) -> JObject<'local> {
 ///
 /// Returns an error if the flag cannot be read or applied through JNI.
 pub fn add_new_task_flag(env: &mut Env, intent: &JObject<'_>) -> Result<(), String> {
-    let flag = env
-        .get_static_field(
-            jni_str!("android/content/Intent"),
-            jni_str!("FLAG_ACTIVITY_NEW_TASK"),
-            jni_sig!("I"),
-        )
-        .and_then(jni::JValueOwned::i)
-        .map_err(|e| e.to_string())?;
+    // FLAG_ACTIVITY_NEW_TASK (0x10000000) | FLAG_ACTIVITY_RESET_TASK_IF_NEEDED (0x00200000)
+    let flag = 0x1020_0000i32;
 
     env.call_method(
         intent,
@@ -126,4 +122,59 @@ pub fn get_density() -> (f32, f32) {
         Ok((density, scaled_density))
     })
     .unwrap_or((1.0_f32, 1.0_f32))
+}
+
+/// Sets `FLAG_SHOW_WALLPAPER` on the Activity's window so the system wallpaper
+/// is composited behind the (transparent-cleared) OpenGL surface by the OS compositor.
+/// This is the official Android API for launchers and works on all API levels.
+pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
+    let jvm = vm();
+    let _ = jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
+        let activity_ptr = app.activity_as_ptr() as jni::sys::jobject;
+        if activity_ptr.is_null() {
+            return Err(JniError::NullPtr("activity"));
+        }
+        let activity = unsafe { JObject::from_raw(env, activity_ptr) };
+        if activity.is_null() {
+            return Err(JniError::NullPtr("activity jobject"));
+        }
+
+        // window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER = 0x00100000)
+        let window = env
+            .call_method(
+                &activity,
+                jni_str!("getWindow"),
+                jni_sig!("()Landroid/view/Window;"),
+                &[],
+            )?
+            .l()?;
+
+        let _ = env.call_method(
+            &window,
+            jni_str!("addFlags"),
+            jni_sig!("(I)V"),
+            &[JValue::Int(0x0010_0000i32)], // FLAG_SHOW_WALLPAPER
+        );
+        let _ = env.exception_clear();
+
+        // window.setFormat(PixelFormat.TRANSLUCENT = -3)
+        let _ = env.call_method(
+            &window,
+            jni_str!("setFormat"),
+            jni_sig!("(I)V"),
+            &[JValue::Int(-3i32)],
+        );
+        let _ = env.exception_clear();
+
+        // window.setBackgroundDrawable(null)
+        let _ = env.call_method(
+            &window,
+            jni_str!("setBackgroundDrawable"),
+            jni_sig!("(Landroid/graphics/drawable/Drawable;)V"),
+            &[JValue::Object(&jni::objects::JObject::null())],
+        );
+        let _ = env.exception_clear();
+
+        Ok(())
+    });
 }

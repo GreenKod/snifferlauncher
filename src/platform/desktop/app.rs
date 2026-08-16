@@ -1,4 +1,4 @@
-use crate::core::render::draw::{draw_ui, find_clicked_button, find_hovered_button};
+use crate::core::render::draw::{draw_ui, find_clicked_button_with_scroll, find_hovered_button};
 use crate::core::style::BACKGROUND;
 use crate::core::ui::data_map::DataMap;
 use crate::core::ui::event::{EventBus, UiEvent};
@@ -53,16 +53,28 @@ impl AppState {
         let mut plugin_registry = PluginRegistry::default();
         let action_queue = Arc::new(Mutex::new(Vec::new()));
 
-        let mut plugins_dir = std::env::current_exe()
-            .unwrap_or_default()
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .join(".plugins");
-
-        if !plugins_dir.exists() {
-            // Fallback to current working directory
-            plugins_dir = std::path::PathBuf::from(".plugins");
+        if let Ok(apps) = crate::platform::desktop::get_application_list() {
+            plugin_registry.vault().update_system_apps(apps);
         }
+
+        let candidates = [
+            // 1. Next to the executable (e.g. target/debug/.plugins or target/release/.plugins)
+            std::env::current_exe().ok().and_then(|p| p.parent().map(|dir| dir.join(".plugins"))),
+            // 2. Parent of the profile directory (e.g. target/.plugins)
+            std::env::current_exe().ok().and_then(|p| p.parent().and_then(|d| d.parent()).map(|dir| dir.join(".plugins"))),
+            // 3. Project compile-time manifest dir (guarantees cargo run works from anywhere)
+            option_env!("CARGO_MANIFEST_DIR").map(|dir| std::path::Path::new(dir).join(".plugins")),
+            // 4. Current working directory (.plugins)
+            Some(std::path::PathBuf::from(".plugins")),
+        ];
+
+        let plugins_dir = candidates
+            .into_iter()
+            .flatten()
+            .find(|p| p.exists())
+            .unwrap_or_else(|| std::path::PathBuf::from(".plugins"));
+
+        crate::dev_log!("Using plugins directory: {}", plugins_dir.display());
 
         crate::plugin::PluginLoader::new(&plugins_dir)
             .register_all(&mut plugin_registry, &action_queue);
@@ -268,7 +280,12 @@ pub fn run_loop(
                             }
 
                             if let Some((clicked_btn, rect)) =
-                                find_clicked_button(&root_element, &layout_tree, clicked_pt)
+                                find_clicked_button_with_scroll(
+                                    &root_element,
+                                    &layout_tree,
+                                    clicked_pt,
+                                    &|_id_opt, sx, sy| (sx, sy),
+                                )
                             {
                                 app.event_bus.push(UiEvent::PointerDown(clicked_btn));
                                 app.event_bus.push(UiEvent::Click(

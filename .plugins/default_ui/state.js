@@ -1,29 +1,40 @@
-// Default UI - State & Page Management (4x7 Layout)
+// Default UI - State & Page Management (4x7 Layout with Native Data Vault)
 
 function loadInitialApps() {
     let installed = [];
     try {
-        installed = typeof getApplicationList === "function" ? getApplicationList() : [];
+        if (typeof Vault !== "undefined" && typeof Vault.queryApps === "function") {
+            const res = Vault.queryApps({ limit: 999 });
+            installed = res.apps;
+        } else if (typeof getApplicationList === "function") {
+            installed = getApplicationList();
+        }
     } catch (e) {
         installed = [];
     }
 
     const apps = Array.isArray(installed) ? [...installed] : [];
 
-    // Only generate mock apps if NO real apps were returned (e.g. desktop/emulator fallback)
+    // Fallback apps if real apps list is still loading or on emulator
     if (apps.length === 0) {
-        const mockNames = [
-            "Borsa & Finans", "Ses Kaydedici", "Kamera Pro", "Video Oynatıcı", "Oyun Parkı", "E-Posta Client", "Radyo FM", "Podkast Player",
-            "Rehber Sync", "Sistem Monitörü", "Güvenlik Duvarı", "Sosyal Medya", "Sohbet Odası", "Haberler 24", "Kitap Okuyucu",
-            "Fitness Tracker", "Sağlık Koçu", "Dijital Cüzdan", "Foto Düzenleyici", "Ses Ayarları", "Şifre Kasası", "Harita Gezgini", "Bulut Sürücü",
-            "Çizim Tahtası", "Kod Editörü", "Cümle Çeviri", "Görev Listesi", "Anımsatıcılar", "Hava Kirliliği", "Kronometre Pro", "Pusula HD"
+        const mockData = [
+            { name: "Ayarlar", pkg: "com.android.settings" },
+            { name: "Kamera", pkg: "com.android.camera" },
+            { name: "Rehber", pkg: "com.android.contacts" },
+            { name: "Tarayıcı", pkg: "com.android.chrome" },
+            { name: "Hesap Makinesi", pkg: "com.android.calculator2" },
+            { name: "Galeri", pkg: "com.android.gallery3d" },
+            { name: "Dosyalar", pkg: "com.android.documentsui" },
+            { name: "Saat", pkg: "com.android.deskclock" },
+            { name: "Mesajlar", pkg: "com.android.mms" },
+            { name: "Telefon", pkg: "com.android.dialer" }
         ];
 
-        for (let i = 0; i < mockNames.length; i++) {
+        for (let i = 0; i < mockData.length; i++) {
             apps.push({
                 id: "mock_app_" + (i + 1),
-                name: mockNames[i],
-                package_name: null
+                name: mockData[i].name,
+                package_name: mockData[i].pkg
             });
         }
     }
@@ -34,7 +45,7 @@ function loadInitialApps() {
 const APPS_PER_PAGE = 28;
 
 let state = {
-    bgColor: "#0F0F12",
+    bgColor: null,
     searchQuery: "",
     isSearchFocused: false,
     scrollX: 0.0,
@@ -43,22 +54,33 @@ let state = {
     // Carousel Paging State (0-indexed: 0 = Page 1, 1 = Page 2, ...)
     currentPage: 0,
     appsPerPage: APPS_PER_PAGE,
-    // Not: isDragging ve dragOffset kaldırıldı — Rust fizik motoru yönetiyor
 
     allApps: loadInitialApps(),
 
-    // Arama filtreli tüm uygulamalar
+    // Arama filtreli tüm uygulamalar (Rust DataVault ile mikro-saniye hızında)
     get filteredApps() {
-        const query = (this.searchQuery || "").toLowerCase().trim();
+        const query = (this.searchQuery || "").trim();
+        if (typeof Vault !== "undefined" && typeof Vault.queryApps === "function") {
+            return Vault.queryApps({ search: query, page: 0, limit: 999 }).apps;
+        }
+
+        const q = query.toLowerCase();
         return this.allApps.filter(app => {
-            if (!query) return true;
-            return (app.name && app.name.toLowerCase().includes(query))
-                || (app.package_name && app.package_name.toLowerCase().includes(query));
+            if (!q) return true;
+            return (app.name && app.name.toLowerCase().includes(q))
+                || (app.package_name && app.package_name.toLowerCase().includes(q));
         });
     },
 
     // Herhangi bir sayfa indeksi (0, 1, 2...) için uygulamaları döndürür
     appsForPage(pageIndex) {
+        if (typeof Vault !== "undefined" && typeof Vault.queryApps === "function") {
+            return Vault.queryApps({
+                search: (this.searchQuery || "").trim(),
+                page: pageIndex,
+                limit: this.appsPerPage
+            }).apps;
+        }
         const list = this.filteredApps;
         const startIndex = pageIndex * this.appsPerPage;
         return list.slice(startIndex, startIndex + this.appsPerPage);
@@ -70,6 +92,13 @@ let state = {
     },
 
     get totalPages() {
+        if (typeof Vault !== "undefined" && typeof Vault.queryApps === "function") {
+            return Vault.queryApps({
+                search: (this.searchQuery || "").trim(),
+                page: 0,
+                limit: this.appsPerPage
+            }).total_pages;
+        }
         return Math.max(1, Math.ceil(this.filteredApps.length / this.appsPerPage));
     },
 
@@ -91,7 +120,12 @@ let state = {
         if (!this._cardHashToAppPackage) {
             this.rebuildCardHashCache();
         }
-        return this._cardHashToAppPackage ? this._cardHashToAppPackage[hashStr] : null;
+        let pkg = this._cardHashToAppPackage ? this._cardHashToAppPackage[hashStr] : null;
+        if (!pkg) {
+            this.rebuildCardHashCache();
+            pkg = this._cardHashToAppPackage ? this._cardHashToAppPackage[hashStr] : null;
+        }
+        return pkg;
     },
 
     rebuildCardHashCache() {
@@ -103,16 +137,22 @@ let state = {
                 const cardId = "p" + p + "_card_" + i;
                 const iconId = "p" + p + "_icon_" + i;
                 const imgId = "p" + p + "_img_" + i;
+                const nameId = "p" + p + "_name_" + i;
+                const letterId = "p" + p + "_letter_" + i;
                 const pkg = pageApps[i].package_name;
                 if (pkg) {
                     if (typeof host_hash === "function") {
                         map[host_hash(cardId)] = pkg;
                         map[host_hash(iconId)] = pkg;
                         map[host_hash(imgId)] = pkg;
+                        map[host_hash(nameId)] = pkg;
+                        map[host_hash(letterId)] = pkg;
                     } else {
                         map[cardId] = pkg;
                         map[iconId] = pkg;
                         map[imgId] = pkg;
+                        map[nameId] = pkg;
+                        map[letterId] = pkg;
                     }
                 }
             }
@@ -120,3 +160,4 @@ let state = {
         this._cardHashToAppPackage = map;
     }
 };
+state.rebuildCardHashCache();

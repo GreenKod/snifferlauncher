@@ -3,6 +3,7 @@
   "active_plugins": [
     "clock_widget",
     "default_ui",
-    "logger_plugin"
+    "logger_plugin",
+    "dock"
   ]
 }

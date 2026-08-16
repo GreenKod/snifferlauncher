@@ -90,6 +90,14 @@ impl EglContextState {
         self.unbind();
 
         let surface = unsafe {
+            // 1 = WINDOW_FORMAT_RGBA_8888 (enables hardware alpha channel blending with system wallpaper)
+            ndk_sys::ANativeWindow_setBuffersGeometry(
+                native_window_ptr.cast(),
+                0,
+                0,
+                1_i32,
+            );
+
             self.egl
                 .create_window_surface(self.display, self.config, native_window_ptr, None)
                 .map_err(|e| format!("Failed to create EGL window surface: {e:?}"))?

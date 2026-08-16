@@ -4,18 +4,19 @@ version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 publish = false
-
-[[bin]]
-name = "snifferlauncher"
-path = "src/main.rs"
+default-run = "snifferlauncher-desktop"
 
 [lib]
 name = "snifferlauncher"
 path = "src/lib.rs"
 crate-type = ["rlib", "cdylib"]
 
+[[bin]]
+name = "snifferlauncher-desktop"
+path = "src/main.rs"
+
 [features]
-default = []
+default = ["devkit"]
 devkit = []
 
 [dependencies]
@@ -39,6 +40,7 @@ android-activity = { version = "0.6.1", features = ["native-activity"] }
 jni = { version = "0.22.4" }
 ndk-context = { version = "0.1.1" }
 ndk = "0.9.0"
+ndk-sys = "0.6.0"
 khronos-egl = { version = "6.0", features = ["dynamic"] }
 
 [package.metadata.android]
@@ -102,7 +104,11 @@ name = "android.permission.READ_EXTERNAL_STORAGE"
 [[package.metadata.android.uses_permission]]
 name = "android.permission.READ_MEDIA_IMAGES"
 
+[[package.metadata.android.uses_permission]]
+name = "android.permission.SET_WALLPAPER"
+
 [package.metadata.android.application.activity]
+theme = "@android:style/Theme.Wallpaper.NoTitleBar.Fullscreen"
 launch_mode = "singleTask"
 state_not_needed = "true"
 clear_task_on_launch = "true"

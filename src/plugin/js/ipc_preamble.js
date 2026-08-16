@@ -58,6 +58,97 @@ globalThis.hasPermission = function(permission) {
     return host_has_permission(permission);
 };
 
+// =============================================================================
+// Native Data Vault API
+// =============================================================================
+
+globalThis.Vault = {
+    /**
+     * Get a value from the vault by key.
+     * @param {string} key
+     * @param {*} [defaultValue=null]
+     * @returns {*}
+     */
+    get: function(key, defaultValue) {
+        if (typeof host_vault_get !== "function") return defaultValue !== undefined ? defaultValue : null;
+        try {
+            const raw = host_vault_get(String(key));
+            if (raw === null || raw === undefined) return defaultValue !== undefined ? defaultValue : null;
+            return JSON.parse(raw);
+        } catch(e) {
+            return defaultValue !== undefined ? defaultValue : null;
+        }
+    },
+
+    /**
+     * Store a value in the vault.
+     * @param {string} key
+     * @param {*} value
+     * @returns {boolean}
+     */
+    set: function(key, value) {
+        if (typeof host_vault_set !== "function") return false;
+        try {
+            const json = JSON.stringify(value);
+            return host_vault_set(String(key), json);
+        } catch(e) {
+            return false;
+        }
+    },
+
+    /**
+     * Delete a key from the vault.
+     * @param {string} key
+     * @returns {boolean}
+     */
+    delete: function(key) {
+        if (typeof host_vault_delete !== "function") return false;
+        return host_vault_delete(String(key));
+    },
+
+    /**
+     * Fast native search and pagination for installed applications in Rust memory.
+     * @param {{ search?: string, page?: number, limit?: number }} [params]
+     * @returns {{ apps: Array<{name:string, package_name:string}>, total_count: number, page: number, total_pages: number }}
+     */
+    queryApps: function(params) {
+        if (typeof host_vault_query_apps !== "function") {
+            return { apps: [], total_count: 0, page: 0, total_pages: 1 };
+        }
+        try {
+            const json = host_vault_query_apps(JSON.stringify(params ?? {}));
+            return JSON.parse(json);
+        } catch(e) {
+            return { apps: [], total_count: 0, page: 0, total_pages: 1 };
+        }
+    },
+
+    /**
+     * List all keys matching an optional prefix.
+     * @param {string} [prefix=""]
+     * @returns {string[]}
+     */
+    keys: function(prefix) {
+        if (typeof host_vault_keys !== "function") return [];
+        try {
+            return JSON.parse(host_vault_keys(String(prefix || "")));
+        } catch(e) {
+            return [];
+        }
+    },
+
+    /**
+     * Subscribe to changes on a vault key.
+     * @param {string} key
+     * @param {function} callback
+     */
+    subscribe: function(key, callback) {
+        if (typeof subscribeChannel === "function") {
+            subscribeChannel("vault.changed:" + key, callback);
+        }
+    }
+};
+
 /**
  * Fetch the installed application list.
  *
@@ -65,7 +156,42 @@ globalThis.hasPermission = function(permission) {
  * @returns {Array<{name:string, package_name:string}>}
  */
 globalThis.getApplicationList = function() {
-    return JSON.parse(host_get_application_list());
+    try {
+        return JSON.parse(host_get_application_list());
+    } catch(e) {
+        return [];
+    }
+};
+
+/**
+ * Launch an installed application by package name.
+ *
+ * @param {string} packageName
+ */
+globalThis.launchApp = function(packageName) {
+    if (typeof host_launch_app === "function" && packageName) {
+        host_launch_app(String(packageName));
+    }
+};
+
+/**
+ * Request soft keyboard focus for an input field by ID.
+ *
+ * @param {string} id
+ */
+globalThis.focusInput = function(id) {
+    if (typeof host_focus_input === "function") {
+        host_focus_input(String(id || ""));
+    }
+};
+
+/**
+ * Blur/hide the soft keyboard.
+ */
+globalThis.blurInput = function() {
+    if (typeof host_blur_input === "function") {
+        host_blur_input();
+    }
 };
 
 /**
@@ -148,13 +274,45 @@ globalThis._onTimerTick = function() {
     }
 };
 
+// Broadcast Channel Subscribers Map
+globalThis._broadcastListeners = {};
+
 /**
- * Override this in your plugin to receive broadcasts from other plugins.
+ * Subscribe to a specific broadcast channel.
  *
  * @param {string} channel
- * @param {object} data
+ * @param {function} callback - (data: object) => void
  */
-globalThis.onBroadcast = function(channel, data) {};
+globalThis.subscribeChannel = function(channel, callback) {
+    if (typeof callback !== "function") return;
+    if (!globalThis._broadcastListeners[channel]) {
+        globalThis._broadcastListeners[channel] = [];
+    }
+    globalThis._broadcastListeners[channel].push(callback);
+};
+
+/**
+ * Unsubscribe all listeners from a broadcast channel.
+ *
+ * @param {string} channel
+ */
+globalThis.unsubscribeChannel = function(channel) {
+    delete globalThis._broadcastListeners[channel];
+};
+
+/**
+ * Register a broadcast listener (supports both wildcard function or (channel, callback)).
+ *
+ * @param {string|function} channelOrCallback
+ * @param {function} [callback]
+ */
+globalThis.onBroadcast = function(channelOrCallback, callback) {
+    if (typeof channelOrCallback === "function") {
+        globalThis.subscribeChannel("*", channelOrCallback);
+    } else if (typeof channelOrCallback === "string" && typeof callback === "function") {
+        globalThis.subscribeChannel(channelOrCallback, callback);
+    }
+};
 
 // SharedView Handshake Protocol & Pending Invitations Storage
 globalThis._sharedViewPending = {};
@@ -255,7 +413,19 @@ globalThis._dispatchBroadcast = function(channel, payload_json) {
             }
         }
 
-        globalThis.onBroadcast(channel, data);
+        // 1. Channel-specific subscribers
+        if (globalThis._broadcastListeners[channel]) {
+            globalThis._broadcastListeners[channel].forEach(function(cb) {
+                try { cb(data); } catch(e) {}
+            });
+        }
+
+        // 2. Wildcard subscribers
+        if (globalThis._broadcastListeners["*"]) {
+            globalThis._broadcastListeners["*"].forEach(function(cb) {
+                try { cb(channel, data); } catch(e) {}
+            });
+        }
     } catch(e) {}
 };
 

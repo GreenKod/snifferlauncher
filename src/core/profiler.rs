@@ -5,12 +5,22 @@
 use std::collections::VecDeque;
 use std::time::Instant;
 
+#[derive(Clone, Debug, Default)]
+pub struct TouchTelemetry {
+    pub active_pointers: usize,
+    pub gesture: String,
+    pub target_element: String,
+    pub touch_x: f32,
+    pub touch_y: f32,
+}
+
 pub struct FrameProfiler {
     frame_times: VecDeque<f32>,
     cpu_times: VecDeque<f32>,
     gpu_times: VecDeque<f32>,
     swap_times: VecDeque<f32>,
     max_history: usize,
+    pub touch_telemetry: TouchTelemetry,
 }
 
 impl FrameProfiler {
@@ -22,6 +32,7 @@ impl FrameProfiler {
             gpu_times: VecDeque::with_capacity(max_history),
             swap_times: VecDeque::with_capacity(max_history),
             max_history,
+            touch_telemetry: TouchTelemetry::default(),
         }
     }
 
@@ -101,7 +112,11 @@ pub fn count_elements(element: &crate::core::types::Element) -> usize {
         crate::core::types::Element::Container { children, .. }
         | crate::core::types::Element::ScrollView { children, .. }
         | crate::core::types::Element::SharedView { children, .. } => {
-            1 + children.iter().map(count_elements).sum::<usize>()
+            let mut count = 1;
+            for child in children {
+                count += count_elements(child);
+            }
+            count
         }
         _ => 1,
     }
@@ -119,8 +134,8 @@ pub fn render_devkit_hud(
     let gpu_ms = profiler.avg_gpu_ms();
     let swap_ms = profiler.avg_swap_ms();
 
-    let w = 210.0_f32;
-    let h = 100.0_f32;
+    let w = 240.0_f32;
+    let h = 135.0_f32;
     let x = (screen_width - w - 16.0).max(10.0);
     let y = 50.0_f32;
 
@@ -146,13 +161,25 @@ pub fn render_devkit_hud(
     };
 
     let fps_str = format!("FPS: {fps:.1} ({avg_ms:.1}ms)");
-    renderer.draw_text(&fps_str, x + 12.0, y + 28.0, 13.0, fps_color);
+    renderer.draw_text(&fps_str, x + 12.0, y + 26.0, 12.0, fps_color);
 
     // Latency details
     let cpu_gpu_str = format!("CPU: {cpu_ms:.1}ms | GPU: {gpu_ms:.1}ms");
-    renderer.draw_text(&cpu_gpu_str, x + 12.0, y + 50.0, 11.0, 0xFFE2_E8F0);
+    renderer.draw_text(&cpu_gpu_str, x + 12.0, y + 44.0, 10.0, 0xFFE2_E8F0);
 
     let os_str = format!("VSync: {swap_ms:.1}ms | Nodes: {node_count}");
-    renderer.draw_text(&os_str, x + 12.0, y + 68.0, 11.0, 0xFF94_A3B8);
-}
+    renderer.draw_text(&os_str, x + 12.0, y + 58.0, 10.0, 0xFF94_A3B8);
 
+    // Touch Telemetry
+    let touch = &profiler.touch_telemetry;
+    let gesture_name = if touch.gesture.is_empty() { "IDLE" } else { &touch.gesture };
+    let touch_hdr = format!("👉 Pointers: {} | {}", touch.active_pointers, gesture_name);
+    renderer.draw_text(&touch_hdr, x + 12.0, y + 76.0, 10.0, 0xFFFACC15);
+
+    let target_name = if touch.target_element.is_empty() { "None" } else { &touch.target_element };
+    let target_str = format!("Target: {target_name}");
+    renderer.draw_text(&target_str, x + 12.0, y + 92.0, 10.0, 0xFFE2_E8F0);
+
+    let pos_str = format!("Pos: ({:.1}, {:.1})", touch.touch_x, touch.touch_y);
+    renderer.draw_text(&pos_str, x + 12.0, y + 108.0, 10.0, 0xFF94_A3B8);
+}

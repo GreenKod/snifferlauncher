@@ -69,6 +69,8 @@ pub struct PluginRegistry {
     api_map: ApiMap,
     /// Pending broadcast events queued by any plugin. Drained once per frame in `dispatch`.
     broadcast_queue: BroadcastQueue,
+    /// Shared Native Data Vault.
+    vault: Arc<crate::core::vault::DataVault>,
 }
 
 impl PluginRegistry {
@@ -97,6 +99,12 @@ impl PluginRegistry {
     #[must_use]
     pub fn broadcast_queue(&self) -> BroadcastQueue {
         Arc::clone(&self.broadcast_queue)
+    }
+
+    /// Returns a clone of the shared DataVault.
+    #[must_use]
+    pub fn vault(&self) -> Arc<crate::core::vault::DataVault> {
+        Arc::clone(&self.vault)
     }
 
     /// Ask registered plugins for a UI layout.

@@ -16,12 +16,13 @@ pub fn is_aabb_visible(rect: Rect, viewport: Rect, margin_x: f32, margin_y: f32)
         && rect.y <= max_y
 }
 
-/// Recursively traverses the layout and element trees to find which widget was clicked.
+/// Recursively traverses the layout and element trees to find which widget was clicked, supporting dynamic active scroll overrides.
 #[must_use]
-pub fn find_clicked_button(
+pub fn find_clicked_button_with_scroll(
     element: &Element,
     layout: &LayoutNode,
     point: Point,
+    get_active_scroll: &dyn Fn(Option<&str>, f32, f32) -> (f32, f32),
 ) -> Option<(u64, Rect)> {
     if !layout.rect.contains(point) {
         return None;
@@ -30,7 +31,7 @@ pub fn find_clicked_button(
         Element::Container { children, id, .. }
         | Element::SharedView { children, id, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
-                if let Some(clicked_data) = find_clicked_button(child_el, child_lay, point) {
+                if let Some(clicked_data) = find_clicked_button_with_scroll(child_el, child_lay, point, get_active_scroll) {
                     return Some(clicked_data);
                 }
             }
@@ -49,9 +50,10 @@ pub fn find_clicked_button(
             scroll_y,
             ..
         } => {
-            let offset_point = Point::new(point.x + scroll_x, point.y + scroll_y);
+            let (active_x, active_y) = get_active_scroll(id.as_deref(), *scroll_x, *scroll_y);
+            let offset_point = Point::new(point.x + active_x, point.y + active_y);
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
-                if let Some(clicked_data) = find_clicked_button(child_el, child_lay, offset_point) {
+                if let Some(clicked_data) = find_clicked_button_with_scroll(child_el, child_lay, offset_point, get_active_scroll) {
                     return Some(clicked_data);
                 }
             }
@@ -78,6 +80,27 @@ pub fn find_clicked_button(
             None
         }
     }
+}
+
+/// Recursively traverses the layout and element trees to find which widget was clicked.
+#[must_use]
+pub fn find_clicked_button(
+    element: &Element,
+    layout: &LayoutNode,
+    point: Point,
+) -> Option<(u64, Rect)> {
+    find_clicked_button_with_scroll(element, layout, point, &|_id, sx, sy| (sx, sy))
+}
+
+/// Recursively traverses the layout and element trees to find which widget is currently hovered, supporting dynamic active scroll overrides.
+#[must_use]
+pub fn find_hovered_button_with_scroll(
+    element: &Element,
+    layout: &LayoutNode,
+    point: Point,
+    get_active_scroll: &dyn Fn(Option<&str>, f32, f32) -> (f32, f32),
+) -> Option<(u64, Rect)> {
+    find_clicked_button_with_scroll(element, layout, point, get_active_scroll)
 }
 
 /// Recursively traverses the layout and element trees to find which widget is currently hovered.

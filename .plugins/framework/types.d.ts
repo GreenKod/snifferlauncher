@@ -137,10 +137,42 @@ declare function host_create_image(id: string, src: string): void;
 declare function host_focus_input(id: string): void;
 declare function host_blur_input(): void;
 declare function host_has_permission(permission: string): boolean;
-declare function host_request_permissions(permissions: string[]): string;
 declare function host_register_api(name: string): void;
 declare function host_call_api(name: string, payloadJson: string): string | null;
 declare function host_broadcast(channel: string, payloadJson: string): void;
+declare function host_vault_get(key: string): string | null;
+declare function host_vault_set(key: string, valueJson: string): boolean;
+declare function host_vault_delete(key: string): boolean;
+declare function host_vault_query_apps(paramsJson: string): string;
+declare function host_vault_keys(prefix: string): string;
+
+// -----------------------------------------------------------------------------
+// Native Data Vault API
+// -----------------------------------------------------------------------------
+
+interface VaultQueryAppsParams {
+    search?: string;
+    page?: number;
+    limit?: number;
+}
+
+interface VaultAppQueryResult {
+    apps: AppInfo[];
+    total_count: number;
+    page: number;
+    total_pages: number;
+}
+
+interface NativeVault {
+    get<T = any>(key: string, defaultValue?: T): T;
+    set(key: string, value: any): boolean;
+    delete(key: string): boolean;
+    queryApps(params?: VaultQueryAppsParams): VaultAppQueryResult;
+    keys(prefix?: string): string[];
+    subscribe(key: string, callback: (data: any) => void): void;
+}
+
+declare const Vault: NativeVault;
 
 // -----------------------------------------------------------------------------
 // SnifferUI Framework & Component Builders

@@ -100,6 +100,8 @@ pub fn handle_winit_event(
         WindowEvent::Resized(size) => {
             let width = f32::from(u16::try_from(size.width).unwrap_or(0));
             let height = f32::from(u16::try_from(size.height).unwrap_or(0));
+            crate::core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+            crate::core::types::SCREEN_HEIGHT.store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
             app.event_bus.push(UiEvent::WindowResized(width, height));
         }
         WindowEvent::MouseWheel { delta, .. } => match delta {

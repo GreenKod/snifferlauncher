@@ -12,9 +12,9 @@ export CFLAGS="-ffile-prefix-map=${PROJECT_DIR}=/src -ffile-prefix-map=${HOME_DI
 export CXXFLAGS="-ffile-prefix-map=${PROJECT_DIR}=/src -ffile-prefix-map=${HOME_DIR}=/anon -ffile-prefix-map=.=/src"
 
 echo "Building anonymous Desktop release binary..."
-cargo build --release --bin snifferlauncher
+cargo build --release --bin snifferlauncher-desktop
 
-OUTPUT_BIN="target/release/snifferlauncher"
+OUTPUT_BIN="target/release/snifferlauncher-desktop"
 RELEASE_PLUGINS_DIR="target/release/.plugins"
 
 echo "Bundling .plugins directory and plugin manifests..."

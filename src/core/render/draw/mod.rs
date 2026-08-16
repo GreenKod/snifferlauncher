@@ -3,7 +3,10 @@
 pub mod culling;
 pub mod elements;
 
-pub use culling::{find_clicked_button, find_hovered_button, find_hovered_scrollview, is_aabb_visible};
+pub use culling::{
+    find_clicked_button, find_clicked_button_with_scroll, find_hovered_button,
+    find_hovered_button_with_scroll, find_hovered_scrollview, is_aabb_visible,
+};
 
 use crate::core::layout::LayoutNode;
 use crate::core::render::api::Renderer;

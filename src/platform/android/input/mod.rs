@@ -2,11 +2,26 @@ pub mod gestures;
 
 use crate::core::Point;
 use crate::core::render::draw::{
-    find_clicked_button, find_hovered_button, find_hovered_scrollview,
+    find_clicked_button_with_scroll, find_hovered_button_with_scroll, find_hovered_scrollview,
 };
 use crate::core::ui::event::UiEvent;
 use android_activity::InputStatus;
 use android_activity::input::{InputEvent, MotionAction};
+
+fn resolve_active_scroll(
+    scroll_physics: &std::collections::HashMap<u64, super::app::physics_sync::ScrollPhysics>,
+    id_opt: Option<&str>,
+    default_x: f32,
+    default_y: f32,
+) -> (f32, f32) {
+    if let Some(id_str) = id_opt {
+        let sv_id = crate::core::ui::widget::fnv1a(id_str.as_bytes());
+        if let Some(phys) = scroll_physics.get(&sv_id) {
+            return (phys.pos_x, phys.pos_y);
+        }
+    }
+    (default_x, default_y)
+}
 
 #[allow(clippy::too_many_lines)]
 pub fn handle_input_event(
@@ -26,6 +41,7 @@ pub fn handle_input_event(
 
             let (delta_x, delta_y) = match motion_event.action() {
                 MotionAction::Down | MotionAction::PointerDown => {
+                    state.touch_start_pos = point;
                     state.last_touch_pos = point;
                     state.last_drag_delta = (0.0, 0.0);
                     state.total_touch_drag_distance = 0.0;
@@ -65,7 +81,7 @@ pub fn handle_input_event(
                         state.drag_history.clear();
 
                         if let Some((clicked_btn, _)) =
-                            find_clicked_button(root_element, layout_tree, point)
+                            find_clicked_button_with_scroll(root_element, layout_tree, point, &|id_opt, sx, sy| resolve_active_scroll(&state.scroll_physics, id_opt, sx, sy))
                         {
                             state.event_bus.push(UiEvent::PointerDown(clicked_btn));
                         } else {
@@ -74,8 +90,27 @@ pub fn handle_input_event(
                     }
 
                     let prev_hovered = state.hovered_btn;
-                    let hovered_data = find_hovered_button(root_element, layout_tree, point);
+                    let hovered_data = find_hovered_button_with_scroll(root_element, layout_tree, point, &|id_opt, sx, sy| resolve_active_scroll(&state.scroll_physics, id_opt, sx, sy));
                     state.hovered_btn = hovered_data.map(|(id, _)| id);
+
+                    let pointer_count = motion_event.pointers().count();
+                    let gesture_name = match motion_event.action() {
+                        MotionAction::Down | MotionAction::PointerDown => "TAP (Down)".to_string(),
+                        MotionAction::Move => {
+                            let dist = (point.x - state.touch_start_pos.x).hypot(point.y - state.touch_start_pos.y);
+                            if dist > 16.0 * state.cached_density.0.max(1.0) { "SWIPE / DRAG".to_string() } else { "HOLD".to_string() }
+                        }
+                        _ => "TOUCH".to_string(),
+                    };
+                    let target_name = hovered_data.map(|(btn, _)| format!("btn_{btn:x}")).unwrap_or_else(|| "None".to_string());
+
+                    if let Ok(mut prof) = state.profiler.lock() {
+                        prof.touch_telemetry.active_pointers = pointer_count;
+                        prof.touch_telemetry.gesture = gesture_name;
+                        prof.touch_telemetry.target_element = target_name;
+                        prof.touch_telemetry.touch_x = point.x;
+                        prof.touch_telemetry.touch_y = point.y;
+                    }
 
                     if prev_hovered != state.hovered_btn
                         && let Some(prev) = prev_hovered
@@ -230,7 +265,7 @@ pub fn handle_input_event(
                     state.drag_history.clear();
 
                     let prev_hovered = state.hovered_btn;
-                    let hovered_data = find_hovered_button(root_element, layout_tree, point);
+                    let hovered_data = find_hovered_button_with_scroll(root_element, layout_tree, point, &|id_opt, sx, sy| resolve_active_scroll(&state.scroll_physics, id_opt, sx, sy));
                     state.hovered_btn = hovered_data.map(|(id, _)| id);
                     if let Some(prev) = prev_hovered {
                         state.event_bus.push(UiEvent::HoverEnd(prev));
@@ -238,18 +273,39 @@ pub fn handle_input_event(
 
                     state.event_bus.push(UiEvent::PointerUp(state.hovered_btn));
 
-                    let is_static_tap = state.total_touch_drag_distance < 12.0;
+                    // Determine tap thresholds based on device density
+                    let density = state.cached_density.0.max(1.0);
+                    let tap_threshold = 48.0 * density;
+                    let tap_dist = (point.x - state.touch_start_pos.x).hypot(point.y - state.touch_start_pos.y);
+                    let is_static_tap = tap_dist < tap_threshold;
+                    
+                    let pointer_count = motion_event.pointers().count();
+                    let gesture_name = if is_static_tap { "TAP (Release)".to_string() } else { "SWIPE (Release)".to_string() };
+                    let target_name = hovered_data.map(|(btn, _)| format!("btn_{btn:x}")).unwrap_or_else(|| "None".to_string());
+
+                    if let Ok(mut prof) = state.profiler.lock() {
+                        prof.touch_telemetry.active_pointers = pointer_count;
+                        prof.touch_telemetry.gesture = gesture_name;
+                        prof.touch_telemetry.target_element = target_name;
+                        prof.touch_telemetry.touch_x = point.x;
+                        prof.touch_telemetry.touch_y = point.y;
+                    }
+
                     if is_static_tap {
-                        if let Some((clicked_btn, rect)) =
-                            find_clicked_button(root_element, layout_tree, point)
-                        {
+                        let clicked = find_clicked_button_with_scroll(root_element, layout_tree, state.touch_start_pos, &|id_opt, sx, sy| resolve_active_scroll(&state.scroll_physics, id_opt, sx, sy))
+                            .or_else(|| find_clicked_button_with_scroll(root_element, layout_tree, point, &|id_opt, sx, sy| resolve_active_scroll(&state.scroll_physics, id_opt, sx, sy)));
+
+                        if let Some((clicked_btn, rect)) = clicked {
+                            crate::dev_log!("[Input] TAP on button id: {clicked_btn} (hex: {clicked_btn:x})");
                             state
                                 .event_bus
                                 .push(UiEvent::Click(clicked_btn, rect.width, rect.height));
                         } else {
+                            crate::dev_log!("[Input] TAP clicked outside (no button at start={:?}, end={:?})", state.touch_start_pos, point);
                             state.event_bus.push(UiEvent::ClickOutside);
                         }
                     } else {
+                        crate::dev_log!("[Input] Swipe detected (dist={tap_dist:.1}, thresh={tap_threshold:.1})");
                         state.event_bus.push(UiEvent::ClickOutside);
                     }
                     InputStatus::Handled
