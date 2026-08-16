@@ -171,6 +171,12 @@ pub fn run_loop(
     let mut last_frame_time = std::time::Instant::now();
     let mut input = FrameInputState::default();
 
+    let (phys_w, phys_h) = desktop.drawable_size();
+    let width = f32::from(u16::try_from(phys_w).unwrap_or(0));
+    let height = f32::from(u16::try_from(phys_h).unwrap_or(0));
+    crate::core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+    crate::core::types::SCREEN_HEIGHT.store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
+
     desktop.window.request_redraw();
 
     #[allow(deprecated)]
@@ -185,9 +191,17 @@ pub fn run_loop(
                     }
                     winit::event::WindowEvent::Resized(size) => {
                         desktop.resize_surface(size.width, size.height);
+                        let (phys_w, phys_h) = desktop.drawable_size();
+                        let width = f32::from(u16::try_from(phys_w).unwrap_or(0));
+                        let height = f32::from(u16::try_from(phys_h).unwrap_or(0));
+                        crate::core::types::SCREEN_WIDTH
+                            .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                        crate::core::types::SCREEN_HEIGHT
+                            .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
+
                         app.event_bus.push(UiEvent::WindowResized(
-                            size.width as f32,
-                            size.height as f32,
+                            width,
+                            height,
                         ));
                         desktop.window.request_redraw();
                     }
@@ -198,6 +212,17 @@ pub fn run_loop(
                         let now = std::time::Instant::now();
                         let dt = now.duration_since(last_frame_time).as_secs_f32();
                         last_frame_time = now;
+
+                        let (log_w, log_h) = desktop.size();
+                        let (phys_w, phys_h) = desktop.drawable_size();
+
+                        let width = f32::from(u16::try_from(phys_w).unwrap_or(0));
+                        let height = f32::from(u16::try_from(phys_h).unwrap_or(0));
+
+                        crate::core::types::SCREEN_WIDTH
+                            .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                        crate::core::types::SCREEN_HEIGHT
+                            .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
                         app.plugin_registry.tick();
 
@@ -211,17 +236,6 @@ pub fn run_loop(
 
                         app.transition_manager.sync_tree(&root_element);
                         let _ = app.transition_manager.tick(dt);
-
-                        let (log_w, log_h) = desktop.size();
-                        let (phys_w, phys_h) = desktop.drawable_size();
-
-                        let width = f32::from(u16::try_from(phys_w).unwrap_or(0));
-                        let height = f32::from(u16::try_from(phys_h).unwrap_or(0));
-
-                        crate::core::types::SCREEN_WIDTH
-                            .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
-                        crate::core::types::SCREEN_HEIGHT
-                            .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
                         let scale_x = width / f32::from(u16::try_from(log_w).unwrap_or(1));
                         let scale_y = height / f32::from(u16::try_from(log_h).unwrap_or(1));

@@ -100,7 +100,7 @@ impl JsPlugin {
                 register_host_api(
                     &ctx,
                     HostApiConfig {
-                        plugin_id,
+                        plugin_id: plugin_id.clone(),
                         msg_tx: msg_tx_worker,
                         vault,
                         ui_tree: ui_tree_worker,
@@ -114,13 +114,25 @@ impl JsPlugin {
                     },
                 );
 
-                let _ = ctx
-                    .eval::<Value, _>(IPC_PREAMBLE.as_bytes())
-                    .map_err(|e| e.to_string())?;
+                if let Err(e) = ctx.eval::<Value, _>(IPC_PREAMBLE.as_bytes()) {
+                    if let Some(exc) = ctx.catch().as_exception() {
+                        let msg = exc.message().unwrap_or_default();
+                        let stack = exc.stack().unwrap_or_default();
+                        return Err(format!("IPC_PREAMBLE error: {msg}\n{stack}"));
+                    }
+                    return Err(format!("IPC_PREAMBLE error: {e}"));
+                }
 
-                let _ = ctx
-                    .eval::<Value, _>(script_content.as_bytes())
-                    .map_err(|e| e.to_string())?;
+                if let Err(e) = ctx.eval::<Value, _>(script_content.as_bytes()) {
+                    if let Some(exc) = ctx.catch().as_exception() {
+                        let msg = exc.message().unwrap_or_default();
+                        let stack = exc.stack().unwrap_or_default();
+                        dev_err!("SCRIPT FAIL {plugin_id}: {msg} | {stack}");
+                        let _ = std::fs::write(format!("/data/user/0/com.greenkod.snifferlauncher/{plugin_id}.js"), &script_content);
+                        return Err(format!("Script eval error in plugin: {msg}\n{stack}"));
+                    }
+                    return Err(format!("Script eval error in plugin: {e}"));
+                }
 
                 Ok::<(), String>(())
             });
@@ -175,7 +187,14 @@ impl JsPlugin {
                                         format!(r#"{{"type":"PageSnapped","widget_id":{widget_id},"page":{page}}}"#)
                                     }
                                 };
-                                let _res: Result<String, _> = on_event_fn.call((event_json,));
+                                let res: Result<rquickjs::Value, _> = on_event_fn.call((event_json,));
+                                if let Err(e) = res {
+                                    let caught = ctx.catch();
+                                    let exc = caught.as_exception();
+                                    let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
+                                    let stack = exc.as_ref().and_then(|x| x.stack()).unwrap_or_default();
+                                    crate::dev_err!("[JS Worker] onEvent failed in plugin '{}': {msg}\n{stack}\n{e}", plugin_id);
+                                }
                             }
                         });
                     }

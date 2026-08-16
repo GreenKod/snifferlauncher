@@ -17,16 +17,14 @@ function getDockElement(isLandscape) {
 
     // Fallback if dock plugin is still initializing
     return Container("dock_fallback_area", {
-        width: isLandscape ? px(vw(16.0)) : pct(100),
-        height: isLandscape ? pct(100) : px(vh(16.0)),
-        border_width: px(1.0),
-        border_color: hex("#ffffff18"),
+        width: isLandscape ? px(vw(13.0)) : pct(100),
+        height: isLandscape ? pct(100) : px(vh(11.0)),
         justify_content: "Center",
         align_items: "Center",
     }, [
-        Label("dock_fallback_label", "⚡ Dock Bağlanıyor...", {
-            text_color: hex("#AAAAAA"),
-            text_size: vmin(3.5),
+        Label("dock_fallback_label", "...", {
+            text_color: hex("#666666"),
+            text_size: vmin(2.5),
             width: "Auto",
         })
     ]);
@@ -45,7 +43,7 @@ function Root() {
             justify_content: "Start",
             align_items: "Stretch",
         }, [
-            ...AppGridComponent(),
+            AppGridComponent(),
             getDockElement(true)
         ]);
     }
@@ -59,7 +57,7 @@ function Root() {
         justify_content: "Start",
         align_items: "Stretch",
     }, [
-        ...AppGridComponent(),
+        AppGridComponent(),
         getDockElement(false)
     ]);
 }

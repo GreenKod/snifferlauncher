@@ -281,6 +281,34 @@ mod tests {
         let issues = PluginLoader::validate_manifest(&manifest);
         assert!(issues.is_empty());
     }
+
+    #[test]
+    fn test_load_all_plugins_from_disk() {
+        let mut registry = crate::plugin::PluginRegistry::default();
+        let queue = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let loader = PluginLoader::new(".plugins");
+        loader.register_all(&mut registry, &queue);
+    }
+
+    #[test]
+    fn test_eval_both_framework_files_in_quickjs() {
+        let rt = rquickjs::Runtime::new().unwrap();
+        let ctx = rquickjs::Context::full(&rt).unwrap();
+        
+        for path in &[".plugins/_framework/sniffer_ui.js", ".plugins/framework/sniffer_ui.js"] {
+            let code = std::fs::read_to_string(path).unwrap();
+            ctx.with(|ctx| {
+                let res = ctx.eval::<rquickjs::Value, _>(code.as_bytes());
+                if let Err(e) = res {
+                    let caught = ctx.catch();
+                    let exc = caught.as_exception();
+                    let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
+                    let stack = exc.as_ref().and_then(|x| x.stack()).unwrap_or_default();
+                    panic!("File {path} failed: {msg}\n{stack}\n{e}");
+                }
+            });
+        }
+    }
 }
 
 #[cfg(target_os = "android")]
@@ -344,55 +372,59 @@ impl PluginLoader {
                                              .and_then(|c| asset_manager.open(c.as_c_str()))
                                      });
 
-                                 if let Some(mut pa) = asset_opt {
-                                     let mut src = String::new();
-                                     if pa.read_to_string(&mut src).is_ok() {
-                                         dev_log!(
-                                             "{} '{}' {} '{}'",
-                                             obfstr!("Android: preloading"),
-                                             resolved,
-                                             obfstr!("for plugin"),
-                                             manifest.name
-                                         );
-                                         preload_scripts.push(src);
+                                  if let Some(mut pa) = asset_opt {
+                                      let mut src = String::new();
+                                      if pa.read_to_string(&mut src).is_ok() {
+                                          let clean_src = src.replace('\0', "").trim().to_string();
+                                          dev_log!(
+                                              "{} '{}' {} '{}'",
+                                              obfstr!("Android: preloading"),
+                                              resolved,
+                                              obfstr!("for plugin"),
+                                              manifest.name
+                                          );
+                                          preload_scripts.push(clean_src);
+                                      }
+                                  } else {
+                                      dev_err!(
+                                          "{} '{resolved}' {}",
+                                          obfstr!("Android: preload asset"),
+                                          obfstr!("not found")
+                                      );
+                                  }
+                             }
+
+                             let files_to_read = if !manifest.scripts.is_empty() {
+                                 manifest.scripts.clone()
+                             } else {
+                                 vec![manifest.main.clone()]
+                             };
+
+                             let mut plugin_code = String::new();
+                             for script_rel in &files_to_read {
+                                 let script_path = format!("{plugin_folder}/{script_rel}");
+                                 if let Ok(script_cstr) = std::ffi::CString::new(script_path) {
+                                     if let Some(mut asset) = asset_manager.open(script_cstr.as_c_str()) {
+                                         let mut content = String::new();
+                                         if asset.read_to_string(&mut content).is_ok() {
+                                             let clean_content = content.replace('\0', "").trim().to_string();
+                                             if !plugin_code.is_empty() {
+                                                 plugin_code.push('\n');
+                                             }
+                                             plugin_code.push_str(&clean_content);
+                                         }
                                      }
-                                 } else {
-                                     dev_err!(
-                                         "{} '{resolved}' {}",
-                                         obfstr!("Android: preload asset"),
-                                         obfstr!("not found")
-                                     );
                                  }
-                            }
+                             }
 
-                            let files_to_read = if !manifest.scripts.is_empty() {
-                                manifest.scripts.clone()
-                            } else {
-                                vec![manifest.main.clone()]
-                            };
-
-                            let mut plugin_code = String::new();
-                            for script_rel in &files_to_read {
-                                let script_path = format!("{plugin_folder}/{script_rel}");
-                                if let Ok(script_cstr) = std::ffi::CString::new(script_path) {
-                                    if let Some(mut asset) = asset_manager.open(script_cstr.as_c_str()) {
-                                        let mut content = String::new();
-                                        if asset.read_to_string(&mut content).is_ok() {
-                                            if !plugin_code.is_empty() {
-                                                plugin_code.push('\n');
-                                            }
-                                            plugin_code.push_str(&content);
-                                        }
-                                    }
-                                }
-                            }
-
-                            if !plugin_code.is_empty() {
-                                let mut full_script = preload_scripts.join("\n");
-                                if !full_script.is_empty() {
-                                    full_script.push('\n');
-                                }
-                                full_script.push_str(&plugin_code);
+                             if !plugin_code.is_empty() {
+                                 let mut full_script = preload_scripts.join("\n");
+                                 if !full_script.is_empty() {
+                                     full_script.push('\n');
+                                 }
+                                 full_script.push_str(&plugin_code);
+                                 let full_script = full_script.replace('\0', "");
+                                 let full_script = full_script.trim_matches('\0').trim().to_string();
 
                                 match crate::plugin::JsPlugin::new(crate::plugin::js::JsPluginConfig {
                                     script_content: full_script,
@@ -448,12 +480,6 @@ impl PluginLoader {
                             obfstr!("on Android")
                         );
                     }
-                } else {
-                    dev_err!(
-                        "{} '{plugin_folder}' {}",
-                        obfstr!("manifest.json not found for plugin"),
-                        obfstr!("on Android")
-                    );
                 }
             }
         }

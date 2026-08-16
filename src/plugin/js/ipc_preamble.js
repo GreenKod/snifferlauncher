@@ -23,7 +23,7 @@ globalThis.registerApi = function(name, handler) {
  * @returns {object|null} - JSON-parsed response or null on failure/missing API
  */
 globalThis.callApi = function(name, payload) {
-    const json = host_call_api(name, JSON.stringify(payload ?? {}));
+    const json = host_call_api(name, JSON.stringify(payload !== undefined && payload !== null ? payload : {}));
     if (json === null || json === undefined) return null;
     try { return JSON.parse(json); } catch(e) { return null; }
 };
@@ -35,7 +35,7 @@ globalThis.callApi = function(name, payload) {
  * @param {object} data - JSON-serializable data
  */
 globalThis.broadcastEvent = function(channel, data) {
-    host_broadcast(channel, JSON.stringify(data ?? {}));
+    host_broadcast(channel, JSON.stringify(data !== undefined && data !== null ? data : {}));
 };
 
 /**
@@ -116,7 +116,7 @@ globalThis.Vault = {
             return { apps: [], total_count: 0, page: 0, total_pages: 1 };
         }
         try {
-            const json = host_vault_query_apps(JSON.stringify(params ?? {}));
+            const json = host_vault_query_apps(JSON.stringify(params !== undefined && params !== null ? params : {}));
             return JSON.parse(json);
         } catch(e) {
             return { apps: [], total_count: 0, page: 0, total_pages: 1 };
@@ -429,7 +429,7 @@ globalThis.requestSharedView = function(targetPluginId, slotName, payload, timeo
 
         globalThis._sharedViewPending[invitationId] = { resolve: resolve, timer: timer };
 
-        const payloadStr = JSON.stringify(payload ?? {});
+        const payloadStr = JSON.stringify(payload !== undefined && payload !== null ? payload : {});
         broadcastEvent("shared_view_invite", {
             invitationId: invitationId,
             targetPluginId: targetPluginId,
@@ -448,7 +448,7 @@ globalThis.acceptSharedView = function(invitationId, uiTree) {
         invitationId: invitationId,
         accepted: true,
         status: "accepted",
-        uiTree: uiTree ?? null
+        uiTree: uiTree !== undefined ? uiTree : null
     });
 };
 
@@ -460,7 +460,7 @@ globalThis.rejectSharedView = function(invitationId, reason) {
         invitationId: invitationId,
         accepted: false,
         status: "rejected",
-        reason: reason ?? "Invitation rejected"
+        reason: reason !== undefined && reason !== null ? reason : "Invitation rejected"
     });
 };
 
@@ -481,7 +481,7 @@ globalThis._dispatchBroadcast = function(channel, payload_json) {
                 globalThis.onRequestSharedView({
                     invitationId: data.invitationId,
                     slotName: data.slotName,
-                    payload: JSON.parse(data.payload ?? "{}")
+                    payload: JSON.parse(data.payload !== undefined && data.payload !== null ? data.payload : "{}")
                 });
             }
         } else if (channel === "shared_view_response") {
@@ -520,7 +520,7 @@ globalThis._handleApiCall = function(name, payload_json) {
     try {
         const payload = JSON.parse(payload_json);
         const result = globalThis._apis[name](payload);
-        return JSON.stringify(result ?? null);
+        return JSON.stringify(result !== undefined ? result : null);
     } catch(e) {
         return null;
     }

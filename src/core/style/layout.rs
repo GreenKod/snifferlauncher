@@ -41,6 +41,8 @@ pub enum JustifyContent {
     Center,
     End,
     SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
 }
 
 /// How children are aligned along the cross axis.
@@ -146,6 +148,8 @@ impl From<JustifyContent> for taffy::style::JustifyContent {
             JustifyContent::Center => Self::Center,
             JustifyContent::End => Self::FlexEnd,
             JustifyContent::SpaceBetween => Self::SpaceBetween,
+            JustifyContent::SpaceAround => Self::SpaceAround,
+            JustifyContent::SpaceEvenly => Self::SpaceEvenly,
         }
     }
 }
