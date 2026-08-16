@@ -40,6 +40,8 @@ target/**/.plugins/.cache/
 **/apps_cache.json
 *.log
 *.tmp
+/scratch/
+scratch/
 
 # --- IDE & Editor Configuration ---
 .vscode/

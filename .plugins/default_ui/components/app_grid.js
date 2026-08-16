@@ -69,10 +69,6 @@ function EmptySlotComponent(pageIndex, index, cfg) {
     return Container("p" + pageIndex + "_empty_slot_" + index, {
         width: px(cardW),
         height: px(cardH),
-        background_color: hex("#10101866"),
-        border_radius: vmin(1.2),
-        border_width: px(1.0),
-        border_color: hex("#ffffff0d"),
     }, []);
 }
 
@@ -187,33 +183,35 @@ function AppGridComponent() {
     const pageGrids = getPageGrids(totalPages, cfg, isLandscape);
     const indicator = PageIndicatorDots(totalPages, state.currentPage, isLandscape);
 
-    return [
-        Container("app_grid_wrapper", {
-            width: px(pageWidthPx),
-            height: px(vh(cfg.gridH)),
-            position: "Relative",
+    const wrapperChildren = [
+        ScrollView("app_grid_pager", {
+            snap_x: pageWidthPx,
+            rubber_band: 0.20,
+            page_count: totalPages,
+            on_snap: "onPageChanged",
+            momentum_scrolling: false,
+            style: {
+                width: px(pageWidthPx),
+                height: px(vh(cfg.gridH)),
+                overflow_hidden: true,
+            }
         }, [
-            ScrollView("app_grid_pager", {
-                snap_x: pageWidthPx,     // Yatay snap aralığı
-                rubber_band: 0.20,        // Kenar lastik bant (%20)
-                page_count: totalPages,
-                on_snap: "onPageChanged", // Snap tamamlanınca JS callback
-                momentum_scrolling: false, // Rust fizik motoru yönetiyor
-                style: {
-                    width: px(pageWidthPx),
-                    height: px(vh(cfg.gridH)),
-                    overflow_hidden: true,
-                }
-            }, [
-                Container("app_grid_track", {
-                    width: px(trackWidthPx),
-                    height: px(vh(cfg.gridH)),
-                    flex_shrink: 0,
-                    flex_direction: "Row",
-                }, pageGrids)
-            ]),
-
-            ...(indicator ? [indicator] : [])
+            Container("app_grid_track", {
+                width: px(trackWidthPx),
+                height: px(vh(cfg.gridH)),
+                flex_shrink: 0,
+                flex_direction: "Row",
+            }, pageGrids)
         ])
     ];
+
+    if (indicator) {
+        wrapperChildren.push(indicator);
+    }
+
+    return Container("app_grid_wrapper", {
+        width: px(pageWidthPx),
+        height: px(vh(cfg.gridH)),
+        position: "Relative",
+    }, wrapperChildren);
 }

@@ -6,9 +6,15 @@ use jni::{Env, jni_sig, jni_str};
 use jni::objects::{JString, JValue};
 use obfstr::obfstr;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
 
 static APP_LIST_CACHE: RwLock<Option<Vec<AppInfo>>> = RwLock::new(None);
+static APP_LIST_UPDATED: AtomicBool = AtomicBool::new(false);
+
+pub fn take_app_list_updated() -> bool {
+    APP_LIST_UPDATED.swap(false, Ordering::AcqRel)
+}
 
 fn get_apps_cache_path() -> Option<String> {
     let jvm = vm();
@@ -42,6 +48,7 @@ pub fn init_app_list_cache() {
                 if let Ok(mut guard) = APP_LIST_CACHE.write() {
                     *guard = Some(list);
                 }
+                APP_LIST_UPDATED.store(true, Ordering::Release);
                 crate::core::types::UI_VERSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
         }

@@ -4,12 +4,12 @@
 
 function getGridConfig(isLandscape) {
     if (isLandscape) {
-        // Yatay Ekran (Landscape): 7 Sütun x 4 Satır (Sol %84vw Grid, Sağ %16vw Görev Yöneticisi)
+        // Yatay Ekran (Landscape): 7 Sütun x 4 Satır (Sol %87vw Grid, Sağ %13vw Dock)
         const cols = 7;
         const rows = 4;
         const totalSlots = cols * rows; // 28
 
-        const cardW = 9.8;
+        const cardW = 10.2;
         const cardH = 18.0;
         const gapX = 1.8;
         const gapY = 4.0;
@@ -19,23 +19,23 @@ function getGridConfig(isLandscape) {
             cols,
             rows,
             totalSlots,
-            gridW: 84.0,
+            gridW: 87.0,
             gridH: 100.0,
             cardW,
             cardH,
             gapX,
             gapY,
-            taskManagerW: 16.0,
+            taskManagerW: 13.0,
             taskManagerH: 100.0,
         };
     } else {
-        // Dikey Ekran (Portrait): 4 Sütun x 7 Satır (Üst %84vh Grid, Alt %16vh Görev Yöneticisi)
+        // Dikey Ekran (Portrait): 4 Sütun x 7 Satır (Üst %89vh Grid, Alt %11vh Dock)
         const cols = 4;
         const rows = 7;
         const totalSlots = cols * rows; // 28
 
         const cardW = 19.7;
-        const cardH = 8.5; // Dikeyde dikine esnemeyi önlemek için dengeli kare kart oranı
+        const cardH = 9.0;
         const gapX = 4.0;
         const gapY = 2.8;
 
@@ -45,13 +45,13 @@ function getGridConfig(isLandscape) {
             rows,
             totalSlots,
             gridW: 100.0,
-            gridH: 84.0,
+            gridH: 89.0,
             cardW,
             cardH,
             gapX,
             gapY,
             taskManagerW: 100.0,
-            taskManagerH: 16.0,
+            taskManagerH: 11.0,
         };
     }
 }

@@ -13,7 +13,7 @@ function loadInitialApps() {
         installed = [];
     }
 
-    const apps = Array.isArray(installed) ? [...installed] : [];
+    const apps = Array.isArray(installed) ? installed.slice() : [];
 
     // Fallback apps if real apps list is still loading or on emulator
     if (apps.length === 0) {
@@ -161,3 +161,12 @@ let state = {
     }
 };
 state.rebuildCardHashCache();
+
+if (typeof Vault !== "undefined" && typeof Vault.subscribe === "function") {
+    Vault.subscribe("system.apps", function() {
+        state.refreshApps();
+        if (typeof SnifferUI !== "undefined" && typeof SnifferUI.forceUpdate === "function") {
+            SnifferUI.forceUpdate();
+        }
+    });
+}

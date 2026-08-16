@@ -252,6 +252,15 @@ pub fn android_main(app: AndroidApp) {
 
         state.plugin_registry.tick();
 
+        if crate::platform::android::jni::bridge::apps::take_app_list_updated() {
+            if let Ok(apps) = crate::platform::android::jni::get_application_list() {
+                state.plugin_registry.vault().update_system_apps(apps);
+                state.plugin_registry.broadcast("system.apps", "{}");
+                state.cached_layout = None;
+                state.layout_dirty = true;
+            }
+        }
+
         let current_ui_version = crate::core::types::UI_VERSION.load(std::sync::atomic::Ordering::Relaxed);
         let mut ui_changed = current_ui_version != state.last_ui_version;
 

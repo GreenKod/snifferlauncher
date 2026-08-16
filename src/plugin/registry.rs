@@ -93,12 +93,15 @@ impl PluginRegistry {
         Arc::clone(&self.api_map)
     }
 
-    /// Returns a reference to the shared broadcast queue.
-    ///
-    /// Pass this to `JsPlugin::new` so plugins can enqueue broadcasts via `host_broadcast`.
-    #[must_use]
     pub fn broadcast_queue(&self) -> BroadcastQueue {
         Arc::clone(&self.broadcast_queue)
+    }
+
+    /// Enqueue a broadcast message from the host system
+    pub fn broadcast(&self, channel: &str, payload_json: &str) {
+        if let Ok(mut q) = self.broadcast_queue.lock() {
+            q.push((channel.to_string(), payload_json.to_string()));
+        }
     }
 
     /// Returns a clone of the shared DataVault.

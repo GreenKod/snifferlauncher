@@ -6,9 +6,10 @@ unsafe extern "C" {
 
 #[cfg(target_os = "android")]
 pub fn android_log(prio: i32, msg: &str) {
+    let clean_msg = msg.replace('\0', "\\0");
     if let (Ok(c_tag), Ok(c_msg)) = (
         std::ffi::CString::new("SnifferLauncher"),
-        std::ffi::CString::new(msg),
+        std::ffi::CString::new(clean_msg),
     ) {
         unsafe {
             __android_log_write(prio, c_tag.as_ptr(), c_msg.as_ptr());

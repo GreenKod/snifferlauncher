@@ -1,7 +1,8 @@
-// Dock Plugin - Main Entry Point
-// İki eklenti arası IPC haberleşmesi ve yazı yazma (INPUT) iznini yönetir.
+// =============================================================================
+// Sniffer Launcher - Modern Responsive Android Dock Plugin (Clean Quick Apps)
+// =============================================================================
 
-host_log("[Dock Plugin] Initializing dock interface plugin...");
+host_log("[Dock Plugin] Initializing Clean Android Dock plugin...");
 
 // 1. İzinleri Talep Et (INPUT, IPC, UI)
 const granted = requestPermissions([
@@ -9,299 +10,222 @@ const granted = requestPermissions([
     "plugin.permission.IPC",
     "plugin.permission.UI"
 ]);
-host_log("[Dock Plugin] Granted permissions: " + JSON.stringify(granted));
 
-// Dock Durumu (State)
+// 2. Temel Sistem Uygulamaları (Telefon, Mesajlar, Kamera, Ayarlar)
+// Font glif uyumluluğu için temiz harf ikonları kullanıldı (? hatasını önler)
+const ESSENTIAL_APPS_CONFIG = [
+    { id: "phone", name: "Telefon", iconLetter: "T", color: "#22C55E", keywords: ["dialer", "phone", "telefon", "contacts", "rehber"] },
+    { id: "messages", name: "Mesajlar", iconLetter: "M", color: "#3B82F6", keywords: ["messaging", "mms", "mesaj", "message", "sms"] },
+    { id: "camera", name: "Kamera", iconLetter: "K", color: "#EC4899", keywords: ["camera", "kamera"] },
+    { id: "settings", name: "Ayarlar", iconLetter: "A", color: "#F59E0B", keywords: ["settings", "ayar", "setting"] }
+];
+
+// Dock State
 const dockState = {
-    inputText: "",
-    isFocused: false,
-    receivedFromDefaultUI: "Hazır (Bağlı)",
-    appCount: 0,
+    essentialApps: [],
+    detectedPackages: {}
 };
 
-// DataVault üzerinden anlık uygulama sayısını al
-if (typeof Vault !== "undefined" && typeof Vault.queryApps === "function") {
-    const initialApps = Vault.queryApps({ limit: 1 });
-    if (initialApps.total_count > 0) {
-        dockState.appCount = initialApps.total_count;
-        dockState.receivedFromDefaultUI = initialApps.total_count + " Uygulama Senkronize";
+/**
+ * DataVault üzerinden sistemde yüklü olan temel uygulamaları eşleştirir.
+ */
+function refreshEssentialApps() {
+    if (typeof Vault === "undefined" || typeof Vault.queryApps !== "function") {
+        return;
+    }
+
+    try {
+        const queryResult = Vault.queryApps({ limit: 100 });
+        const allApps = queryResult.apps || [];
+        const matched = [];
+        const detected = {};
+
+        for (const config of ESSENTIAL_APPS_CONFIG) {
+            let foundApp = null;
+
+            for (const app of allApps) {
+                const pkgLower = (app.package_name || "").toLowerCase();
+                const nameLower = (app.name || "").toLowerCase();
+
+                const isMatch = config.keywords.some(function(kw) {
+                    return pkgLower.includes(kw) || nameLower.includes(kw);
+                });
+
+                if (isMatch) {
+                    foundApp = app;
+                    break;
+                }
+            }
+
+            if (foundApp) {
+                matched.push({
+                    id: config.id,
+                    name: foundApp.name || config.name,
+                    package_name: foundApp.package_name,
+                    iconLetter: config.iconLetter,
+                    color: config.color,
+                    icon_src: foundApp.icon_src
+                });
+                detected[config.id] = foundApp.package_name;
+            } else {
+                matched.push({
+                    id: config.id,
+                    name: config.name,
+                    package_name: "com.android." + config.id,
+                    iconLetter: config.iconLetter,
+                    color: config.color,
+                    icon_src: null
+                });
+            }
+        }
+
+        dockState.essentialApps = matched;
+        dockState.detectedPackages = detected;
+    } catch (e) {
+        host_log("[Dock Plugin] Error matching apps: " + e);
     }
 }
 
-// 2. Eklentiler Arası API Kayıtları (Inter-Plugin APIs)
+// Başlangıçta eşle
+refreshEssentialApps();
+
+// Sistem uygulamaları güncellendiğinde dock'u otomatik güncelle
+if (typeof Vault !== "undefined" && typeof Vault.subscribe === "function") {
+    Vault.subscribe("system.apps", function() {
+        refreshEssentialApps();
+        broadcastEvent("dock.stateChanged", {});
+    });
+}
+
+// 3. Eklentiler Arası API Kayıtları (Inter-Plugin APIs)
 registerApi("dock.getUI", function(payload) {
     const isLandscape = payload && payload.isLandscape;
     return renderDockUI(isLandscape);
 });
 
-registerApi("dock.setText", function(payload) {
-    if (payload && typeof payload.text === "string") {
-        dockState.inputText = payload.text;
-        broadcastEvent("dock.textChanged", { text: dockState.inputText });
-        broadcastEvent("dock.stateChanged", {});
-        return { success: true, currentText: dockState.inputText };
-    }
-    return { success: false };
-});
-
-registerApi("dock.getText", function() {
-    return { text: dockState.inputText };
-});
-
-// 3. default_ui Eklentisinden Gelen Broadcast Mesajlarını Dinle
-subscribeChannel("default_ui.stats", function(data) {
-    if (data && typeof data.appCount === "number") {
-        dockState.appCount = data.appCount;
-        dockState.receivedFromDefaultUI = data.appCount + " Uygulama Senkronize";
-        broadcastEvent("dock.stateChanged", {});
-    }
-});
-
-subscribeChannel("default_ui.message", function(data) {
-    if (data && data.message) {
-        dockState.receivedFromDefaultUI = String(data.message);
-        broadcastEvent("dock.stateChanged", {});
-    }
-});
-
-// Başlangıçta hazır olduğunu diğer eklentilere duyur
+// Başlangıçta hazır olduğunu bildir
 broadcastEvent("dock.ready", { ready: true });
 
-// 4. UI Çizim Fonksiyonu
+// 4. Modern Yüzen Android Dock Render
 function renderDockUI(isLandscape) {
-    const textToShow = dockState.inputText || "Uygulama ara veya komut yaz...";
-    const isPlaceholder = !dockState.inputText;
-
+    // Yatay (Landscape) Mod: Sağda İnce & Şık Dikey Dock
     if (isLandscape) {
         return Container("dock_root_container", {
-            width: px(vw(16.0)),
+            width: px(vw(13.0)),
             height: pct(100),
-            background_color: hex("#111827EE"),
+            background_color: hex("#0C101BE6"),
             border_left_width: px(1.0),
-            border_left_color: hex("#374151"),
+            border_left_color: hex("#1E293B88"),
             flex_direction: "Column",
-            justify_content: "SpaceBetween",
+            justify_content: "Center",
             align_items: "Center",
-            padding: padXY(vmin(1.5), vmin(2.0)),
-        }, [
-            // Üst Başlık / Durum
-            Container("dock_status_box_land", {
-                width: pct(100),
-                height: "Auto",
-                flex_direction: "Column",
-                align_items: "Center",
-                gap: vh(0.8),
-            }, [
-                Label("dock_title_land", "⚡ DOCK", {
-                    text_color: hex("#38BDF8"),
-                    text_size: vw(1.6),
-                    width: "Auto",
-                }),
-                Label("dock_sync_label_land", dockState.receivedFromDefaultUI, {
-                    text_color: hex("#9CA3AF"),
-                    text_size: vw(1.0),
-                    width: "Auto",
-                })
-            ]),
-
-            // Giriş Alanı Butonu
-            Container("dock_input_bar_land", {
-                width: pct(100),
-                height: px(vh(25.0)),
-                background_color: hex("#1F2937"),
-                border_radius: vmin(2.0),
+            padding: padXY(vmin(1.0), vmin(2.0)),
+            gap: vh(2.8),
+        }, dockState.essentialApps.map(function(app) {
+            const btnSize = vw(8.5);
+            return Container("dock_app_btn_" + app.package_name, {
+                width: px(btnSize),
+                height: px(btnSize),
+                background_color: hex("#1A2234"),
+                border_radius: btnSize / 2.0,
                 border_width: px(1.0),
-                border_color: dockState.isFocused ? hex("#38BDF8") : hex("#4B5563"),
+                border_color: hex("#334155AA"),
                 flex_direction: "Column",
                 justify_content: "Center",
                 align_items: "Center",
-                padding: pad(vmin(1.5)),
             }, [
-                Label("dock_input_text_land", textToShow, {
-                    text_color: isPlaceholder ? hex("#6B7280") : hex("#F9FAFB"),
-                    text_size: vw(1.2),
-                    width: "Auto",
-                })
-            ]),
-
-            // Alt Kısayol Eylem Butonları
-            Container("dock_actions_land", {
-                width: pct(100),
-                height: "Auto",
-                flex_direction: "Column",
-                align_items: "Center",
-                gap: vh(1.0),
-            }, [
-                Container("dock_btn_clear", {
-                    width: pct(90),
-                    height: px(vh(6.0)),
-                    background_color: hex("#EF4444"),
-                    border_radius: vmin(1.5),
+                Container("dock_circle_" + app.id, {
+                    width: px(btnSize * 0.76),
+                    height: px(btnSize * 0.76),
+                    border_radius: (btnSize * 0.76) / 2.0,
+                    background_color: hex(app.color),
                     justify_content: "Center",
                     align_items: "Center",
                 }, [
-                    Label("dock_clear_lbl", "Temizle", {
+                    Label("dock_app_icon_" + app.id, app.iconLetter, {
                         text_color: hex("#FFFFFF"),
-                        text_size: vw(1.1),
+                        text_size: vw(2.2),
                         width: "Auto",
                     })
                 ])
-            ])
-        ]);
+            ]);
+        }));
     }
 
-    // Dikey (Portrait) Mod
+    // Dikey (Portrait) Mod: Altta Yüzen Modern Android Dock
     return Container("dock_root_container", {
         width: pct(100),
-        height: px(vh(16.0)),
-        background_color: hex("#111827EE"),
+        height: px(vh(11.0)),
+        background_color: hex("#0C101BE6"),
         border_top_width: px(1.0),
-        border_top_color: hex("#374151"),
+        border_top_color: hex("#1E293B88"),
         flex_direction: "Column",
-        justify_content: "SpaceBetween",
+        justify_content: "Center",
         align_items: "Center",
-        padding: padXY(vmin(2.5), vmin(1.5)),
+        padding: padXY(vmin(3.0), vmin(1.0)),
+        gap: vh(0.8),
     }, [
-        // Üst Bilgi & Senkronizasyon Durumu (İki eklentinin konuştuğunu gösterir)
-        Container("dock_header_row", {
-            width: pct(100),
-            height: "Auto",
+        Container("dock_apps_row_port", {
+            width: pct(92),
+            height: px(vh(8.2)),
             flex_direction: "Row",
-            justify_content: "SpaceBetween",
+            justify_content: "SpaceAround",
             align_items: "Center",
-        }, [
-            Label("dock_title_port", "⚡ DOCK IPC", {
-                text_color: hex("#38BDF8"),
-                text_size: vmin(3.2),
-                width: "Auto",
-            }),
-            Label("dock_sync_label_port", dockState.receivedFromDefaultUI, {
-                text_color: hex("#10B981"),
-                text_size: vmin(2.8),
-                width: "Auto",
-            })
-        ]),
-
-        // Arama & Yazı Yazma Giriş Çubuğu (Interactive Input / Search Bar)
-        Container("dock_input_bar_port", {
-            width: pct(100),
-            height: px(vh(7.5)),
-            background_color: hex("#1F2937"),
-            border_radius: vmin(3.0),
-            border_width: px(1.5),
-            border_color: dockState.isFocused ? hex("#38BDF8") : hex("#4B5563"),
-            flex_direction: "Row",
-            justify_content: "SpaceBetween",
-            align_items: "Center",
-            padding: padXY(vmin(3.5), vmin(1.0)),
-        }, [
-            Container("dock_text_wrapper", {
-                width: "Auto",
-                height: "Auto",
-                flex_direction: "Row",
-                align_items: "Center",
-                gap: vmin(2.0),
-            }, [
-                Label("dock_search_icon", "🔍", {
-                    text_color: hex("#38BDF8"),
-                    text_size: vmin(4.0),
-                    width: "Auto",
-                }),
-                Label("dock_input_text_port", textToShow, {
-                    text_color: isPlaceholder ? hex("#6B7280") : hex("#F9FAFB"),
-                    text_size: vmin(3.6),
-                    width: "Auto",
-                })
-            ]),
-
-            // Temizle / Klavye Butonu
-            Container("dock_btn_clear", {
-                width: px(vmin(7.0)),
-                height: px(vmin(7.0)),
-                background_color: dockState.inputText ? hex("#EF444433") : hex("#374151"),
-                border_radius: vmin(3.5),
+        }, dockState.essentialApps.map(function(app) {
+            const btnSize = vmin(14.0);
+            return Container("dock_app_btn_" + app.package_name, {
+                width: px(btnSize),
+                height: px(btnSize),
+                background_color: hex("#1A2234"),
+                border_radius: btnSize / 2.0,
+                border_width: px(1.0),
+                border_color: hex("#334155AA"),
                 justify_content: "Center",
                 align_items: "Center",
             }, [
-                Label("dock_clear_lbl_icon", dockState.inputText ? "✕" : "⌨", {
-                    text_color: dockState.inputText ? hex("#EF4444") : hex("#9CA3AF"),
-                    text_size: vmin(3.5),
-                    width: "Auto",
-                })
-            ])
-        ]),
+                Container("dock_circle_" + app.id, {
+                    width: px(btnSize * 0.78),
+                    height: px(btnSize * 0.78),
+                    border_radius: (btnSize * 0.78) / 2.0,
+                    background_color: hex(app.color),
+                    justify_content: "Center",
+                    align_items: "Center",
+                }, [
+                    Label("dock_app_icon_" + app.id, app.iconLetter, {
+                        text_color: hex("#FFFFFF"),
+                        text_size: vmin(5.6),
+                        width: "Auto",
+                    })
+                ])
+            ]);
+        })),
 
-        // Alt Bilgi Çizgisi
-        Container("dock_bottom_indicator", {
-            width: px(vmin(25.0)),
+        // Alt Home Göstergesi
+        Container("dock_home_indicator", {
+            width: px(vmin(28.0)),
             height: px(3.0),
-            background_color: hex("#4B5563"),
+            background_color: hex("#47556988"),
             border_radius: px(1.5),
         }, [])
     ]);
 }
 
-// 5. Olay Dinleyicisi (Tıklamalar, Klavye Girdileri)
+// 5. Olay Dinleyicisi
 globalThis.onEvent = function(eventJsonString) {
     const e = typeof eventJsonString === "string" ? JSON.parse(eventJsonString) : eventJsonString;
 
     if (e.type === "Click") {
         const idStr = String(e.id || "");
 
-        // Input barına tıklandığında klavyeyi aç (Focus Input)
-        if (idStr.includes("dock_input_bar") || idStr.includes("dock_text_wrapper") || idStr.includes("dock_search_icon")) {
-            dockState.isFocused = true;
-            if (typeof focusInput === "function") {
-                focusInput("dock_search_input");
+        // Temel Uygulamayı Başlat
+        if (idStr.startsWith("dock_app_btn_")) {
+            const pkg = idStr.replace("dock_app_btn_", "");
+            host_log("[Dock Plugin] Launching essential app: " + pkg);
+            if (typeof launchApp === "function") {
+                launchApp(pkg);
             }
-            broadcastEvent("dock.stateChanged", {});
-            host_log("[Dock Plugin] Soft keyboard focus requested");
             return "[]";
         }
-
-        // Temizle butonuna tıklandığında
-        if (idStr.includes("dock_btn_clear")) {
-            dockState.inputText = "";
-            dockState.isFocused = false;
-            if (typeof blurInput === "function") {
-                blurInput();
-            }
-            // default_ui eklentisine arama metninin sıfırlandığını bildir!
-            broadcastEvent("dock.textChanged", { text: "" });
-            broadcastEvent("dock.stateChanged", {});
-            host_log("[Dock Plugin] Input cleared and broadcasted to default_ui");
-            return "[]";
-        }
-    }
-
-    // Metin Giriş Olayları (Klavyeden harf yazıldığında)
-    if (e.type === "TextInput" && typeof e.text === "string") {
-        dockState.inputText += e.text;
-        // default_ui eklentisine metin değişikliğini anında bildir!
-        broadcastEvent("dock.textChanged", { text: dockState.inputText });
-        broadcastEvent("dock.stateChanged", {});
-        host_log("[Dock Plugin] TextInput received: '" + e.text + "' => Total: '" + dockState.inputText + "'");
-        return "[]";
-    }
-
-    // Backspace (Silme tuşu)
-    if (e.type === "Backspace") {
-        if (dockState.inputText.length > 0) {
-            dockState.inputText = dockState.inputText.slice(0, -1);
-            broadcastEvent("dock.textChanged", { text: dockState.inputText });
-            broadcastEvent("dock.stateChanged", {});
-            host_log("[Dock Plugin] Backspace applied => Total: '" + dockState.inputText + "'");
-        }
-        return "[]";
-    }
-
-    if (e.type === "ClickOutside") {
-        dockState.isFocused = false;
-        if (typeof blurInput === "function") {
-            blurInput();
-        }
-        broadcastEvent("dock.stateChanged", {});
-        return "[]";
     }
 
     return "[]";
