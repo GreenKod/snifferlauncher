@@ -48,4 +48,13 @@ pub trait UiPlugin: Send + Sync {
     /// * `channel` — The broadcast channel name (e.g. `"store.changed"`).
     /// * `payload_json` — A JSON string containing the broadcast data.
     fn on_broadcast(&self, _channel: &str, _payload_json: &str) {}
+
+    /// Called when the plugin is moved out of viewport / idle to suspend background ticks.
+    fn on_suspend(&self) {}
+
+    /// Called when the plugin becomes active again.
+    fn on_resume(&self) {}
+
+    /// Called when the plugin is being unloaded.
+    fn on_unload(&self) {}
 }

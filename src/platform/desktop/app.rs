@@ -47,11 +47,35 @@ pub struct AppState {
     pub transition_manager: crate::core::anim::TransitionManager,
 }
 
+#[must_use]
+pub fn detect_desktop_theme() -> crate::core::vault::SystemTheme {
+    #[cfg(target_os = "windows")]
+    {
+        // Check Windows Personalize registry for AppsUseLightTheme
+        use std::process::Command;
+        if let Ok(output) = Command::new("reg")
+            .args(["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "/v", "AppsUseLightTheme"])
+            .output()
+        {
+            let text = String::from_utf8_lossy(&output.stdout);
+            if text.contains("0x1") {
+                return crate::core::vault::SystemTheme::light();
+            } else if text.contains("0x0") {
+                return crate::core::vault::SystemTheme::dark();
+            }
+        }
+    }
+    crate::core::vault::SystemTheme::dark()
+}
+
 impl AppState {
     #[must_use]
     pub fn new() -> Self {
         let mut plugin_registry = PluginRegistry::default();
         let action_queue = Arc::new(Mutex::new(Vec::new()));
+
+        let theme = detect_desktop_theme();
+        plugin_registry.vault().update_system_theme(theme);
 
         if let Ok(apps) = crate::platform::desktop::get_application_list() {
             plugin_registry.vault().update_system_apps(apps);
@@ -75,6 +99,10 @@ impl AppState {
             .unwrap_or_else(|| std::path::PathBuf::from(".plugins"));
 
         crate::dev_log!("Using plugins directory: {}", plugins_dir.display());
+
+        plugin_registry
+            .vault()
+            .set_cache_dir(plugins_dir.join(obfstr::obfstr!(".cache")));
 
         crate::plugin::PluginLoader::new(&plugins_dir)
             .register_all(&mut plugin_registry, &action_queue);
@@ -142,7 +170,6 @@ pub fn run_loop(
 ) -> Result<(), String> {
     let mut last_frame_time = std::time::Instant::now();
     let mut input = FrameInputState::default();
-    let mut is_animating = false;
 
     desktop.window.request_redraw();
 
@@ -183,7 +210,7 @@ pub fn run_loop(
                         });
 
                         app.transition_manager.sync_tree(&root_element);
-                        let anim_needs_redraw = app.transition_manager.tick(dt);
+                        let _ = app.transition_manager.tick(dt);
 
                         let (log_w, log_h) = desktop.size();
                         let (phys_w, phys_h) = desktop.drawable_size();
@@ -585,12 +612,6 @@ pub fn run_loop(
                         let _ = desktop.swap_buffers();
 
                         input = FrameInputState::default();
-
-                        let kinetic_active = !app.kinetic_scrolls.is_empty();
-                        is_animating = anim_needs_redraw || kinetic_active;
-                        if is_animating {
-                            desktop.window.request_redraw();
-                        }
                     }
                     _ => {}
                 }
@@ -604,13 +625,10 @@ pub fn run_loop(
                     return;
                 }
 
-                if is_animating {
-                    active_event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
-                        std::time::Instant::now() + Duration::from_millis(16),
-                    ));
-                } else {
-                    active_event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
-                }
+                desktop.window.request_redraw();
+                active_event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
+                    std::time::Instant::now() + Duration::from_millis(16),
+                ));
             }
             _ => {}
         })

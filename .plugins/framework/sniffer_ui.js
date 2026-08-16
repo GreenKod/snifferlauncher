@@ -372,6 +372,22 @@ const Vault = globalThis.Vault || {
     },
     subscribe: function(k, cb) {
         if (typeof subscribeChannel === "function") subscribeChannel("vault.changed:" + k, cb);
+    },
+    saveFile: function(fileName, base64Content) {
+        return typeof host_vault_save_file === "function" ? host_vault_save_file(String(fileName), String(base64Content)) : "";
+    },
+    readFile: function(fileName) {
+        return typeof host_vault_read_file === "function" ? host_vault_read_file(String(fileName)) : null;
+    },
+    deleteFile: function(fileName) {
+        return typeof host_vault_delete_file === "function" ? host_vault_delete_file(String(fileName)) : false;
+    },
+    listFiles: function() {
+        if (typeof host_vault_list_files !== "function") return [];
+        try { return JSON.parse(host_vault_list_files()); } catch(e) { return []; }
+    },
+    getFileUrl: function(fileName) {
+        return "vault://" + String(fileName).replace(/^vault:\/\//, "");
     }
 };
 
@@ -390,7 +406,39 @@ const Theme = {
         border:     hex("#334155")
     },
     spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
-    radius:  { sm: 8, md: 12, lg: 16 }
+    radius:  { sm: 8, md: 12, lg: 16 },
+
+    /**
+     * Get the active operating system theme.
+     * @returns {{is_dark: boolean, mode: string, accent_color: string, bg_color: string, text_color: string, card_bg: string}}
+     */
+    getSystemTheme: function() {
+        return Vault.get("system.theme", {
+            is_dark: true,
+            mode: "dark",
+            accent_color: "#38BDF8",
+            bg_color: "#0F172A",
+            text_color: "#F8FAFC",
+            card_bg: "#1E293B"
+        });
+    },
+
+    /**
+     * Check if the device is currently in Dark Mode.
+     * @returns {boolean}
+     */
+    isDarkMode: function() {
+        const t = this.getSystemTheme();
+        return t ? t.is_dark !== false : true;
+    },
+
+    /**
+     * Listen for system dark/light theme changes reactively.
+     * @param {function} callback
+     */
+    onSystemThemeChange: function(callback) {
+        Vault.subscribe("system.theme", callback);
+    }
 };
 
 /**

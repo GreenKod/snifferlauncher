@@ -146,6 +146,91 @@ globalThis.Vault = {
         if (typeof subscribeChannel === "function") {
             subscribeChannel("vault.changed:" + key, callback);
         }
+    },
+
+    /**
+     * Save a binary file or image to the plugin's isolated file vault.
+     * @param {string} fileName
+     * @param {string} base64Content
+     * @returns {string} - The "vault://fileName" URI for rendering.
+     */
+    saveFile: function(fileName, base64Content) {
+        if (typeof host_vault_save_file !== "function") return "";
+        return host_vault_save_file(String(fileName), String(base64Content));
+    },
+
+    /**
+     * Read a binary file or image from the plugin's isolated file vault as Base64.
+     * @param {string} fileName
+     * @returns {string|null} - Base64 string or null if not found.
+     */
+    readFile: function(fileName) {
+        if (typeof host_vault_read_file !== "function") return null;
+        return host_vault_read_file(String(fileName));
+    },
+
+    /**
+     * Delete a file from the plugin's isolated file vault.
+     * @param {string} fileName
+     * @returns {boolean}
+     */
+    deleteFile: function(fileName) {
+        if (typeof host_vault_delete_file !== "function") return false;
+        return host_vault_delete_file(String(fileName));
+    },
+
+    /**
+     * List all files in the plugin's isolated file vault.
+     * @returns {string[]}
+     */
+    listFiles: function() {
+        if (typeof host_vault_list_files !== "function") return [];
+        try {
+            return JSON.parse(host_vault_list_files());
+        } catch(e) {
+            return [];
+        }
+    },
+
+    /**
+     * Get the rendering URI for a file in the vault.
+     * @param {string} fileName
+     * @returns {string}
+     */
+    getFileUrl: function(fileName) {
+        return "vault://" + String(fileName).replace(/^vault:\/\//, "");
+    },
+
+    /**
+     * Get the active operating system theme.
+     * @returns {{is_dark: boolean, mode: string, accent_color: string, bg_color: string, text_color: string, card_bg: string}}
+     */
+    getTheme: function() {
+        return this.get("system.theme", {
+            is_dark: true,
+            mode: "dark",
+            accent_color: "#38BDF8",
+            bg_color: "#0F172A",
+            text_color: "#F8FAFC",
+            card_bg: "#1E293B"
+        });
+    },
+
+    /**
+     * Check if system is currently in Dark Mode.
+     * @returns {boolean}
+     */
+    isDarkMode: function() {
+        const t = this.getTheme();
+        return t ? t.is_dark !== false : true;
+    },
+
+    /**
+     * Listen for system theme changes.
+     * @param {function} callback
+     */
+    onThemeChange: function(callback) {
+        this.subscribe("system.theme", callback);
     }
 };
 

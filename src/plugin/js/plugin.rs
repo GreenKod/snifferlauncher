@@ -28,6 +28,9 @@ pub enum PluginMsg {
         payload: String,
         responder: Sender<Option<String>>,
     },
+    Suspend,
+    Resume,
+    Unload,
 }
 
 #[allow(dead_code)]
@@ -128,6 +131,7 @@ impl JsPlugin {
             }
 
             let mut gc_count = 0u32;
+            let mut is_suspended = false;
             while let Ok(msg) = msg_rx.recv() {
                 match msg {
                     PluginMsg::Event(event) => {
@@ -176,16 +180,18 @@ impl JsPlugin {
                         });
                     }
                     PluginMsg::Tick => {
-                        gc_count += 1;
-                        if gc_count >= 300 {
-                            gc_count = 0;
-                            runtime.run_gc();
-                        }
-                        context.with(|ctx| {
-                            if let Ok(handler) = ctx.globals().get::<_, rquickjs::Function>("_onTimerTick") {
-                                let _ = handler.call::<_, ()>(());
+                        if !is_suspended {
+                            gc_count += 1;
+                            if gc_count >= 300 {
+                                gc_count = 0;
+                                runtime.run_gc();
                             }
-                        });
+                            context.with(|ctx| {
+                                if let Ok(handler) = ctx.globals().get::<_, rquickjs::Function>("_onTimerTick") {
+                                    let _ = handler.call::<_, ()>(());
+                                }
+                            });
+                        }
                     }
                     PluginMsg::Broadcast { channel, payload } => {
                         context.with(|ctx| {
@@ -210,6 +216,17 @@ impl JsPlugin {
                             }
                         });
                         let _ = responder.send(result);
+                    }
+                    PluginMsg::Suspend => {
+                        is_suspended = true;
+                        runtime.run_gc();
+                    }
+                    PluginMsg::Resume => {
+                        is_suspended = false;
+                    }
+                    PluginMsg::Unload => {
+                        runtime.run_gc();
+                        break;
                     }
                 }
             }
@@ -254,5 +271,17 @@ impl UiPlugin for JsPlugin {
             channel: channel.to_string(),
             payload: payload_json.to_string(),
         });
+    }
+
+    fn on_suspend(&self) {
+        let _ = self.msg_tx.send(PluginMsg::Suspend);
+    }
+
+    fn on_resume(&self) {
+        let _ = self.msg_tx.send(PluginMsg::Resume);
+    }
+
+    fn on_unload(&self) {
+        let _ = self.msg_tx.send(PluginMsg::Unload);
     }
 }

@@ -126,6 +126,20 @@ impl PluginRegistry {
         }
     }
 
+    /// Suspend all registered plugins (e.g. when launcher goes to background).
+    pub fn suspend_all(&self) {
+        for plugin in &self.plugins {
+            plugin.on_suspend();
+        }
+    }
+
+    /// Resume all registered plugins (e.g. when launcher returns to foreground).
+    pub fn resume_all(&self) {
+        for plugin in &self.plugins {
+            plugin.on_resume();
+        }
+    }
+
     /// Dispatch all queued events to their respective plugin listeners,
     /// then drain and broadcast any pending inter-plugin broadcast messages.
     ///

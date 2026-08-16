@@ -52,6 +52,10 @@ impl AppState {
         let mut plugin_registry = PluginRegistry::default();
         let action_queue = Arc::new(Mutex::new(Vec::new()));
 
+        plugin_registry
+            .vault()
+            .update_system_theme(crate::core::vault::SystemTheme::default());
+
         if let Ok(apps) = crate::platform::android::jni::get_application_list() {
             if !apps.is_empty() {
                 plugin_registry.vault().update_system_apps(apps);
