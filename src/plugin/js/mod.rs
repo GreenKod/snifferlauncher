@@ -1,23 +1,26 @@
 pub mod bindings_app;
 pub mod bindings_ui;
+pub mod bindings_vault;
 pub mod engine;
 pub mod permission_manager;
 pub mod plugin;
 
 use crate::core::types::Element;
+use crate::core::vault::DataVault;
 use crate::dev_log;
 use crate::plugin::registry::{ApiMap, BroadcastQueue};
+use crossbeam_channel::Sender;
 use obfstr::obfstr;
 use rquickjs::Function;
 use std::sync::{Arc, Mutex};
 
-pub use bindings_app::SafeContext;
-pub use plugin::{JsPlugin, JsPluginConfig};
+pub use plugin::{JsPlugin, JsPluginConfig, PluginMsg};
 
 /// Configuration bundle passed to `register_host_api`.
 pub struct HostApiConfig {
     pub plugin_id: String,
-    pub context: rquickjs::Context,
+    pub msg_tx: Sender<PluginMsg>,
+    pub vault: Arc<DataVault>,
     pub ui_tree: Arc<Mutex<Option<Element>>>,
     pub action_queue: Arc<Mutex<Vec<crate::core::types::Action>>>,
     pub api_map: ApiMap,
@@ -32,7 +35,8 @@ pub struct HostApiConfig {
 pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let HostApiConfig {
         plugin_id,
-        context,
+        msg_tx,
+        vault,
         ui_tree,
         action_queue,
         api_map,
@@ -114,12 +118,20 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     bindings_app::register_app_bindings(
         ctx,
         &globals,
-        plugin_id,
-        context,
+        plugin_id.clone(),
+        msg_tx,
         action_queue,
         api_map,
         broadcast_queue,
         &plugin_permissions,
         granted_permissions,
+    );
+
+    // Register Native Data Vault bindings
+    bindings_vault::register_vault_bindings(
+        ctx,
+        &globals,
+        plugin_id,
+        vault,
     );
 }

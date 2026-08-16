@@ -33,13 +33,13 @@ $env:CXXFLAGS = $cflags
 
 Write-Host "Building anonymous Desktop release binary..." -ForegroundColor Cyan
 
-cargo build --release --bin snifferlauncher
+cargo build --release --bin snifferlauncher-desktop
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Cargo desktop build failed!" -ForegroundColor Red
     exit $LASTEXITCODE
 }
 
-$exePath = "target/release/snifferlauncher.exe"
+$exePath = "target/release/snifferlauncher-desktop.exe"
 $releasePluginsDir = "target/release/.plugins"
 
 Write-Host "Bundling .plugins directory and plugin manifests..." -ForegroundColor Cyan

@@ -17,6 +17,7 @@ pub struct KineticScroll {
 
 pub struct AppState {
     pub running: bool,
+    pub touch_start_pos: Point,
     pub last_touch_pos: Point,
     pub hovered_btn: Option<u64>,
     pub active_scrollview_drag: Option<u64>,
@@ -42,7 +43,7 @@ pub struct AppState {
     pub memory_pressure_pending: bool,
     pub virtual_page_manager: crate::core::virtualization::VirtualPageManager,
     pub total_touch_drag_distance: f32,
-    pub profiler: crate::core::profiler::FrameProfiler,
+    pub profiler: Arc<Mutex<crate::core::profiler::FrameProfiler>>,
 }
 
 impl AppState {
@@ -50,6 +51,12 @@ impl AppState {
     pub fn new(app: &AndroidApp) -> Self {
         let mut plugin_registry = PluginRegistry::default();
         let action_queue = Arc::new(Mutex::new(Vec::new()));
+
+        if let Ok(apps) = crate::platform::android::jni::get_application_list() {
+            if !apps.is_empty() {
+                plugin_registry.vault().update_system_apps(apps);
+            }
+        }
 
         crate::plugin::PluginLoader::register_all_from_assets(
             &mut plugin_registry,
@@ -59,6 +66,7 @@ impl AppState {
 
         Self {
             running: true,
+            touch_start_pos: Point::zero(),
             last_touch_pos: Point::zero(),
             hovered_btn: None,
             active_scrollview_drag: None,
@@ -84,7 +92,7 @@ impl AppState {
             memory_pressure_pending: false,
             virtual_page_manager: crate::core::virtualization::VirtualPageManager::new(),
             total_touch_drag_distance: 0.0,
-            profiler: crate::core::profiler::FrameProfiler::default(),
+            profiler: Arc::new(Mutex::new(crate::core::profiler::FrameProfiler::default())),
         }
     }
 

@@ -2,6 +2,36 @@
 // Rust scroll fizik motorunu kullanır.
 // JS'in isDragging / dragOffset / kinetic scroll takip etmesine gerek yok.
 
+function getDockElement(isLandscape) {
+    let dockUI = null;
+    if (typeof callApi === "function") {
+        try {
+            dockUI = callApi("dock.getUI", { isLandscape: isLandscape });
+        } catch (e) {
+            dockUI = null;
+        }
+    }
+    if (dockUI) {
+        return dockUI;
+    }
+
+    // Fallback if dock plugin is still initializing
+    return Container("dock_fallback_area", {
+        width: isLandscape ? px(vw(16.0)) : pct(100),
+        height: isLandscape ? pct(100) : px(vh(16.0)),
+        border_width: px(1.0),
+        border_color: hex("#ffffff18"),
+        justify_content: "Center",
+        align_items: "Center",
+    }, [
+        Label("dock_fallback_label", "⚡ Dock Bağlanıyor...", {
+            text_color: hex("#AAAAAA"),
+            text_size: vmin(3.5),
+            width: "Auto",
+        })
+    ]);
+}
+
 function Root() {
     const isLandscape = vw(100) > vh(100);
 
@@ -10,43 +40,13 @@ function Root() {
             width: pct(100),
             height: pct(100),
             position: "Relative",
-            background_color: hex(state.bgColor),
+            background_color: state.bgColor ? hex(state.bgColor) : undefined,
             flex_direction: "Row",
             justify_content: "Start",
             align_items: "Stretch",
         }, [
             ...AppGridComponent(),
-
-            Container("task_manager_reserved_area", {
-                width: px(vw(16.0)),
-                height: pct(100),
-                background_color: hex("#0B0B0E"),
-                flex_direction: "Column",
-                justify_content: "Center",
-                align_items: "Center",
-                gap: vh(1.2),
-            }, [
-                Label("tm_reserved_l1", "G Ö R E V", {
-                    text_color: hex("#333344"),
-                    text_size: vw(1.4),
-                    width: "Auto",
-                }),
-                Label("tm_reserved_l2", "Y Ö N E T İ C İ S İ", {
-                    text_color: hex("#333344"),
-                    text_size: vw(1.2),
-                    width: "Auto",
-                }),
-                Label("tm_reserved_l3", "A L A N I", {
-                    text_color: hex("#333344"),
-                    text_size: vw(1.4),
-                    width: "Auto",
-                }),
-                Label("tm_reserved_l4", "(%16)", {
-                    text_color: hex("#333344"),
-                    text_size: vw(1.2),
-                    width: "Auto",
-                })
-            ])
+            getDockElement(true)
         ]);
     }
 
@@ -54,44 +54,52 @@ function Root() {
         width: pct(100),
         height: pct(100),
         position: "Relative",
-        background_color: hex(state.bgColor),
+        background_color: state.bgColor ? hex(state.bgColor) : undefined,
         flex_direction: "Column",
         justify_content: "Start",
         align_items: "Stretch",
     }, [
         ...AppGridComponent(),
-
-        Container("task_manager_reserved_area", {
-            width: pct(100),
-            height: px(vh(16.0)),
-            background_color: hex("#0B0B0E"),
-            justify_content: "Center",
-            align_items: "Center",
-        }, [
-            Label("tm_reserved_label", "Görev Yöneticisi Alanı (%16)", {
-                text_color: hex("#333344"),
-                text_size: vmin(4.0),
-                width: "Auto",
-            })
-        ])
+        getDockElement(false)
     ]);
 }
 
-subscribeChannel("clock.secondChanged", function(eventData) {});
-
-// Cihaz gerçek uygulamaları yükleyene kadar (arka plan thread'i bitene kadar) kontrol et
-let _retryInterval = setInterval(() => {
-    if (state.allApps.length > 0 && state.allApps[0].id === "mock_app_1") {
-        let realApps = getApplicationList();
-        if (realApps.length > 0) {
-            state.refreshApps();
-            SnifferUI.forceUpdate();
-            clearInterval(_retryInterval);
-        }
-    } else {
-        clearInterval(_retryInterval);
+// Eklentiler Arası İletişim (IPC): Dock eklentisinden gelen yayınları dinle
+subscribeChannel("dock.ready", function() {
+    SnifferUI.forceUpdate();
+    if (typeof broadcastEvent === "function") {
+        broadcastEvent("default_ui.stats", { appCount: state.allApps.length });
     }
-}, 100);
+});
+
+subscribeChannel("dock.stateChanged", function() {
+    SnifferUI.forceUpdate();
+});
+
+subscribeChannel("dock.textChanged", function(data) {
+    if (data && typeof data.text === "string") {
+        state.searchQuery = data.text;
+        SnifferUI.forceUpdate();
+        if (typeof broadcastEvent === "function") {
+            broadcastEvent("default_ui.stats", { appCount: state.filteredApps.length });
+        }
+    }
+});
+
+// Native Data Vault Reaktif Dinleyici (Polling yerine)
+if (typeof Vault !== "undefined" && typeof Vault.subscribe === "function") {
+    Vault.subscribe("system.apps", function() {
+        state.refreshApps();
+        SnifferUI.forceUpdate();
+        if (typeof broadcastEvent === "function") {
+            broadcastEvent("default_ui.stats", { appCount: state.allApps.length });
+        }
+    });
+}
+
+if (typeof broadcastEvent === "function") {
+    broadcastEvent("default_ui.stats", { appCount: state.allApps.length });
+}
 
 let _hasInitialRefreshed = false;
 
@@ -137,10 +145,18 @@ globalThis.onEvent = function (eventJsonString) {
         return "[]";
     }
 
-    if (e.type === "Click" && e.id) {
-        const pkg = state.getAppPackageByHash(String(e.id));
+    if (e.type === "Click") {
+        const idStr = String(e.id || "");
+        const pkg = state.getAppPackageByHash(idStr);
+        if (typeof host_log === "function") {
+            host_log("[SnifferLauncher JS] Click received for ID: " + idStr + " => Resolved Package: " + (pkg || "null"));
+        }
         if (pkg) {
             launchApp(pkg);
+        } else {
+            if (typeof host_log === "function") {
+                host_log("[SnifferLauncher JS] No package found for ID: " + idStr);
+            }
         }
         return "[]";
     }

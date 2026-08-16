@@ -1830,6 +1830,7 @@ dependencies = [
  "khronos-egl",
  "ndk",
  "ndk-context",
+ "ndk-sys",
  "obfstr",
  "postcard",
  "rquickjs",

@@ -1,28 +1,39 @@
-/// Developer Kit logging macros controlled by the `devkit` Cargo feature.
-///
-/// When `devkit` feature is NOT enabled (standard release production build):
-/// - `if cfg!(feature = "devkit")` evaluates to `if false { ... }`.
-/// - Dead-code elimination (DCE) removes the call, text strings, and formatting code.
-/// - 0 runtime overhead, 0 plaintext log/error strings in binary.
-///
-/// When `devkit` feature IS enabled (`cargo build --features devkit`):
-/// - `if cfg!(feature = "devkit")` evaluates to `if true { ... }`.
-/// - Full debug logging is enabled for plugin developers to diagnose IPC calls, permissions, and manifest issues.
+#[cfg(target_os = "android")]
+#[allow(unused_extern_crates)]
+unsafe extern "C" {
+    fn __android_log_write(prio: i32, tag: *const std::ffi::c_char, text: *const std::ffi::c_char) -> i32;
+}
+
+#[cfg(target_os = "android")]
+pub fn android_log(prio: i32, msg: &str) {
+    if let (Ok(c_tag), Ok(c_msg)) = (
+        std::ffi::CString::new("SnifferLauncher"),
+        std::ffi::CString::new(msg),
+    ) {
+        unsafe {
+            __android_log_write(prio, c_tag.as_ptr(), c_msg.as_ptr());
+        }
+    }
+}
 
 #[macro_export]
 macro_rules! dev_log {
-    ($($arg:tt)*) => {
-        if cfg!(feature = "devkit") {
-            println!($($arg)*);
-        }
-    };
+    ($($arg:tt)*) => {{
+        let msg = format!($($arg)*);
+        #[cfg(target_os = "android")]
+        $crate::core::log::android_log(4, &msg);
+        #[cfg(not(target_os = "android"))]
+        println!("{msg}");
+    }};
 }
 
 #[macro_export]
 macro_rules! dev_err {
-    ($($arg:tt)*) => {
-        if cfg!(feature = "devkit") {
-            eprintln!($($arg)*);
-        }
-    };
+    ($($arg:tt)*) => {{
+        let msg = format!($($arg)*);
+        #[cfg(target_os = "android")]
+        $crate::core::log::android_log(6, &msg);
+        #[cfg(not(target_os = "android"))]
+        eprintln!("{msg}");
+    }};
 }

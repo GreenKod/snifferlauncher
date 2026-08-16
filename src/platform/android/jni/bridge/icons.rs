@@ -237,6 +237,53 @@ pub(crate) fn extract_drawable_pixels(
     Ok(rgba_bytes)
 }
 
+fn get_icon_cache_dir_path(env: &mut Env) -> std::path::PathBuf {
+    let ctx = context(env);
+    let path_res: Result<String, JniError> = (|| {
+        let files_dir = env.call_method(&ctx, jni_str!("getCacheDir"), jni_sig!("()Ljava/io/File;"), &[])?.l()?;
+        let path_obj = env.call_method(&files_dir, jni_str!("getAbsolutePath"), jni_sig!("()Ljava/lang/String;"), &[])?.l()?;
+        let path_jstring = env.as_cast::<jni::objects::JString>(&path_obj)?;
+        let path_str = path_jstring.try_to_string(env)?;
+        Ok(path_str)
+    })();
+
+    let base = path_res.unwrap_or_else(|_| "/data/data/com.greenkod.snifferlauncher/cache".to_string());
+    let dir = std::path::PathBuf::from(base).join("icons");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
+fn load_icon_from_disk(env: &mut Env, package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
+    let dir = get_icon_cache_dir_path(env);
+    let path = dir.join(format!("{package_name}.raw"));
+    if let Ok(data) = std::fs::read(&path) {
+        if data.len() >= 8 {
+            let width = u32::from_le_bytes(data[0..4].try_into().ok()?);
+            let height = u32::from_le_bytes(data[4..8].try_into().ok()?);
+            let expected = 8 + (width as usize) * (height as usize) * 4;
+            if data.len() == expected {
+                let pixels = data[8..].to_vec();
+                return Some((pixels, width, height));
+            }
+        }
+        let _ = std::fs::remove_file(path);
+    }
+    None
+}
+
+fn save_icon_to_disk(env: &mut Env, package_name: &str, pixels: &[u8], width: u32, height: u32) {
+    let dir = get_icon_cache_dir_path(env);
+    let path = dir.join(format!("{package_name}.raw"));
+    let tmp_path = dir.join(format!("{package_name}.tmp"));
+    let mut data = Vec::with_capacity(8 + pixels.len());
+    data.extend_from_slice(&width.to_le_bytes());
+    data.extend_from_slice(&height.to_le_bytes());
+    data.extend_from_slice(pixels);
+    if std::fs::write(&tmp_path, data).is_ok() {
+        let _ = std::fs::rename(&tmp_path, path);
+    }
+}
+
 /// Retrieves the application icon for a given package name and returns it as a raw RGBA pixel buffer.
 /// Returns `Option<(pixels, width, height)>`.
 #[must_use]
@@ -253,6 +300,10 @@ pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
 }
 
 pub(crate) fn get_app_icon_pixels_inner(env: &mut Env, package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
+    if let Some(cached) = load_icon_from_disk(env, package_name) {
+        return Some(cached);
+    }
+
     let result: Result<(Vec<u8>, u32, u32), JniError> = (|| {
         let ctx = context(env);
 
@@ -326,7 +377,11 @@ pub(crate) fn get_app_icon_pixels_inner(env: &mut Env, package_name: &str) -> Op
             }
         };
 
-        Ok((rgba_bytes, width.cast_unsigned(), height.cast_unsigned()))
+        let w = width.cast_unsigned();
+        let h = height.cast_unsigned();
+        save_icon_to_disk(env, package_name, &rgba_bytes, w, h);
+
+        Ok((rgba_bytes, w, h))
     })();
 
     result.ok()

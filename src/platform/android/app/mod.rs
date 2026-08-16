@@ -5,7 +5,6 @@ pub use physics_sync::ScrollPhysics;
 pub use state::{AppState, KineticScroll};
 
 use crate::core::render::draw::draw_ui;
-use crate::core::style::BACKGROUND;
 use crate::core::ui::event::UiEvent;
 use crate::core::{calculate_layout, Renderer, ScreenMetrics, Size};
 use crate::dev_err;
@@ -42,22 +41,29 @@ pub struct SharedRenderState {
 pub fn android_main(app: AndroidApp) {
     crate::platform::android::jni::bridge::init_app_list_cache();
     crate::platform::android::jni::bridge::init_icon_worker_pool();
+    crate::platform::android::jni::bridge::set_show_wallpaper_flag(&app);
 
     let mut state = AppState::new(&app);
+
+    let (initial_width, initial_height) = app.native_window().map_or((1080.0, 1920.0), |window| {
+        let w = f32::from(u16::try_from(window.width()).unwrap_or(1080));
+        let h = f32::from(u16::try_from(window.height()).unwrap_or(1920));
+        if w > 0.0 && h > 0.0 { (w, h) } else { (1080.0, 1920.0) }
+    });
 
     let initial_root = crate::core::types::Element::Container {
         id: None,
         style: crate::core::style::Style::default(),
         children: vec![],
     };
-    let initial_layout = Arc::new(crate::core::layout::LayoutNode::new(initial_root.clone(), crate::core::Rect { x: 0.0, y: 0.0, width: 1080.0, height: 1920.0 }));
+    let initial_layout = Arc::new(crate::core::layout::LayoutNode::new(initial_root.clone(), crate::core::Rect { x: 0.0, y: 0.0, width: initial_width, height: initial_height }));
 
     let mut root_element = initial_root.clone();
 
     let shared_render_state = Arc::new(RwLock::new(Arc::new(SharedRenderState {
         root_element: initial_root,
         layout_tree: initial_layout,
-        metrics: ScreenMetrics::default_mdpi(1080.0, 1920.0),
+        metrics: ScreenMetrics::default_mdpi(initial_width, initial_height),
         style_map: state.style_map.clone(),
         data_map: state.data_map.clone(),
         transition_manager: state.transition_manager.clone(),
@@ -69,7 +75,7 @@ pub fn android_main(app: AndroidApp) {
     let render_app_clone = app.clone();
     let render_state_clone = shared_render_state.clone();
     let action_queue_clone = state.action_queue.clone();
-    let profiler_clone = Arc::new(std::sync::Mutex::new(crate::core::profiler::FrameProfiler::default()));
+    let profiler_clone = state.profiler.clone();
 
     std::thread::spawn(move || {
         let mut egl_state: Option<EglContextState> = None;
@@ -180,11 +186,6 @@ pub fn android_main(app: AndroidApp) {
                         let width = current_state.metrics.physical_width;
                         let height = current_state.metrics.physical_height;
 
-                        if width > 0.0 && height > 0.0 && !renderer.has_image("__system_wallpaper__") {
-                            if let Some((pixels, w, h)) = crate::platform::android::jni::bridge::get_system_wallpaper_pixels(width as u32, height as u32) {
-                                renderer.load_wallpaper(&pixels, w, h);
-                            }
-                        }
 
                         while let Some(res) = crate::platform::android::jni::bridge::poll_async_app_icon() {
                             let image_id = format!("{}{}", obfstr!("app-icon://"), res.package_name);
@@ -203,8 +204,7 @@ pub fn android_main(app: AndroidApp) {
                             }
                         }
 
-                        renderer.clear(BACKGROUND);
-                        renderer.draw_wallpaper(width, height);
+                        renderer.clear(0x00000000); // Fully transparent — OS compositor renders wallpaper behind
 
                         let rendered_nodes = draw_ui(
                             renderer,
@@ -285,6 +285,17 @@ pub fn android_main(app: AndroidApp) {
                         if let Some(window) = app.native_window() {
                             let width = f32::from(u16::try_from(window.width()).unwrap_or(0));
                             let height = f32::from(u16::try_from(window.height()).unwrap_or(0));
+                            let (top_sa, bot_sa) = crate::platform::android::jni::get_safe_area(&app)
+                                .map(|(top, bottom)| {
+                                    (
+                                        f32::from(i16::try_from(top).unwrap_or(0)),
+                                        f32::from(i16::try_from(bottom).unwrap_or(0)),
+                                    )
+                                })
+                                .unwrap_or((0.0, 0.0));
+                            let content_h = height - top_sa - bot_sa;
+                            crate::core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                            crate::core::types::SCREEN_HEIGHT.store(content_h.to_bits(), std::sync::atomic::Ordering::Relaxed);
                             state.event_bus.push(UiEvent::WindowResized(width, height));
                             
                             let native_window_ptr = window.ptr().as_ptr().cast::<std::ffi::c_void>() as usize;
@@ -292,6 +303,8 @@ pub fn android_main(app: AndroidApp) {
                         }
                         state.cached_layout = None;
                         state.cached_max_scroll.clear();
+                        state.kinetic_scrolls.clear();
+                        state.active_scrollview_drag = None;
                         state.virtual_page_manager.invalidate_on_resize(&mut root_element);
                         needs_redraw = true;
                     }
@@ -301,6 +314,17 @@ pub fn android_main(app: AndroidApp) {
                         if let Some(window) = app.native_window() {
                             let width = f32::from(u16::try_from(window.width()).unwrap_or(0));
                             let height = f32::from(u16::try_from(window.height()).unwrap_or(0));
+                            let (top_sa, bot_sa) = crate::platform::android::jni::get_safe_area(&app)
+                                .map(|(top, bottom)| {
+                                    (
+                                        f32::from(i16::try_from(top).unwrap_or(0)),
+                                        f32::from(i16::try_from(bottom).unwrap_or(0)),
+                                    )
+                                })
+                                .unwrap_or((0.0, 0.0));
+                            let content_h = height - top_sa - bot_sa;
+                            crate::core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                            crate::core::types::SCREEN_HEIGHT.store(content_h.to_bits(), std::sync::atomic::Ordering::Relaxed);
                             state.event_bus.push(UiEvent::WindowResized(width, height));
                             
                             let native_window_ptr = window.ptr().as_ptr().cast::<std::ffi::c_void>() as usize;
@@ -308,6 +332,13 @@ pub fn android_main(app: AndroidApp) {
                         }
                         state.cached_layout = None;
                         state.cached_max_scroll.clear();
+                        state.kinetic_scrolls.clear();
+                        state.active_scrollview_drag = None;
+                        for phys in state.scroll_physics.values_mut() {
+                            phys.vel_x = 0.0;
+                            phys.vel_y = 0.0;
+                            phys.snap_target_x = None;
+                        }
                         state.virtual_page_manager.invalidate_on_resize(&mut root_element);
                         needs_redraw = true;
                     }
@@ -318,7 +349,8 @@ pub fn android_main(app: AndroidApp) {
                                     let layout_clone = if let Some(ref cached) = state.cached_layout {
                                         cached.clone()
                                     } else {
-                                        Arc::new(crate::core::layout::LayoutNode::new(root_element.clone(), crate::core::Rect { x: 0.0, y: 0.0, width: 1080.0, height: 1920.0 })) 
+                                        let (w, h) = app.native_window().map_or((1080.0, 1920.0), |win| (f32::from(u16::try_from(win.width()).unwrap_or(1080)), f32::from(u16::try_from(win.height()).unwrap_or(1920))));
+                                        Arc::new(crate::core::layout::LayoutNode::new(root_element.clone(), crate::core::Rect { x: 0.0, y: 0.0, width: w, height: h })) 
                                     };
                                     super::input::handle_input_event(
                                         input_event,
@@ -517,6 +549,8 @@ pub fn android_main(app: AndroidApp) {
                 }
             }
 
+            state.plugin_registry.tick();
+
             state.plugin_registry.dispatch(
                 &state.event_bus,
                 &state.style_map,
@@ -538,7 +572,9 @@ pub fn android_main(app: AndroidApp) {
                             remaining.push(crate::core::Action::LoadImage { id, src });
                         }
                         _ => {
-                            let _ = crate::platform::android::jni::intent::launch_action(action);
+                            if let Err(e) = crate::platform::android::jni::intent::launch_action(action) {
+                                crate::dev_err!("{}: {e}", obfstr!("Failed to launch action"));
+                            }
                         }
                     }
                 }

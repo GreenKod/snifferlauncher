@@ -184,7 +184,11 @@ pub(crate) fn sync_scroll_physics_from_tree(
                 });
                 if let (Some(new_snap_x), Some(old_snap_x)) = (*snap_x, entry.snap_x) {
                     if (new_snap_x - old_snap_x).abs() > 0.5 && !entry.is_dragging {
-                        entry.pos_x = (entry.last_snap_page as f32).max(0.0) * new_snap_x;
+                        let max_page = (entry.page_count.unwrap_or(1) as f32 - 1.0).max(0.0);
+                        let clamped_page = (entry.last_snap_page as f32).clamp(0.0, max_page);
+                        entry.pos_x = clamped_page * new_snap_x;
+                        entry.vel_x = 0.0;
+                        entry.vel_y = 0.0;
                         entry.snap_target_x = None;
                     }
                 }

@@ -120,12 +120,21 @@ fn main() {
     fs::write(&out_path, &output).expect("build.rs: failed to write encrypted_assets.rs");
 
     // Copy .plugins directory to build profile output directory (target/debug/.plugins or target/release/.plugins)
-    let out_dir_path = Path::new(&out_dir);
-    if let Some(profile_dir) = out_dir_path.ancestors().nth(3) {
-        let target_plugins = profile_dir.join(".plugins");
-        let src_plugins = Path::new(".plugins");
-        if src_plugins.exists() {
+    let src_plugins = Path::new(".plugins");
+    if src_plugins.exists() {
+        let out_dir_path = Path::new(&out_dir);
+        if let Some(profile_dir) = out_dir_path.ancestors().nth(3) {
+            let target_plugins = profile_dir.join(".plugins");
             let _ = copy_dir_all(src_plugins, &target_plugins);
+        }
+        // Also copy to standard target/debug and target/release if they exist
+        let debug_plugins = Path::new("target/debug/.plugins");
+        let release_plugins = Path::new("target/release/.plugins");
+        if Path::new("target/debug").exists() {
+            let _ = copy_dir_all(src_plugins, debug_plugins);
+        }
+        if Path::new("target/release").exists() {
+            let _ = copy_dir_all(src_plugins, release_plugins);
         }
     }
 }
