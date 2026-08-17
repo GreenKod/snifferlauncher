@@ -59,6 +59,7 @@ pub fn register_app_bindings<'js>(
         .unwrap();
 
     // host_launch_app
+    #[cfg(not(target_os = "android"))]
     let aq_launch = action_queue.clone();
     let launch_app_func = Function::new(ctx.clone(), move |package_name: String| {
         #[cfg(target_os = "android")]
@@ -67,8 +68,11 @@ pub fn register_app_bindings<'js>(
                 crate::dev_err!("{}: {e}", obfstr!("Direct host_launch_app failed"));
             }
         }
-        if let Ok(mut q) = aq_launch.lock() {
-            q.push(crate::core::types::Action::LaunchApp { package_name });
+        #[cfg(not(target_os = "android"))]
+        {
+            if let Ok(mut q) = aq_launch.lock() {
+                q.push(crate::core::types::Action::LaunchApp { package_name });
+            }
         }
     })
     .unwrap();

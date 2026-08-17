@@ -162,7 +162,20 @@ let state = {
 };
 state.rebuildCardHashCache();
 
-if (typeof Vault !== "undefined" && typeof Vault.subscribe === "function") {
+if (typeof subscribeChannel === "function") {
+    subscribeChannel("vault.changed:system.apps", function() {
+        state.refreshApps();
+        if (typeof SnifferUI !== "undefined" && typeof SnifferUI.forceUpdate === "function") {
+            SnifferUI.forceUpdate();
+        }
+    });
+    subscribeChannel("system.apps", function() {
+        state.refreshApps();
+        if (typeof SnifferUI !== "undefined" && typeof SnifferUI.forceUpdate === "function") {
+            SnifferUI.forceUpdate();
+        }
+    });
+} else if (typeof Vault !== "undefined" && typeof Vault.subscribe === "function") {
     Vault.subscribe("system.apps", function() {
         state.refreshApps();
         if (typeof SnifferUI !== "undefined" && typeof SnifferUI.forceUpdate === "function") {
