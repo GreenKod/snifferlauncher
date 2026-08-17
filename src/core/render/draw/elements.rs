@@ -57,13 +57,10 @@ pub(crate) fn draw_element_contents(
                 if bottom > max_y { max_y = bottom; }
             }
             let content_height = if min_y <= max_y { max_y - min_y } else { 0.0 };
-            let max_scroll_y = (content_height - rect.height).max(0.0);
             let safe_scroll_y = if scroll_y.is_nan() || scroll_y.is_infinite() { 0.0 } else { *scroll_y };
-            let actual_scroll_y = safe_scroll_y.clamp(0.0, max_scroll_y);
             let safe_scroll_x = if scroll_x.is_nan() || scroll_x.is_infinite() { 0.0 } else { *scroll_x };
-            let actual_scroll_x = safe_scroll_x.max(0.0);
 
-            renderer.push_transform(0.0, 0.0, 1.0, 0.0, -actual_scroll_x, -actual_scroll_y);
+            renderer.push_transform(0.0, 0.0, 1.0, 0.0, -safe_scroll_x, -safe_scroll_y);
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
                 rendered_children += draw_ui(
                     renderer,
@@ -74,8 +71,8 @@ pub(crate) fn draw_element_contents(
                     data_map,
                     transition_manager,
                     final_alpha,
-                    accumulated_scroll_x + actual_scroll_x,
-                    accumulated_scroll_y + actual_scroll_y,
+                    accumulated_scroll_x + safe_scroll_x,
+                    accumulated_scroll_y + safe_scroll_y,
                 );
             }
             renderer.pop_transform();

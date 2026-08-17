@@ -222,7 +222,14 @@ pub fn android_main(app: AndroidApp) {
                         #[cfg(feature = "devkit")]
                         {
                             if let Ok(prof) = profiler_clone.lock() {
-                                crate::core::profiler::render_devkit_hud(renderer, &prof, rendered_nodes, width);
+                                crate::core::profiler::render_devkit_hud(
+                                    renderer,
+                                    &prof,
+                                    rendered_nodes,
+                                    width,
+                                    &current_state.root_element,
+                                    &current_state.layout_tree,
+                                );
                             }
                         }
 
@@ -255,6 +262,7 @@ pub fn android_main(app: AndroidApp) {
         if crate::platform::android::jni::bridge::apps::take_app_list_updated() {
             if let Ok(apps) = crate::platform::android::jni::get_application_list() {
                 state.plugin_registry.vault().update_system_apps(apps);
+                state.plugin_registry.broadcast("vault.changed:system.apps", "{}");
                 state.plugin_registry.broadcast("system.apps", "{}");
                 state.cached_layout = None;
                 state.layout_dirty = true;
@@ -455,7 +463,7 @@ pub fn android_main(app: AndroidApp) {
 
             let metrics = ScreenMetrics::from_scale(
                 width,
-                height - safe_area_top - safe_area_bottom,
+                height,
                 density,
                 scaled_density,
             );

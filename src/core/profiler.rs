@@ -122,12 +122,124 @@ pub fn count_elements(element: &crate::core::types::Element) -> usize {
     }
 }
 
+fn draw_touch_hitboxes(
+    renderer: &mut dyn crate::core::render::api::Renderer,
+    element: &crate::core::types::Element,
+    layout: &crate::core::layout::LayoutNode,
+) {
+    let elem_id = match element {
+        crate::core::types::Element::Container { id, .. }
+        | crate::core::types::Element::ScrollView { id, .. }
+        | crate::core::types::Element::SharedView { id, .. }
+        | crate::core::types::Element::Label { id, .. }
+        | crate::core::types::Element::Image { id, .. }
+        | crate::core::types::Element::TextInput { id, .. }
+        | crate::core::types::Element::Slider { id, .. }
+        | crate::core::types::Element::ProgressBar { id, .. }
+        | crate::core::types::Element::Checkbox { id, .. } => id,
+    };
+
+    let is_button = match elem_id {
+        Some(k) => {
+            k.starts_with("btn_")
+                || k.starts_with("dock_app_btn_")
+                || k.starts_with("dock_app_circle_")
+                || k.starts_with("fab_")
+                || k.starts_with("app_card_")
+                || k.starts_with("card_")
+                || k.starts_with("action_")
+                || k.starts_with("clock_")
+                || k.contains("btn")
+                || k.contains("card")
+                || k.contains("item")
+        }
+        None => matches!(
+            element,
+            crate::core::types::Element::TextInput { .. }
+                | crate::core::types::Element::Checkbox { .. }
+        ),
+    };
+
+    if is_button && layout.rect.width > 2.0 && layout.rect.height > 2.0 {
+        // Dock buttons have green/emerald accent, other buttons have cyan/sky accent
+        let is_dock = elem_id.as_ref().map_or(false, |k| k.contains("dock"));
+        let (fill_color, border_color, text_color) = if is_dock {
+            (0x284A_DE80, Some(0xEE4A_DE80), 0xFF4A_DE80)
+        } else {
+            (0x2038_BDF8, Some(0xDD38_BDF8), 0xFF38_BDF8)
+        };
+
+        // Draw bounding box
+        renderer.draw_rect(
+            layout.rect,
+            fill_color,
+            4.0,
+            1.5,
+            border_color,
+        );
+
+        // Draw tag text with id and dimensions
+        if let Some(k) = elem_id {
+            let label_name = if k.len() > 16 { &k[..16] } else { k.as_str() };
+            let tag = format!("{label_name} [{}x{}]", layout.rect.width as i32, layout.rect.height as i32);
+            renderer.draw_text(
+                &tag,
+                layout.rect.x + 3.0,
+                layout.rect.y + 3.0,
+                8.5,
+                text_color,
+            );
+        }
+    }
+
+    match element {
+        crate::core::types::Element::ScrollView {
+            children,
+            scroll_x,
+            scroll_y,
+            ..
+        } => {
+            let safe_scroll_y = if scroll_y.is_nan() || scroll_y.is_infinite() { 0.0 } else { *scroll_y };
+            let safe_scroll_x = if scroll_x.is_nan() || scroll_x.is_infinite() { 0.0 } else { *scroll_x };
+            renderer.push_clip_rect(layout.rect, 8.0);
+            renderer.push_transform(0.0, 0.0, 1.0, 0.0, -safe_scroll_x, -safe_scroll_y);
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+                draw_touch_hitboxes(renderer, child_el, child_lay);
+            }
+            renderer.pop_transform();
+            renderer.pop_clip_rect();
+        }
+        crate::core::types::Element::Container { children, .. }
+        | crate::core::types::Element::SharedView { children, .. } => {
+            for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+                draw_touch_hitboxes(renderer, child_el, child_lay);
+            }
+        }
+        _ => {}
+    }
+}
+
 pub fn render_devkit_hud(
     renderer: &mut dyn crate::core::render::api::Renderer,
     profiler: &FrameProfiler,
     node_count: usize,
     screen_width: f32,
+    root_element: &crate::core::types::Element,
+    layout_tree: &crate::core::layout::LayoutNode,
 ) {
+    // 1. Dokunma ve Hitbox Alanlarını Çiz
+    draw_touch_hitboxes(renderer, root_element, layout_tree);
+
+    // 2. Aktif Dokunma Noktası (Pointer Telemetry Visualizer)
+    if profiler.touch_telemetry.touch_x > 0.0 || profiler.touch_telemetry.touch_y > 0.0 {
+        let tx = profiler.touch_telemetry.touch_x;
+        let ty = profiler.touch_telemetry.touch_y;
+        renderer.draw_circle(tx, ty, 20.0, 0x44FB_BF24);
+        renderer.draw_circle(tx, ty, 10.0, 0x88FB_BF24);
+        renderer.draw_circle(tx, ty, 4.0, 0xFFF5_9E0B);
+    }
+
+    // 3. Devkit HUD Bilgi Kartı
     let fps = profiler.current_fps();
     let avg_ms = profiler.average_frame_time_ms();
     let cpu_ms = profiler.avg_cpu_ms();

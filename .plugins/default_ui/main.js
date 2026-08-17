@@ -18,7 +18,7 @@ function getDockElement(isLandscape) {
     // Fallback if dock plugin is still initializing
     return Container("dock_fallback_area", {
         width: isLandscape ? px(vw(13.0)) : pct(100),
-        height: isLandscape ? pct(100) : px(vh(11.0)),
+        height: isLandscape ? pct(100) : px(vh(18.0)),
         justify_content: "Center",
         align_items: "Center",
     }, [
@@ -145,16 +145,14 @@ globalThis.onEvent = function (eventJsonString) {
 
     if (e.type === "Click") {
         const idStr = String(e.id || "");
+
+        // Ana ızgara uygulaması tıklaması (Dock tıklamalarını Dock eklentisi onEvent ile kendisi karşılar)
         const pkg = state.getAppPackageByHash(idStr);
         if (typeof host_log === "function") {
             host_log("[SnifferLauncher JS] Click received for ID: " + idStr + " => Resolved Package: " + (pkg || "null"));
         }
         if (pkg) {
             launchApp(pkg);
-        } else {
-            if (typeof host_log === "function") {
-                host_log("[SnifferLauncher JS] No package found for ID: " + idStr);
-            }
         }
         return "[]";
     }
@@ -163,5 +161,14 @@ globalThis.onEvent = function (eventJsonString) {
     // diğer scroll view'lar için normal akış devam eder.
     return "[]";
 };
+
+if (typeof subscribeChannel === "function") {
+    subscribeChannel("dock.stateChanged", function() {
+        SnifferUI.forceUpdate();
+    });
+    subscribeChannel("dock.ready", function() {
+        SnifferUI.forceUpdate();
+    });
+}
 
 SnifferUI.start(Root, state);

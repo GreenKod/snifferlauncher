@@ -29,15 +29,15 @@ function getGridConfig(isLandscape) {
             taskManagerH: 100.0,
         };
     } else {
-        // Dikey Ekran (Portrait): 4 Sütun x 7 Satır (Üst %89vh Grid, Alt %11vh Dock)
+        // Dikey Ekran (Portrait): 4 Sütun x 7 Satır (Üst %86vh Grid, Alt %14vh Dock)
         const cols = 4;
         const rows = 7;
         const totalSlots = cols * rows; // 28
 
         const cardW = 19.7;
-        const cardH = 9.0;
+        const cardH = 8.6;
         const gapX = 4.0;
-        const gapY = 2.8;
+        const gapY = 2.4;
 
         return {
             isLandscape: false,
@@ -45,13 +45,13 @@ function getGridConfig(isLandscape) {
             rows,
             totalSlots,
             gridW: 100.0,
-            gridH: 89.0,
+            gridH: 82.0,
             cardW,
             cardH,
             gapX,
             gapY,
             taskManagerW: 100.0,
-            taskManagerH: 11.0,
+            taskManagerH: 18.0,
         };
     }
 }
