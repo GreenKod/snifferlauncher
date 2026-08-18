@@ -1,0 +1,22 @@
+{
+  "id": "com.sniffer.defaultui",
+  "name": "Default Interface",
+  "version": "1.0.0",
+  "isMaster": true,
+  "main": "main.js",
+  "scripts": [
+    "state.js",
+    "components/layout.js",
+    "components/app_grid.js",
+    "main.js"
+  ],
+  "preload": [
+    "../_framework/sniffer_ui.js"
+  ],
+  "permissions": [
+    "plugin.permission.UI",
+    "plugin.permission.IPC",
+    "plugin.permission.INPUT",
+    "android.permission.QUERY_ALL_PACKAGES"
+  ]
+}

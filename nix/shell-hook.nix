@@ -97,14 +97,14 @@ CARGO_CONFIG
   _gh_group "Set up library paths"
   _gh_step "LD_LIBRARY_PATH / PKG_CONFIG_PATH"
 
-  export LD_LIBRARY_PATH="${pkgs.SDL2}/lib:${pkgs.SDL2_ttf}/lib:${pkgs.SDL2_image}/lib:${pkgs.SDL2_mixer}/lib:${pkgs.openssl.out}/lib:${pkgs.zlib.out}/lib:${pkgs.stdenv.cc.cc.lib}/lib:$LD_LIBRARY_PATH"
-  export PKG_CONFIG_PATH="${pkgs.SDL2.dev}/lib/pkgconfig:${pkgs.SDL2_ttf}/lib/pkgconfig:${pkgs.SDL2_image}/lib/pkgconfig:${pkgs.SDL2_mixer}/lib/pkgconfig:${pkgs.openssl.dev}/lib/pkgconfig:${pkgs.zlib.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
+  export LD_LIBRARY_PATH="${pkgs.openssl.out}/lib:${pkgs.zlib.out}/lib:${pkgs.stdenv.cc.cc.lib}/lib:$LD_LIBRARY_PATH"
+  export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig:${pkgs.zlib.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
 
   export OPENSSL_DIR="${pkgs.openssl.dev}"
   export OPENSSL_LIB_DIR="${pkgs.openssl.out}/lib"
   export OPENSSL_INCLUDE_DIR="${pkgs.openssl.dev}/include"
 
-  _gh_ok "SDL2, OpenSSL, zlib paths exported"
+  _gh_ok "OpenSSL, zlib paths exported"
   _gh_endgroup
 
   # ── Step 4 — Cross-compilation linkers ──────────────────────────────────────
@@ -220,7 +220,7 @@ EXTENSIONS
   alias lint-android-x86_64="cargo clippy --target x86_64-linux-android --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
   alias lint-android-i686="cargo clippy --target i686-linux-android --workspace --all-targets --all-features -- \$CLIPPY_FLAGS"
   alias lint-android="lint-android-aarch64 && lint-android-armv7 && lint-android-x86_64 && lint-android-i686"
-  alias lint-macos="export PKG_CONFIG_PATH=\"\$(brew --prefix sdl2)/lib/pkgconfig:\$PKG_CONFIG_PATH\" LIBRARY_PATH=\"\$(brew --prefix sdl2)/lib:\$LIBRARY_PATH\"; cargo clippy --locked --workspace --all-targets --all-features --target aarch64-apple-darwin -- \$CLIPPY_FLAGS"
+  alias lint-macos="cargo clippy --locked --workspace --all-targets --all-features --target aarch64-apple-darwin -- \$CLIPPY_FLAGS"
 
   # ── Step 7 — Environment summary ────────────────────────────────────────────
   _gh_group "Environment summary"

@@ -1,6 +1,9 @@
 filters:
   rust:
     - "src/**"
+    - "crates/**"
+    - ".plugins/**"
+    - "android/**"
     - "Cargo.toml"
     - "Cargo.lock"
     - "deny.toml"

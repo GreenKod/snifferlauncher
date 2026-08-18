@@ -1,0 +1,31 @@
+[package]
+name = "sniffer_platform_android"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[features]
+default = ["devkit"]
+devkit = ["sniffer_core/devkit"]
+
+[dependencies]
+sniffer_core = { path = "../sniffer_core" }
+sniffer_render = { path = "../sniffer_render" }
+sniffer_plugin = { path = "../sniffer_plugin" }
+
+glow = "0.17.0"
+serde_json = "1.0"
+crossbeam-channel = "0.5"
+obfstr = "0.4"
+image = { version = "0.25.1", default-features = false, features = ["png", "jpeg"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android-activity = { version = "0.6.1", features = ["native-activity"] }
+jni = { version = "0.22.4" }
+ndk-context = { version = "0.1.1" }
+ndk = "0.9.0"
+ndk-sys = "0.6.0"
+khronos-egl = { version = "6.0", features = ["dynamic"] }
+
+[lints]
+workspace = true

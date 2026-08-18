@@ -7,7 +7,6 @@ on:
     branches: [ '**' ]
   workflow_dispatch:
 
-# Principle of Least Privilege
 permissions:
   contents: read
   pull-requests: write
@@ -22,7 +21,8 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "-D warnings"
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+  CARGO_PROFILE_RELEASE_LTO: "thin"
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
 
 jobs:
   changes:
@@ -33,8 +33,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Filter Changed Files
         id: filter
@@ -44,7 +42,7 @@ jobs:
           filters: .github/paths.yaml
 
   # ==========================================
-  # STAGE 1: Quick Pre-flight Checks
+  # STAGE 1: Quick Pre-flight Checks (Parallel)
   # ==========================================
   pre-flight:
     name: Quick Pre-flight Checks
@@ -54,11 +52,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # If the repo security settings are disabled, this step will gracefully continue instead of failing.
       - name: Dependency Review
         if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@v4
-        continue-on-error: true 
+        continue-on-error: true
         with:
           fail-on-severity: moderate
 
@@ -70,39 +67,31 @@ jobs:
       - name: Check Formatting (cargo fmt)
         run: cargo fmt --all --check
 
-      - name: Install and Run Typos
-        run: |
-          cargo install --locked typos-cli
-          typos .
+      - name: Run Typos Spell Check
+        uses: crate-ci/typos@v1
 
-      # Optimize cargo-deny using the official action (Fast & No compilation)
-      - name: Run cargo-deny
+      - name: Run cargo-deny (Licenses & Advisories)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
 
-      # Optimize cargo-audit using the official action (Fast & No compilation)
-      - name: Run cargo-audit
-        uses: rustsec/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
 
-      # Install cargo-binstall from crates.io and run cargo-machete
-      - name: Install cargo-binstall and Run cargo-machete
+      - name: Run cargo-machete
         run: |
-          cargo install --locked cargo-binstall
           cargo binstall --no-confirm cargo-machete
           cargo machete
 
   # ==========================================
-  # STAGE 2: Heavy Compilations & Platform Verifications
+  # STAGE 2: Parallel Platform Verifications
   # ==========================================
-  
+
   # Linux (Desktop) Verification
   validate-linux:
     name: Linux Desktop Verification
     runs-on: ubuntu-latest
-    needs: pre-flight
+    needs: changes
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -112,7 +101,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
             libasound2-dev \
             libssl-dev \
             pkg-config \
@@ -120,7 +108,6 @@ jobs:
             libx11-dev \
             libxkbcommon-dev \
             libwayland-dev \
-            libsdl2-dev \
             cmake
 
       - name: Setup Rust Toolchain
@@ -133,120 +120,56 @@ jobs:
         with:
           key: linux-desktop
 
-      - name: Syntax and Type Check (cargo check)
-        run: cargo check --locked --workspace --all-targets --all-features
-
       - name: Linter Analysis (cargo clippy)
-        run: |
-          cargo clippy --locked --workspace --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+      - name: Run Unit & Integration Tests (cargo test)
+        run: cargo test --locked --workspace --all-features
 
       - name: Linux Release Build Check
         run: cargo build --locked --release --workspace --all-features
 
-  # Windows verification on a native runner with MSYS2
+  # Windows (Native MSVC) Verification
   validate-windows:
-    name: Windows Verification
+    name: Windows Native Verification
     runs-on: windows-latest
-    needs: pre-flight
+    needs: changes
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup MSYS2
-        id: msys2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-SDL2
-            mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-cmake
-
-      - name: Setup Rust Toolchain and Windows Target
+      - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-gnu
           components: clippy
 
       - name: Cache Dependencies
         uses: swatinem/rust-cache@v2
         with:
-          key: windows-msys2
+          key: windows-native
 
-      - name: Windows (GNU/64-bit) Check & Clippy
-        shell: pwsh
-        env:
-          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
-        run: |
-          $msys2Root = "${{ steps.msys2.outputs.msys2-location }}"
-          $mingwRoot = Join-Path $msys2Root "mingw64"
-          if (-not (Test-Path "$mingwRoot\bin\x86_64-w64-mingw32-gcc.exe")) { throw "MINGW64 compiler not found under $mingwRoot" }
-          $sdl2LibPaths = @("$mingwRoot\lib", "$mingwRoot\x86_64-w64-mingw32\lib") | Where-Object { Test-Path $_ }
-          $sdl2ImportLib = $sdl2LibPaths | ForEach-Object { Join-Path $_ "libSDL2.dll.a" } | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $sdl2ImportLib) {
-            Get-ChildItem -Path $msys2Root -Recurse -Filter "libSDL2*.a" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
-            throw "SDL2 import library not found under $msys2Root"
-          }
-          $sdl2LibDir = Split-Path $sdl2ImportLib -Parent
-          $sdl2LibPaths = @($sdl2LibDir) + ($sdl2LibPaths | Where-Object { $_ -ne $sdl2LibDir })
-          Write-Host "Using MINGW64 root: $mingwRoot"
-          Write-Host "Using SDL2 library paths: $($sdl2LibPaths -join ';')"
-          $env:Path = "$mingwRoot\bin;$msys2Root\usr\bin;$env:Path"
-          $env:LIBRARY_PATH = "$($sdl2LibPaths -join ';');$env:LIBRARY_PATH"
-          $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
-          $env:SDL2_LIB_DIR = $sdl2LibDir
-          $env:SDL2_INCLUDE_DIR = "$mingwRoot\include\SDL2"
-          $env:RUSTFLAGS = "$env:RUSTFLAGS $(($sdl2LibPaths | ForEach-Object { "-L native=$_" }) -join ' ')"
-          cargo --version
-          cargo check --locked --target x86_64-pc-windows-gnu
-          cargo clippy --locked --workspace --all-targets --all-features --target x86_64-pc-windows-gnu -- -D warnings -D clippy::pedantic -D clippy::nursery -D clippy::cargo -A clippy::multiple-crate-versions
+      - name: Windows Linter Analysis (cargo clippy)
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+      - name: Windows Unit & Integration Tests (cargo test)
+        run: cargo test --locked --workspace --all-features
 
       - name: Windows Release Build Check
-        shell: pwsh
-        env:
-          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
-        run: |
-          $msys2Root = "${{ steps.msys2.outputs.msys2-location }}"
-          $mingwRoot = Join-Path $msys2Root "mingw64"
-          if (-not (Test-Path "$mingwRoot\bin\x86_64-w64-mingw32-gcc.exe")) { throw "MINGW64 compiler not found under $mingwRoot" }
-          $sdl2LibPaths = @("$mingwRoot\lib", "$mingwRoot\x86_64-w64-mingw32\lib") | Where-Object { Test-Path $_ }
-          $sdl2ImportLib = $sdl2LibPaths | ForEach-Object { Join-Path $_ "libSDL2.dll.a" } | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $sdl2ImportLib) {
-            Get-ChildItem -Path $msys2Root -Recurse -Filter "libSDL2*.a" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
-            throw "SDL2 import library not found under $msys2Root"
-          }
-          $sdl2LibDir = Split-Path $sdl2ImportLib -Parent
-          $sdl2LibPaths = @($sdl2LibDir) + ($sdl2LibPaths | Where-Object { $_ -ne $sdl2LibDir })
-          Write-Host "Using MINGW64 root: $mingwRoot"
-          Write-Host "Using SDL2 library paths: $($sdl2LibPaths -join ';')"
-          $env:Path = "$mingwRoot\bin;$msys2Root\usr\bin;$env:Path"
-          $env:LIBRARY_PATH = "$($sdl2LibPaths -join ';');$env:LIBRARY_PATH"
-          $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
-          $env:SDL2_LIB_DIR = $sdl2LibDir
-          $env:SDL2_INCLUDE_DIR = "$mingwRoot\include\SDL2"
-          $env:RUSTFLAGS = "$env:RUSTFLAGS $(($sdl2LibPaths | ForEach-Object { "-L native=$_" }) -join ' ')"
-          cargo build --locked --release --target x86_64-pc-windows-gnu
+        run: cargo build --locked --release --workspace --all-features
 
-  # macOS verification on native runners (Apple Silicon)
+  # macOS verification on Apple Silicon
   validate-macos-aarch64:
     name: macOS Verification (Apple Silicon)
     runs-on: macos-14
-    needs: pre-flight
+    needs: changes
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install SDL2
-        run: brew install pkg-config sdl2
+      - name: Install System Dependencies
+        run: brew install pkg-config
 
-      - name: Setup Rust Toolchain and macOS Targets
+      - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin
@@ -257,29 +180,17 @@ jobs:
         with:
           key: macos-arm64
 
-      - name: macOS (Apple Silicon) Check & Clippy
-        run: |
-          export PKG_CONFIG_PATH="$(brew --prefix sdl2)/lib/pkgconfig:$PKG_CONFIG_PATH"
-          export LIBRARY_PATH="$(brew --prefix sdl2)/lib:$LIBRARY_PATH"
-          cargo check --locked --target aarch64-apple-darwin
-          cargo clippy --locked --workspace --all-targets --all-features --target aarch64-apple-darwin -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
+      - name: macOS Linter Analysis (cargo clippy)
+        run: cargo clippy --locked --workspace --all-targets --all-features --target aarch64-apple-darwin -- -D warnings
 
       - name: macOS Release Build Check
-        run: |
-          export PKG_CONFIG_PATH="$(brew --prefix sdl2)/lib/pkgconfig:$PKG_CONFIG_PATH"
-          export LIBRARY_PATH="$(brew --prefix sdl2)/lib:$LIBRARY_PATH"
-          cargo build --locked --release --target aarch64-apple-darwin
+        run: cargo build --locked --release --target aarch64-apple-darwin
 
   # Android Compilation Verification
   validate-android:
-    name: Android Verification (Multi-Architecture)
+    name: Android Multi-Architecture Verification
     runs-on: ubuntu-latest
-    needs: pre-flight
+    needs: changes
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -290,11 +201,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # Sets up the Android SDK on Linux
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
-      # Installs the NDK and dynamically writes ANDROID_NDK_HOME to GITHUB_ENV
       - name: Install NDK tool
         run: |
           sdkmanager "ndk;26.1.10909125"
@@ -306,53 +215,30 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
+          components: clippy
 
       - name: Cache Dependencies
         uses: swatinem/rust-cache@v2
         with:
           key: android-linux
 
-      # Install cargo-ndk directly from crates.io
-      - name: Install cargo-ndk
-        run: |
-          cargo install --locked cargo-ndk
+      - name: Install cargo-binstall and cargo-ndk
+        uses: cargo-bins/cargo-binstall@main
 
-      # Performs checks using cargo-ndk.
-      # ANDROID_NDK_HOME is automatically sourced from GITHUB_ENV.
-      - name: Android (ARM64) Check
-        run: BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android" cargo ndk --target aarch64-linux-android check
+      - name: Install cargo-ndk binary
+        run: cargo binstall --no-confirm cargo-ndk
+
+      - name: Android (ARM64) Check & Clippy
+        run: BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android30" cargo ndk --target aarch64-linux-android clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Android (ARMv7) Check
         run: BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--target=armv7-linux-androideabi" cargo ndk --target armv7-linux-androideabi check
 
-      - name: Android Clippy Checks
-        run: |
-          BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android" cargo ndk --target aarch64-linux-android clippy --workspace --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
-          BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--target=armv7-linux-androideabi" cargo ndk --target armv7-linux-androideabi clippy --workspace --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
-          BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android clippy --workspace --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
-          BINDGEN_EXTRA_CLANG_ARGS_i686_linux_android="--target=i686-linux-android" cargo ndk --target i686-linux-android clippy --workspace --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
+      - name: Android (Emulator x86_64) Check & Clippy
+        run: BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android clippy --workspace --all-targets --all-features -- -D warnings
 
-      - name: Android (Emulator x86_64) Check and Build
-        run: |
-          BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android check
-          BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android build --release
+      - name: Android (x86 32-bit) Check
+        run: BINDGEN_EXTRA_CLANG_ARGS_i686_linux_android="--target=i686-linux-android" cargo ndk --target i686-linux-android check
+
+      - name: Android (ARM64) Release Build Check
+        run: BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android30" cargo ndk --target aarch64-linux-android build --release

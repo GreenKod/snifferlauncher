@@ -4,70 +4,119 @@ version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 publish = false
-
-[[bin]]
-name = "snifferlauncher"
-path = "src/main.rs"
+default-run = "snifferlauncher-desktop"
 
 [lib]
 name = "snifferlauncher"
 path = "src/lib.rs"
 crate-type = ["rlib", "cdylib"]
 
+[[bin]]
+name = "snifferlauncher-desktop"
+path = "src/main.rs"
+
 [features]
-default = []
+default = ["devkit"]
+devkit = [
+    "sniffer_core/devkit",
+    "sniffer_platform_desktop/devkit",
+]
 
 [dependencies]
-glow = "0.17.0"
-sdl2 = "0.38.0"
-swash = { version = "0.2.9", features = ["scale"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-rquickjs = { version = "0.7", features = ["macro", "classes", "bindgen", "array-buffer"] }
-postcard = { version = "1.0", default-features = false, features = ["alloc"] }
-image = { version = "0.25.1", default-features = false, features = ["png", "jpeg"] }
+sniffer_core = { path = "crates/sniffer_core" }
+sniffer_render = { path = "crates/sniffer_render" }
+sniffer_plugin = { path = "crates/sniffer_plugin" }
+sniffer_platform_desktop = { path = "crates/sniffer_platform_desktop" }
 
 [target.'cfg(target_os = "android")'.dependencies]
+sniffer_platform_android = { path = "crates/sniffer_platform_android", features = ["devkit"] }
 android-activity = { version = "0.6.1", features = ["native-activity"] }
-jni = { version = "0.22.4" }
-ndk-context = { version = "0.1.1" }
-ndk = "0.9.0"
-khronos-egl = { version = "6.0", features = ["dynamic"] }
 
 [package.metadata.android]
 package = "com.greenkod.snifferlauncher"
 build_targets = ["aarch64-linux-android"]
-assets = "assets"
+assets = ".plugins"
+resources = "android/res"
+manifest = "android/AndroidManifest.xml"
+aapt_ignore_assets = "!.svn:!.git:!.ds_store:!*.scc:.*:!_*:!_"
+
+[package.metadata.android.application]
+icon = "@mipmap/ic_launcher"
+round_icon = "@mipmap/ic_launcher_round"
+label = "Sniffer Launcher"
 
 [package.metadata.android.sdk]
 min_sdk_version = 30
 target_sdk_version = 35
 compile_sdk_version = 35
 
+[package.metadata.android.signing.release]
+path = "keystores/debug.keystore"
+keystore_password = "android"
+key_alias = "androiddebugkey"
+key_password = "android"
+
 [profile.dev]
-opt-level = 3        # Fully optimize codes as in release mode
-strip = true         # Clean symbols to reduce binary size
-lto = true           # Enable Link-Time Optimization
-panic = "abort"      # Abort on panic, not unwind
+opt-level = 1
+debug = false
+strip = false
+lto = "off"
+codegen-units = 256
+
+[profile.dev.package."*"]
+opt-level = 3
 
 [profile.release]
 opt-level = 3
-strip = "symbols"    # 'true' yerine 'symbols' daha spesifik bir temizlik yapar
-lto = "fat"          # 'true' yerine 'fat' daha agresif bir LTO sağlar
-codegen-units = 1    # Derleme süresini uzatır ama kodu çok daha fazla optimize eder
+strip = true
+lto = "fat"
+codegen-units = 1
 panic = "abort"
 
 [workspace.lints.rust]
-warnings = "deny" # -D warnings karşılığı
+warnings = "deny"
 
 [workspace.lints.clippy]
-# Grupları aktif ediyoruz (priority = -1 vererek tekil izinlerin ezilmesini önlüyoruz)
-pedantic = { level = "deny", priority = -1 } # -D clippy::pedantic karşılığı
-nursery = { level = "deny", priority = -1 }  # -D clippy::nursery karşılığı
-cargo = { level = "deny", priority = -1 }    # -D clippy::cargo karşılığı
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
 
-# Spesifik olarak izin vermek (Açık bırakmak) istediğin kural
-multiple_crate_versions = "allow"            # -A clippy::multiple-crate-versions karşılığı
+multiple_crate_versions = "allow"
+cargo_common_metadata = "allow"
+module_name_repetitions = "allow"
+missing_panics_doc = "allow"
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"
+option_if_let_else = "allow"
+manual_let_else = "allow"
+missing_const_for_fn = "allow"
+redundant_pub_crate = "allow"
+redundant_else = "allow"
+needless_pass_by_value = "allow"
+similar_names = "allow"
+too_many_lines = "allow"
+significant_drop_tightening = "allow"
+ignored_unit_patterns = "allow"
+case_sensitive_file_extension_comparisons = "allow"
+items_after_statements = "allow"
+unreadable_literal = "allow"
+if_not_else = "allow"
+single_match_else = "allow"
+collapsible_if = "allow"
+type_complexity = "allow"
+missing_safety_doc = "allow"
+suboptimal_flops = "allow"
+too_many_arguments = "allow"
+cast_lossless = "allow"
+manual_is_multiple_of = "allow"
+elidable_lifetime_names = "allow"
+explicit_iter_loop = "allow"
+float_cmp = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
 
 [lints]
 workspace = true
@@ -75,7 +124,35 @@ workspace = true
 [[package.metadata.android.uses_permission]]
 name = "android.permission.QUERY_ALL_PACKAGES"
 
-# Keep .plugins/ crates independent — they are separate plugin packages,
-# not part of the main build graph.
+[[package.metadata.android.uses_permission]]
+name = "android.permission.READ_EXTERNAL_STORAGE"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.READ_MEDIA_IMAGES"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.SET_WALLPAPER"
+
+[package.metadata.android.application.activity]
+theme = "@android:style/Theme.Wallpaper.NoTitleBar.Fullscreen"
+launch_mode = "singleTask"
+state_not_needed = "true"
+clear_task_on_launch = "true"
+
 [workspace]
+members = [
+    "crates/sniffer_core",
+    "crates/sniffer_render",
+    "crates/sniffer_plugin",
+    "crates/sniffer_platform_android",
+    "crates/sniffer_platform_desktop",
+]
 exclude = [".plugins"]
+
+[[package.metadata.android.application.activity.intent_filter]]
+actions = ["android.intent.action.MAIN"]
+categories = ["android.intent.category.HOME", "android.intent.category.DEFAULT"]
+
+[[package.metadata.android.application.activity.intent_filter]]
+actions = ["android.intent.action.MAIN"]
+categories = ["android.intent.category.LAUNCHER"]

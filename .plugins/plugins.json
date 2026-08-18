@@ -1,0 +1,9 @@
+{
+  "master_plugin": "default_ui",
+  "active_plugins": [
+    "clock_widget",
+    "default_ui",
+    "logger_plugin",
+    "dock"
+  ]
+}
