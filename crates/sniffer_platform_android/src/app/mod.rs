@@ -48,7 +48,7 @@ impl sniffer_plugin::js::host_bridge::HostPlatformBridge for AndroidHostBridge {
         Ok(())
     }
     fn request_permissions(&self, perms: &[String]) {
-        crate::jni::bridge::request_permissions(perms);
+        let _ = crate::jni::bridge::request_permissions(perms);
     }
 }
 
