@@ -38,7 +38,7 @@ fn get_apps_cache_path() -> Option<String> {
             .l()?;
         let path_jstring = env.as_cast::<JString>(&path_obj)?;
         let path_str = path_jstring.try_to_string(env)?;
-        Ok(format!("{}/apps_cache.json", path_str))
+        Ok(format!("{path_str}/apps_cache.json"))
     })
     .ok()
 }
@@ -264,7 +264,7 @@ pub fn request_permissions(permissions: &[String]) -> Result<Vec<String>, String
 
             for (index, permission) in permissions.iter().enumerate() {
                 let j_permission = env.new_string(permission)?;
-                permission_array.set_element(env, index.try_into().unwrap_or(0), &j_permission)?;
+                permission_array.set_element(env, index, &j_permission)?;
             }
 
             let activity_class = env.find_class(jni_str!("android/app/Activity"))?;

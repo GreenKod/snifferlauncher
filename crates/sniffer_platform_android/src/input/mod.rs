@@ -317,9 +317,10 @@ pub fn handle_input_event(
                     } else {
                         "SWIPE (Release)".to_string()
                     };
-                    let target_name = hovered_data
-                        .map(|(btn, _)| format!("btn_{btn:x}"))
-                        .unwrap_or_else(|| "None".to_string());
+                    let target_name = hovered_data.map_or_else(
+                        || "None".to_string(),
+                        |(btn, _)| format!("btn_{btn:x}"),
+                    );
 
                     if let Ok(mut prof) = state.profiler.lock() {
                         prof.touch_telemetry.active_pointers = pointer_count;
