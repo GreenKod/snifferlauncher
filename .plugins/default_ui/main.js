@@ -1,6 +1,6 @@
 // Default Interface - Main Entry Point
-// Rust scroll fizik motorunu kullanır.
-// JS'in isDragging / dragOffset / kinetic scroll takip etmesine gerek yok.
+// Uses Rust scroll physics engine.
+// JS does not need to manually track isDragging / dragOffset / kinetic scroll.
 
 function getDockElement(isLandscape) {
     let dockUI = null;
@@ -62,7 +62,7 @@ function Root() {
     ]);
 }
 
-// Eklentiler Arası İletişim (IPC): Dock eklentisinden gelen yayınları dinle
+// Inter-Plugin Communication (IPC): Listen for broadcasts from dock plugin
 subscribeChannel("dock.ready", function() {
     SnifferUI.forceUpdate();
     if (typeof broadcastEvent === "function") {
@@ -84,7 +84,7 @@ subscribeChannel("dock.textChanged", function(data) {
     }
 });
 
-// Native Data Vault Reaktif Dinleyici (Polling yerine)
+// Native Data Vault Reactive Listener (instead of polling)
 if (typeof Vault !== "undefined" && typeof Vault.subscribe === "function") {
     Vault.subscribe("system.apps", function() {
         state.refreshApps();
@@ -101,8 +101,8 @@ if (typeof broadcastEvent === "function") {
 
 let _hasInitialRefreshed = false;
 
-// Rust tarafından snap tamamlandığında çağrılır.
-// Sayfa indicator dots'unu güncellemek için kullanılır.
+// Invoked when Rust scroll physics completes a page snap.
+// Used to update page indicator dots.
 function onPageChanged(pageData) {
     const data = typeof pageData === "string" ? JSON.parse(pageData) : pageData;
     if (typeof data.page === "number") {
@@ -127,15 +127,12 @@ globalThis.onEvent = function (eventJsonString) {
     const e = JSON.parse(eventJsonString);
 
     if (e.type === "WindowResized") {
-        // state.refreshApps() kaldırıldı! 
-        // WindowResized (uygulamayı arka plandan geri alma) durumlarında 
-        // 150+ uygulamanın JSON'unu tekrar parse edip UI ağacını baştan kurmak devasa bir LAG'a sebep oluyordu.
-        // Taffy layout motoru forceUpdate ile boyutları zaten dinamik hesaplar.
+        // Taffy layout engine calculates dynamic sizes on forceUpdate
         SnifferUI.forceUpdate();
         return "[]";
     }
 
-    // PageSnapped: Rust fizik motoru snap tamamlandığını bildirdi
+    // PageSnapped: Rust physics engine notified snap completion
     if (e.type === "PageSnapped") {
         if (typeof onPageChanged === "function") {
             onPageChanged({ page: e.page });
@@ -146,7 +143,7 @@ globalThis.onEvent = function (eventJsonString) {
     if (e.type === "Click") {
         const idStr = String(e.id || "");
 
-        // Ana ızgara uygulaması tıklaması (Dock tıklamalarını Dock eklentisi onEvent ile kendisi karşılar)
+        // Main app grid click (dock clicks are handled by the dock plugin)
         const pkg = state.getAppPackageByHash(idStr);
         if (typeof host_log === "function") {
             host_log("[SnifferLauncher JS] Click received for ID: " + idStr + " => Resolved Package: " + (pkg || "null"));
@@ -157,8 +154,7 @@ globalThis.onEvent = function (eventJsonString) {
         return "[]";
     }
 
-    // Scroll, PointerDown, PointerUp: app_grid_pager için Rust handles,
-    // diğer scroll view'lar için normal akış devam eder.
+    // Scroll, PointerDown, PointerUp: handled by Rust engine
     return "[]";
 };
 

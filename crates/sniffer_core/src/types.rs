@@ -96,20 +96,20 @@ pub enum Element {
         dynamic_sensitivity: Option<bool>,
         momentum_scrolling: Option<bool>,
         capture_drag: Option<bool>,
-        // ── Rust-managed scroll physics (eklenti yazarı sadece bunları tanımlar) ──
-        /// Yatay snap aralığı (px). Some(pageWidthPx) = pager modu. None = serbest.
+        // ── Rust-managed scroll physics ──
+        /// Horizontal snap interval in px. Some(pageWidthPx) = pager mode. None = free scrolling.
         #[serde(default)]
         snap_x: Option<f32>,
-        /// Dikey snap aralığı (px). None = serbest.
+        /// Vertical snap interval in px. None = free scrolling.
         #[serde(default)]
         snap_y: Option<f32>,
-        /// Kenar lastik-bant elastikiyet oranı 0.0–1.0. None = sert kenar.
+        /// Rubber-band boundary elasticity ratio (0.0 to 1.0). None = rigid boundary.
         #[serde(default)]
         rubber_band: Option<f32>,
-        /// Toplam sayfa sayısı (snap_x ile birlikte kullanılır).
+        /// Total page count (used together with snap_x).
         #[serde(default)]
         page_count: Option<u32>,
-        /// Snap tamamlanınca JS'de çağrılacak callback fonksiyon adı.
+        /// Callback function name to invoke in JS when snapping completes.
         #[serde(default)]
         on_snap: Option<String>,
     },

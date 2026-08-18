@@ -18,16 +18,16 @@ function loadInitialApps() {
     // Fallback apps if real apps list is still loading or on emulator
     if (apps.length === 0) {
         const mockData = [
-            { name: "Ayarlar", pkg: "com.android.settings" },
-            { name: "Kamera", pkg: "com.android.camera" },
-            { name: "Rehber", pkg: "com.android.contacts" },
-            { name: "Tarayıcı", pkg: "com.android.chrome" },
-            { name: "Hesap Makinesi", pkg: "com.android.calculator2" },
-            { name: "Galeri", pkg: "com.android.gallery3d" },
-            { name: "Dosyalar", pkg: "com.android.documentsui" },
-            { name: "Saat", pkg: "com.android.deskclock" },
-            { name: "Mesajlar", pkg: "com.android.mms" },
-            { name: "Telefon", pkg: "com.android.dialer" }
+            { name: "Settings", pkg: "com.android.settings" },
+            { name: "Camera", pkg: "com.android.camera" },
+            { name: "Contacts", pkg: "com.android.contacts" },
+            { name: "Browser", pkg: "com.android.chrome" },
+            { name: "Calculator", pkg: "com.android.calculator2" },
+            { name: "Gallery", pkg: "com.android.gallery3d" },
+            { name: "Files", pkg: "com.android.documentsui" },
+            { name: "Clock", pkg: "com.android.deskclock" },
+            { name: "Messages", pkg: "com.android.mms" },
+            { name: "Phone", pkg: "com.android.dialer" }
         ];
 
         for (let i = 0; i < mockData.length; i++) {
@@ -57,7 +57,7 @@ let state = {
 
     allApps: loadInitialApps(),
 
-    // Arama filtreli tüm uygulamalar (Rust DataVault ile mikro-saniye hızında)
+    // Search-filtered apps query (microsecond latency via Rust DataVault)
     get filteredApps() {
         const query = (this.searchQuery || "").trim();
         if (typeof Vault !== "undefined" && typeof Vault.queryApps === "function") {
@@ -72,7 +72,7 @@ let state = {
         });
     },
 
-    // Herhangi bir sayfa indeksi (0, 1, 2...) için uygulamaları döndürür
+    // Returns apps for a specific page index (0, 1, 2...)
     appsForPage(pageIndex) {
         if (typeof Vault !== "undefined" && typeof Vault.queryApps === "function") {
             return Vault.queryApps({
@@ -86,7 +86,7 @@ let state = {
         return list.slice(startIndex, startIndex + this.appsPerPage);
     },
 
-    // Aktif sayfadaki uygulamaları döndürür
+    // Returns apps for the currently active page
     get apps() {
         return this.appsForPage(this.currentPage);
     },
@@ -102,14 +102,14 @@ let state = {
         return Math.max(1, Math.ceil(this.filteredApps.length / this.appsPerPage));
     },
 
-    // Sayfa değiştirme fonksiyonu (0-indexed sınır kontrolü)
+    // Page navigation helper with bounds check
     setPage(p) {
         if (p >= 0 && p < this.totalPages) {
             this.currentPage = p;
         }
     },
 
-    // Uygulamalar listesini yeniden yükleme
+    // Reload applications list
     refreshApps() {
         if (typeof _dragCacheGrids !== 'undefined') _dragCacheGrids = null;
         this._cardHashToAppPackage = null;

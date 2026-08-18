@@ -4,7 +4,7 @@
 
 function getGridConfig(isLandscape) {
     if (isLandscape) {
-        // Yatay Ekran (Landscape): 7 Sütun x 4 Satır (Sol Grid, Sağ %14vmin Ergonomik Dock)
+        // Landscape Mode: 7 Columns x 4 Rows (Left Grid, Right 14vmin Ergonomic Dock)
         const cols = 7;
         const rows = 4;
         const totalSlots = cols * rows; // 28
@@ -34,7 +34,7 @@ function getGridConfig(isLandscape) {
             taskManagerH: 100.0,
         };
     } else {
-        // Dikey Ekran (Portrait): 4 Sütun x 7 Satır (Üst %86vh Grid, Alt %14vh Dock)
+        // Portrait Mode: 4 Columns x 7 Rows (Top 86vh Grid, Bottom 14vh Dock)
         const cols = 4;
         const rows = 7;
         const totalSlots = cols * rows; // 28

@@ -23,7 +23,7 @@ build/
 *.apk
 *.aab
 
-# --- Security & Private Signing Keys (ASLA AÇIĞA ÇIKMAMALI) ---
+# --- Security & Private Signing Keys (Never commit to VCS) ---
 *.keystore
 *.jks
 *.p12
@@ -39,6 +39,7 @@ target/**/.plugins/.cache/
 **/vault_*.json
 **/apps_cache.json
 *.log
+logcat.txt
 *.tmp
 /scratch/
 scratch/
