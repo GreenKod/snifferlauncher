@@ -28,10 +28,11 @@ pub fn find_clicked_button_with_scroll(
         return None;
     }
     match element {
-        Element::Container { children, id, .. }
-        | Element::SharedView { children, id, .. } => {
+        Element::Container { children, id, .. } | Element::SharedView { children, id, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
-                if let Some(clicked_data) = find_clicked_button_with_scroll(child_el, child_lay, point, get_active_scroll) {
+                if let Some(clicked_data) =
+                    find_clicked_button_with_scroll(child_el, child_lay, point, get_active_scroll)
+                {
                     return Some(clicked_data);
                 }
             }
@@ -53,7 +54,12 @@ pub fn find_clicked_button_with_scroll(
             let (active_x, active_y) = get_active_scroll(id.as_deref(), *scroll_x, *scroll_y);
             let offset_point = Point::new(point.x + active_x, point.y + active_y);
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
-                if let Some(clicked_data) = find_clicked_button_with_scroll(child_el, child_lay, offset_point, get_active_scroll) {
+                if let Some(clicked_data) = find_clicked_button_with_scroll(
+                    child_el,
+                    child_lay,
+                    offset_point,
+                    get_active_scroll,
+                ) {
                     return Some(clicked_data);
                 }
             }
@@ -160,4 +166,3 @@ pub(crate) fn shift_layout(layout: &mut LayoutNode, dx: f32, dy: f32) {
         shift_layout(child, dx, dy);
     }
 }
-

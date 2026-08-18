@@ -72,8 +72,16 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
     };
     style.padding = el_style.padding.into();
     style.margin = el_style.margin.into();
-    let col_gap = if el_style.column_gap > 0.0 { el_style.column_gap } else { el_style.gap };
-    let row_gap = if el_style.row_gap > 0.0 { el_style.row_gap } else { el_style.gap };
+    let col_gap = if el_style.column_gap > 0.0 {
+        el_style.column_gap
+    } else {
+        el_style.gap
+    };
+    let row_gap = if el_style.row_gap > 0.0 {
+        el_style.row_gap
+    } else {
+        el_style.gap
+    };
     style.gap = taffy::geometry::Size {
         width: LengthPercentage::Length(col_gap),
         height: LengthPercentage::Length(row_gap),
@@ -264,4 +272,3 @@ pub fn calculate_layout(
     // Skip the wrapper node and just resolve the root
     resolve_layout(&taffy, root, element, x_offset, y_offset)
 }
-

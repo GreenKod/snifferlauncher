@@ -155,8 +155,7 @@ fn draw_touch_hitboxes(
         }
         None => matches!(
             element,
-            crate::types::Element::TextInput { .. }
-                | crate::types::Element::Checkbox { .. }
+            crate::types::Element::TextInput { .. } | crate::types::Element::Checkbox { .. }
         ),
     };
 
@@ -170,13 +169,7 @@ fn draw_touch_hitboxes(
         };
 
         // Draw bounding box
-        renderer.draw_rect(
-            layout.rect,
-            fill_color,
-            4.0,
-            1.5,
-            border_color,
-        );
+        renderer.draw_rect(layout.rect, fill_color, 4.0, 1.5, border_color);
     }
 
     match element {
@@ -186,8 +179,16 @@ fn draw_touch_hitboxes(
             scroll_y,
             ..
         } => {
-            let safe_scroll_y = if scroll_y.is_nan() || scroll_y.is_infinite() { 0.0 } else { *scroll_y };
-            let safe_scroll_x = if scroll_x.is_nan() || scroll_x.is_infinite() { 0.0 } else { *scroll_x };
+            let safe_scroll_y = if scroll_y.is_nan() || scroll_y.is_infinite() {
+                0.0
+            } else {
+                *scroll_y
+            };
+            let safe_scroll_x = if scroll_x.is_nan() || scroll_x.is_infinite() {
+                0.0
+            } else {
+                *scroll_x
+            };
             renderer.push_clip_rect(layout.rect, 8.0);
             renderer.push_transform(0.0, 0.0, 1.0, 0.0, -safe_scroll_x, -safe_scroll_y);
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
@@ -271,15 +272,22 @@ pub fn render_devkit_hud(
 
     // Touch Telemetry
     let touch = &profiler.touch_telemetry;
-    let gesture_name = if touch.gesture.is_empty() { "IDLE" } else { &touch.gesture };
+    let gesture_name = if touch.gesture.is_empty() {
+        "IDLE"
+    } else {
+        &touch.gesture
+    };
     let touch_hdr = format!("👉 Pointers: {} | {}", touch.active_pointers, gesture_name);
     renderer.draw_text(&touch_hdr, x + 12.0, y + 76.0, 10.0, 0xFFFACC15);
 
-    let target_name = if touch.target_element.is_empty() { "None" } else { &touch.target_element };
+    let target_name = if touch.target_element.is_empty() {
+        "None"
+    } else {
+        &touch.target_element
+    };
     let target_str = format!("Target: {target_name}");
     renderer.draw_text(&target_str, x + 12.0, y + 92.0, 10.0, 0xFFE2_E8F0);
 
     let pos_str = format!("Pos: ({:.1}, {:.1})", touch.touch_x, touch.touch_y);
     renderer.draw_text(&pos_str, x + 12.0, y + 108.0, 10.0, 0xFF94_A3B8);
 }
-

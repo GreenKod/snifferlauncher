@@ -59,7 +59,9 @@ pub fn register_app_bindings<'js>(
         }
     })
     .unwrap();
-    globals.set(obfstr!("host_launch_app"), launch_app_func).unwrap();
+    globals
+        .set(obfstr!("host_launch_app"), launch_app_func)
+        .unwrap();
 
     // host_request_default_launcher
     let aq_req_home = action_queue.clone();
@@ -99,7 +101,10 @@ pub fn register_app_bindings<'js>(
                 .collect();
 
             if valid_permissions.is_empty() {
-                dev_err!("{}", obfstr!("Plugin requested permissions it did not declare or are invalid."));
+                dev_err!(
+                    "{}",
+                    obfstr!("Plugin requested permissions it did not declare or are invalid.")
+                );
                 return "[]".to_string();
             }
 
@@ -125,7 +130,10 @@ pub fn register_app_bindings<'js>(
         })
         .unwrap();
     globals
-        .set(obfstr!("host_request_permissions"), request_permissions_func)
+        .set(
+            obfstr!("host_request_permissions"),
+            request_permissions_func,
+        )
         .unwrap();
 
     // host_create_image
@@ -146,7 +154,9 @@ pub fn register_app_bindings<'js>(
         }
     })
     .unwrap();
-    globals.set(obfstr!("host_create_image"), create_image_func).unwrap();
+    globals
+        .set(obfstr!("host_create_image"), create_image_func)
+        .unwrap();
 
     // host_focus_input
     let aq_focus = action_queue.clone();
@@ -166,7 +176,9 @@ pub fn register_app_bindings<'js>(
         }
     })
     .unwrap();
-    globals.set(obfstr!("host_focus_input"), focus_input_func).unwrap();
+    globals
+        .set(obfstr!("host_focus_input"), focus_input_func)
+        .unwrap();
 
     // host_blur_input
     let aq_blur = action_queue;
@@ -186,7 +198,9 @@ pub fn register_app_bindings<'js>(
         }
     })
     .unwrap();
-    globals.set(obfstr!("host_blur_input"), blur_input_func).unwrap();
+    globals
+        .set(obfstr!("host_blur_input"), blur_input_func)
+        .unwrap();
 
     // Inter-Plugin API host functions
     let api_map_register = api_map.clone();
@@ -243,11 +257,19 @@ pub fn register_app_bindings<'js>(
                     callback,
                 },
             );
-            dev_log!("{} '{}' {} '{}'.", obfstr!("[IPC] Plugin"), owning_id, obfstr!("registered API"), name);
+            dev_log!(
+                "{} '{}' {} '{}'.",
+                obfstr!("[IPC] Plugin"),
+                owning_id,
+                obfstr!("registered API"),
+                name
+            );
         }
     })
     .unwrap();
-    globals.set(obfstr!("host_register_api"), register_api_func).unwrap();
+    globals
+        .set(obfstr!("host_register_api"), register_api_func)
+        .unwrap();
 
     // host_call_api
     let api_map_call = api_map;
@@ -259,7 +281,10 @@ pub fn register_app_bindings<'js>(
             let map = match api_map_call.lock() {
                 Ok(m) => m,
                 Err(_) => {
-                    dev_err!("{} '{name}'.", obfstr!("[IPC] Failed to lock ApiMap for call to"));
+                    dev_err!(
+                        "{} '{name}'.",
+                        obfstr!("[IPC] Failed to lock ApiMap for call to")
+                    );
                     return None;
                 }
             };
@@ -290,7 +315,9 @@ pub fn register_app_bindings<'js>(
         },
     )
     .unwrap();
-    globals.set(obfstr!("host_call_api"), call_api_func).unwrap();
+    globals
+        .set(obfstr!("host_call_api"), call_api_func)
+        .unwrap();
 
     // host_broadcast
     let bq = broadcast_queue;
@@ -309,6 +336,7 @@ pub fn register_app_bindings<'js>(
             }
         })
         .unwrap();
-    globals.set(obfstr!("host_broadcast"), broadcast_func).unwrap();
+    globals
+        .set(obfstr!("host_broadcast"), broadcast_func)
+        .unwrap();
 }
-

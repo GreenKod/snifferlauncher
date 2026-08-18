@@ -2,7 +2,9 @@ pub mod apps;
 pub mod icons;
 pub mod wallpaper;
 
-pub use apps::{get_application_list, init_app_list_cache, open_default_home_picker, request_permissions};
+pub use apps::{
+    get_application_list, init_app_list_cache, open_default_home_picker, request_permissions,
+};
 pub use icons::{
     get_app_icon_pixels, init_icon_worker_pool, poll_async_app_icon, prefetch_app_icons,
     request_async_app_icon,
@@ -178,5 +180,3 @@ pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
         Ok(())
     });
 }
-
-

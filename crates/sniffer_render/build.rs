@@ -15,18 +15,18 @@ fn bytes_to_rust_array(bytes: &[u8]) -> String {
 fn main() {
     let shader_dir = "src/shaders";
     let shader_files: &[(&str, &str)] = &[
-        ("shape_android.vs",  "SHAPE_ANDROID_VS"),
-        ("shape_android.fs",  "SHAPE_ANDROID_FS"),
-        ("text_android.vs",   "TEXT_ANDROID_VS"),
-        ("text_android.fs",   "TEXT_ANDROID_FS"),
-        ("image_android.vs",  "IMAGE_ANDROID_VS"),
-        ("image_android.fs",  "IMAGE_ANDROID_FS"),
-        ("shape_desktop.vs",  "SHAPE_DESKTOP_VS"),
-        ("shape_desktop.fs",  "SHAPE_DESKTOP_FS"),
-        ("text_desktop.vs",   "TEXT_DESKTOP_VS"),
-        ("text_desktop.fs",   "TEXT_DESKTOP_FS"),
-        ("image_desktop.vs",  "IMAGE_DESKTOP_VS"),
-        ("image_desktop.fs",  "IMAGE_DESKTOP_FS"),
+        ("shape_android.vs", "SHAPE_ANDROID_VS"),
+        ("shape_android.fs", "SHAPE_ANDROID_FS"),
+        ("text_android.vs", "TEXT_ANDROID_VS"),
+        ("text_android.fs", "TEXT_ANDROID_FS"),
+        ("image_android.vs", "IMAGE_ANDROID_VS"),
+        ("image_android.fs", "IMAGE_ANDROID_FS"),
+        ("shape_desktop.vs", "SHAPE_DESKTOP_VS"),
+        ("shape_desktop.fs", "SHAPE_DESKTOP_FS"),
+        ("text_desktop.vs", "TEXT_DESKTOP_VS"),
+        ("text_desktop.fs", "TEXT_DESKTOP_FS"),
+        ("image_desktop.vs", "IMAGE_DESKTOP_VS"),
+        ("image_desktop.fs", "IMAGE_DESKTOP_FS"),
     ];
 
     let out_dir = std::env::var("OUT_DIR").unwrap();

@@ -1,16 +1,28 @@
-use sniffer_core::types::Element;
 use crate::js::permission_manager::permission_granted;
 use crate::{dev_err, dev_log};
 use obfstr::obfstr;
 use rquickjs::{Ctx, Function, Object};
+use sniffer_core::types::Element;
 use std::sync::{Arc, Mutex};
 
 pub enum UiMutation {
     SetUi(Element),
-    UpdateStyle { id: String, property: String, value: String },
-    SetText { id: String, text: String },
-    InsertChild { parent_id: String, child: Element },
-    RemoveNode { id: String },
+    UpdateStyle {
+        id: String,
+        property: String,
+        value: String,
+    },
+    SetText {
+        id: String,
+        text: String,
+    },
+    InsertChild {
+        parent_id: String,
+        child: Element,
+    },
+    RemoveNode {
+        id: String,
+    },
 }
 
 #[derive(Default)]
@@ -34,7 +46,11 @@ impl MutationBuffer {
                     UiMutation::SetUi(new_elem) => {
                         *tree_lock = Some(new_elem);
                     }
-                    UiMutation::UpdateStyle { id, property, value } => {
+                    UiMutation::UpdateStyle {
+                        id,
+                        property,
+                        value,
+                    } => {
                         if let Some(ref mut root) = *tree_lock {
                             root.mutate_style(&id, &property, &value);
                         }
@@ -101,7 +117,10 @@ pub fn register_ui_bindings<'js>(
                 }
             }
             Err(e) => {
-                dev_err!("{}: {e}", obfstr!("JS Error: Failed to parse host_set_ui JSON"));
+                dev_err!(
+                    "{}: {e}",
+                    obfstr!("JS Error: Failed to parse host_set_ui JSON")
+                );
             }
         }
     })
@@ -125,13 +144,19 @@ pub fn register_ui_bindings<'js>(
             }
 
             if let Ok(mut lock) = mut_update_style.mutations.lock() {
-                lock.push(UiMutation::UpdateStyle { id, property, value });
+                lock.push(UiMutation::UpdateStyle {
+                    id,
+                    property,
+                    value,
+                });
             }
             mut_update_style.flush(&tree_update_style);
         },
     )
     .unwrap();
-    globals.set(obfstr!("host_update_style"), update_style_func).unwrap();
+    globals
+        .set(obfstr!("host_update_style"), update_style_func)
+        .unwrap();
 
     // host_set_text
     let mut_set_text = mutation_buffer.clone();
@@ -153,7 +178,9 @@ pub fn register_ui_bindings<'js>(
         mut_set_text.flush(&tree_set_text);
     })
     .unwrap();
-    globals.set(obfstr!("host_set_text"), set_text_func).unwrap();
+    globals
+        .set(obfstr!("host_set_text"), set_text_func)
+        .unwrap();
 
     // host_insert_child
     let mut_insert_child = mutation_buffer.clone();
@@ -179,11 +206,16 @@ pub fn register_ui_bindings<'js>(
                 }
                 mut_insert_child.flush(&tree_insert_child);
             } else {
-                dev_err!("{}", obfstr!("JS Error: Failed to parse child JSON in host_insert_child"));
+                dev_err!(
+                    "{}",
+                    obfstr!("JS Error: Failed to parse child JSON in host_insert_child")
+                );
             }
         })
         .unwrap();
-    globals.set(obfstr!("host_insert_child"), insert_child_func).unwrap();
+    globals
+        .set(obfstr!("host_insert_child"), insert_child_func)
+        .unwrap();
 
     // host_remove_node
     let mut_remove_node = mutation_buffer;
@@ -205,12 +237,12 @@ pub fn register_ui_bindings<'js>(
         mut_remove_node.flush(&tree_remove_node);
     })
     .unwrap();
-    globals.set(obfstr!("host_remove_node"), remove_node_func).unwrap();
+    globals
+        .set(obfstr!("host_remove_node"), remove_node_func)
+        .unwrap();
 
     // host_get_binary_state
-    fn get_binary_state<'js>(
-        ctx: Ctx<'js>,
-    ) -> rquickjs::Result<rquickjs::ArrayBuffer<'js>> {
+    fn get_binary_state<'js>(ctx: Ctx<'js>) -> rquickjs::Result<rquickjs::ArrayBuffer<'js>> {
         let state = sniffer_core::types::AppState {
             click_count: 42,
             screen_width: f32::from_bits(
@@ -232,7 +264,10 @@ pub fn register_ui_bindings<'js>(
     let send_binary_event_func = Function::new(ctx.clone(), |buffer: rquickjs::ArrayBuffer<'_>| {
         if let Some(bytes) = buffer.as_bytes() {
             if let Ok(state) = postcard::from_bytes::<sniffer_core::types::AppState>(bytes) {
-                dev_log!("{}: {state:?}", obfstr!("JS sent binary state via ArrayBuffer"));
+                dev_log!(
+                    "{}: {state:?}",
+                    obfstr!("JS sent binary state via ArrayBuffer")
+                );
             } else {
                 dev_err!("{}", obfstr!("Failed to deserialize binary event from JS."));
             }
@@ -243,4 +278,3 @@ pub fn register_ui_bindings<'js>(
         .set(obfstr!("host_send_binary_event"), send_binary_event_func)
         .unwrap();
 }
-

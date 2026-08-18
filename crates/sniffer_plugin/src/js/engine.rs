@@ -5,4 +5,3 @@ pub fn create_engine() -> Result<(Runtime, Context), String> {
     let context = Context::full(&runtime).map_err(|e| format!("QuickJS context error: {e}"))?;
     Ok((runtime, context))
 }
-

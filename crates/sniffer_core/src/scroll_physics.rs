@@ -1,8 +1,8 @@
+use crate::style::{Dimension, FlexDirection};
+use crate::types::Element;
+use crate::ui::widget::fnv1a;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
-use crate::types::Element;
-use crate::style::{Dimension, FlexDirection};
-use crate::ui::widget::fnv1a;
 
 pub const RUBBER_BAND_COEFF: f32 = 0.55;
 
@@ -216,13 +216,14 @@ pub fn sync_scroll_physics_from_tree<S: BuildHasher>(
     }
 }
 
-pub fn inject_physics_to_tree(
-    element: &mut Element,
-    target_id: u64,
-    pos_x: f32,
-    pos_y: f32,
-) {
-    if let Element::ScrollView { id: Some(id_str), scroll_x, scroll_y, .. } = element {
+pub fn inject_physics_to_tree(element: &mut Element, target_id: u64, pos_x: f32, pos_y: f32) {
+    if let Element::ScrollView {
+        id: Some(id_str),
+        scroll_x,
+        scroll_y,
+        ..
+    } = element
+    {
         if fnv1a(id_str.as_bytes()) == target_id {
             *scroll_x = pos_x;
             *scroll_y = pos_y;
@@ -247,21 +248,33 @@ pub fn update_indicator_dots_in_element(
     active_page: i32,
     vmin_px: f32,
 ) -> bool {
-    if let Element::Container { id, children, style } = element {
+    if let Element::Container {
+        id,
+        children,
+        style,
+    } = element
+    {
         if let Some(id_str) = id {
             if id_str == "page_indicator_container" {
                 let is_landscape = style.flex_direction == FlexDirection::Column;
                 let mut changed = false;
                 for (p, child_el) in children.iter_mut().enumerate() {
                     let is_active = (p as i32) == active_page;
-                    if let Element::Container { style: dot_style, .. } = child_el {
+                    if let Element::Container {
+                        style: dot_style, ..
+                    } = child_el
+                    {
                         let new_color = Some(if is_active { 0xFF00_E5FF } else { 0x44FF_FFFF });
                         if dot_style.background_color != new_color {
                             dot_style.background_color = new_color;
                             changed = true;
                         }
                         if is_landscape {
-                            let new_h = Dimension::Pixels(if is_active { 3.6 * vmin_px } else { 1.6 * vmin_px });
+                            let new_h = Dimension::Pixels(if is_active {
+                                3.6 * vmin_px
+                            } else {
+                                1.6 * vmin_px
+                            });
                             let new_w = Dimension::Pixels(1.6 * vmin_px);
                             if dot_style.height != new_h || dot_style.width != new_w {
                                 dot_style.height = new_h;
@@ -269,7 +282,11 @@ pub fn update_indicator_dots_in_element(
                                 changed = true;
                             }
                         } else {
-                            let new_w = Dimension::Pixels(if is_active { 3.6 * vmin_px } else { 1.6 * vmin_px });
+                            let new_w = Dimension::Pixels(if is_active {
+                                3.6 * vmin_px
+                            } else {
+                                1.6 * vmin_px
+                            });
                             let new_h = Dimension::Pixels(1.6 * vmin_px);
                             if dot_style.width != new_w || dot_style.height != new_h {
                                 dot_style.width = new_w;

@@ -36,4 +36,3 @@ impl<'a> TextMeasurer<'a> {
         (width, height)
     }
 }
-

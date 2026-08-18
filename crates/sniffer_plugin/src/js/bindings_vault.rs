@@ -1,8 +1,8 @@
 //! QuickJS Host Bindings for the Native Data Vault Engine
 
-use sniffer_core::vault::{DataVault, QueryAppsParams};
 use obfstr::obfstr;
 use rquickjs::{Ctx, Function, Object};
+use sniffer_core::vault::{DataVault, QueryAppsParams};
 use std::sync::Arc;
 
 /// Register all DataVault host functions into the QuickJS environment.
@@ -181,4 +181,3 @@ fn encode_base64(bytes: &[u8]) -> String {
     }
     output
 }
-

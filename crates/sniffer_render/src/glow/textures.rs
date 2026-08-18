@@ -1,7 +1,7 @@
 use super::GlowRenderer;
-use sniffer_core::render_api::Renderer;
-use sniffer_core::math::Rect;
 use glow::HasContext;
+use sniffer_core::math::Rect;
+use sniffer_core::render_api::Renderer;
 
 pub struct TextureHandle {
     pub texture: glow::Texture,
@@ -32,7 +32,13 @@ impl Default for LruTextureCache {
 }
 
 impl GlowRenderer {
-    pub(crate) fn load_image_impl(&mut self, id: &str, rgba_pixels: &[u8], width: u32, height: u32) {
+    pub(crate) fn load_image_impl(
+        &mut self,
+        id: &str,
+        rgba_pixels: &[u8],
+        width: u32,
+        height: u32,
+    ) {
         if let Some(existing) = self.texture_cache.textures.get(id) {
             if existing.width as u32 == width && existing.height as u32 == height {
                 self.texture_cache.access_counter += 1;
@@ -48,16 +54,15 @@ impl GlowRenderer {
                 self.gl.delete_texture(removed.texture);
             }
             let old_size = removed.size_bytes;
-            self.texture_cache.total_vram_bytes = self
-                .texture_cache
-                .total_vram_bytes
-                .saturating_sub(old_size);
+            self.texture_cache.total_vram_bytes =
+                self.texture_cache.total_vram_bytes.saturating_sub(old_size);
         }
 
         let new_size = (width as usize) * (height as usize) * 4;
 
         unsafe {
-            while (self.texture_cache.total_vram_bytes + new_size > self.texture_cache.max_vram_bytes
+            while (self.texture_cache.total_vram_bytes + new_size
+                > self.texture_cache.max_vram_bytes
                 || self.texture_cache.textures.len() >= self.texture_cache.max_textures)
                 && self.texture_cache.textures.len() > 1
             {
@@ -182,13 +187,7 @@ impl GlowRenderer {
                 0.0,
                 sniffer_core::style::ObjectFit::Cover,
             );
-            self.draw_rect(
-                full_rect,
-                0x4000_0000,
-                0.0,
-                0.0,
-                None,
-            );
+            self.draw_rect(full_rect, 0x4000_0000, 0.0, 0.0, None);
         }
     }
 
@@ -249,8 +248,11 @@ impl GlowRenderer {
 
                 let u = self.image_uniforms.clone();
 
-                self.gl
-                    .uniform_2_f32(u.u_resolution.as_ref(), self.resolution.0, self.resolution.1);
+                self.gl.uniform_2_f32(
+                    u.u_resolution.as_ref(),
+                    self.resolution.0,
+                    self.resolution.1,
+                );
                 self.gl
                     .uniform_2_f32(u.u_rect_pos.as_ref(), draw_rect.x, draw_rect.y);
                 self.gl
@@ -260,7 +262,8 @@ impl GlowRenderer {
                 self.gl
                     .uniform_2_f32(u.u_uv_offset.as_ref(), uv_offset.0, uv_offset.1);
                 self.gl.uniform_1_f32(u.u_radius.as_ref(), radius);
-                self.gl.uniform_1_f32(u.u_global_alpha.as_ref(), self.global_alpha);
+                self.gl
+                    .uniform_1_f32(u.u_global_alpha.as_ref(), self.global_alpha);
 
                 let t = self.transform_stack.last().unwrap();
                 self.gl
@@ -270,4 +273,3 @@ impl GlowRenderer {
         }
     }
 }
-

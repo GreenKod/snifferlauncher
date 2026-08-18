@@ -10,11 +10,11 @@
 //! that explicitly subscribed to the target widget, guaranteeing O(1) event dispatching
 //! for non-interactive elements.
 
+use crate::r#trait::UiPlugin;
 use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::event::EventBus;
 use sniffer_core::ui::style_map::StyleMap;
 use sniffer_core::ui::widget::WidgetId;
-use crate::r#trait::UiPlugin;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -159,8 +159,13 @@ impl PluginRegistry {
         let mut coalesced = Vec::with_capacity(raw_events.len());
         for event in raw_events {
             if let sniffer_core::ui::event::UiEvent::Scroll(id, dx, dy, _max_x, _max_y) = &event {
-                if let Some(sniffer_core::ui::event::UiEvent::Scroll(last_id, last_dx, last_dy, _, _)) =
-                    coalesced.last_mut()
+                if let Some(sniffer_core::ui::event::UiEvent::Scroll(
+                    last_id,
+                    last_dx,
+                    last_dy,
+                    _,
+                    _,
+                )) = coalesced.last_mut()
                 {
                     if last_id == id {
                         *last_dx += dx;
@@ -193,4 +198,3 @@ impl PluginRegistry {
         }
     }
 }
-

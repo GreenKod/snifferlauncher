@@ -65,4 +65,3 @@ pub trait Renderer {
         size * 0.75
     }
 }
-

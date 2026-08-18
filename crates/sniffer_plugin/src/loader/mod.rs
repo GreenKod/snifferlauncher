@@ -72,7 +72,10 @@ impl PluginLoader {
         };
 
         if let Some(ref master) = config.master_plugin {
-            dev_log!("{} '{master}'", obfstr!("[PluginLoader] Master plugin designated:"));
+            dev_log!(
+                "{} '{master}'",
+                obfstr!("[PluginLoader] Master plugin designated:")
+            );
         }
 
         let api_map = registry.api_registry();
@@ -196,8 +199,7 @@ impl PluginLoader {
                         cache_file.display()
                     );
                     if let Ok(bytes) = fs::read(&cache_file) {
-                        if let Ok(ui) =
-                            postcard::from_bytes::<sniffer_core::types::Element>(&bytes)
+                        if let Ok(ui) = postcard::from_bytes::<sniffer_core::types::Element>(&bytes)
                         {
                             dev_log!(
                                 "{}: {}",
@@ -206,7 +208,11 @@ impl PluginLoader {
                             );
                             cached_ui = Some(ui);
                         } else {
-                            dev_log!("{} {}", obfstr!("Failed to deserialize postcard for"), manifest.id);
+                            dev_log!(
+                                "{} {}",
+                                obfstr!("Failed to deserialize postcard for"),
+                                manifest.id
+                            );
                         }
                     }
                 } else {
@@ -231,9 +237,7 @@ impl PluginLoader {
                     cache_path: Some(cache_file),
                 }) {
                     Ok(plugin) => {
-                        registry.register(
-                            &(Arc::new(plugin) as Arc<dyn crate::UiPlugin>),
-                        );
+                        registry.register(&(Arc::new(plugin) as Arc<dyn crate::UiPlugin>));
                         dev_log!(
                             "{} '{}' ({})",
                             obfstr!("Successfully loaded JS plugin"),
@@ -274,7 +278,10 @@ mod tests {
             scripts: vec![],
             is_master: false,
             preload: vec![],
-            permissions: vec!["android.permission.CAMERA".to_string(), "shared_view.provider".to_string()],
+            permissions: vec![
+                "android.permission.CAMERA".to_string(),
+                "shared_view.provider".to_string(),
+            ],
             default_settings: serde_json::Value::Null,
         };
 
@@ -295,8 +302,9 @@ mod tests {
     fn test_eval_framework_file_in_quickjs() {
         let rt = rquickjs::Runtime::new().unwrap();
         let ctx = rquickjs::Context::full(&rt).unwrap();
-        
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.plugins/framework/sniffer_ui.js");
+
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.plugins/framework/sniffer_ui.js");
         if let Ok(code) = std::fs::read_to_string(&path) {
             ctx.with(|c| {
                 let res = c.eval::<rquickjs::Value, _>(code.as_bytes());
@@ -340,7 +348,10 @@ impl PluginLoader {
         let config: PluginsConfig = match serde_json::from_str(&config_string) {
             Ok(c) => c,
             Err(e) => {
-                dev_err!("{}: {e}", obfstr!("Failed to parse plugins.json on Android"));
+                dev_err!(
+                    "{}: {e}",
+                    obfstr!("Failed to parse plugins.json on Android")
+                );
                 return;
             }
         };
@@ -358,74 +369,78 @@ impl PluginLoader {
                         {
                             let mut preload_scripts: Vec<String> = Vec::new();
                             for preload_rel in &manifest.preload {
-                                 let resolved = if let Some(stripped) = preload_rel.strip_prefix("../") {
-                                     stripped.to_string()
-                                 } else {
-                                     format!("{plugin_folder}/{preload_rel}")
-                                 };
-                                 let alt_resolved = resolved.replace("_framework/", "framework/");
-                                 let asset_opt = std::ffi::CString::new(resolved.clone())
-                                     .ok()
-                                     .and_then(|c| asset_manager.open(c.as_c_str()))
-                                     .or_else(|| {
-                                         std::ffi::CString::new(alt_resolved)
-                                             .ok()
-                                             .and_then(|c| asset_manager.open(c.as_c_str()))
-                                     });
+                                let resolved =
+                                    if let Some(stripped) = preload_rel.strip_prefix("../") {
+                                        stripped.to_string()
+                                    } else {
+                                        format!("{plugin_folder}/{preload_rel}")
+                                    };
+                                let alt_resolved = resolved.replace("_framework/", "framework/");
+                                let asset_opt = std::ffi::CString::new(resolved.clone())
+                                    .ok()
+                                    .and_then(|c| asset_manager.open(c.as_c_str()))
+                                    .or_else(|| {
+                                        std::ffi::CString::new(alt_resolved)
+                                            .ok()
+                                            .and_then(|c| asset_manager.open(c.as_c_str()))
+                                    });
 
-                                  if let Some(mut pa) = asset_opt {
-                                      let mut src = String::new();
-                                      if pa.read_to_string(&mut src).is_ok() {
-                                          let clean_src = src.replace('\0', "").trim().to_string();
-                                          dev_log!(
-                                              "{} '{}' {} '{}'",
-                                              obfstr!("Android: preloading"),
-                                              resolved,
-                                              obfstr!("for plugin"),
-                                              manifest.name
-                                          );
-                                          preload_scripts.push(clean_src);
-                                      }
-                                  } else {
-                                      dev_err!(
-                                          "{} '{resolved}' {}",
-                                          obfstr!("Android: preload asset"),
-                                          obfstr!("not found")
-                                      );
-                                  }
-                             }
+                                if let Some(mut pa) = asset_opt {
+                                    let mut src = String::new();
+                                    if pa.read_to_string(&mut src).is_ok() {
+                                        let clean_src = src.replace('\0', "").trim().to_string();
+                                        dev_log!(
+                                            "{} '{}' {} '{}'",
+                                            obfstr!("Android: preloading"),
+                                            resolved,
+                                            obfstr!("for plugin"),
+                                            manifest.name
+                                        );
+                                        preload_scripts.push(clean_src);
+                                    }
+                                } else {
+                                    dev_err!(
+                                        "{} '{resolved}' {}",
+                                        obfstr!("Android: preload asset"),
+                                        obfstr!("not found")
+                                    );
+                                }
+                            }
 
-                             let files_to_read = if !manifest.scripts.is_empty() {
-                                 manifest.scripts.clone()
-                             } else {
-                                 vec![manifest.main.clone()]
-                             };
+                            let files_to_read = if !manifest.scripts.is_empty() {
+                                manifest.scripts.clone()
+                            } else {
+                                vec![manifest.main.clone()]
+                            };
 
-                             let mut plugin_code = String::new();
-                             for script_rel in &files_to_read {
-                                 let script_path = format!("{plugin_folder}/{script_rel}");
-                                 if let Ok(script_cstr) = std::ffi::CString::new(script_path) {
-                                     if let Some(mut asset) = asset_manager.open(script_cstr.as_c_str()) {
-                                         let mut content = String::new();
-                                         if asset.read_to_string(&mut content).is_ok() {
-                                             let clean_content = content.replace('\0', "").trim().to_string();
-                                             if !plugin_code.is_empty() {
-                                                 plugin_code.push('\n');
-                                             }
-                                             plugin_code.push_str(&clean_content);
-                                         }
-                                     }
-                                 }
-                             }
+                            let mut plugin_code = String::new();
+                            for script_rel in &files_to_read {
+                                let script_path = format!("{plugin_folder}/{script_rel}");
+                                if let Ok(script_cstr) = std::ffi::CString::new(script_path) {
+                                    if let Some(mut asset) =
+                                        asset_manager.open(script_cstr.as_c_str())
+                                    {
+                                        let mut content = String::new();
+                                        if asset.read_to_string(&mut content).is_ok() {
+                                            let clean_content =
+                                                content.replace('\0', "").trim().to_string();
+                                            if !plugin_code.is_empty() {
+                                                plugin_code.push('\n');
+                                            }
+                                            plugin_code.push_str(&clean_content);
+                                        }
+                                    }
+                                }
+                            }
 
-                             if !plugin_code.is_empty() {
-                                 let mut full_script = preload_scripts.join("\n");
-                                 if !full_script.is_empty() {
-                                     full_script.push('\n');
-                                 }
-                                 full_script.push_str(&plugin_code);
-                                 let full_script = full_script.replace('\0', "");
-                                 let full_script = full_script.trim_matches('\0').trim().to_string();
+                            if !plugin_code.is_empty() {
+                                let mut full_script = preload_scripts.join("\n");
+                                if !full_script.is_empty() {
+                                    full_script.push('\n');
+                                }
+                                full_script.push_str(&plugin_code);
+                                let full_script = full_script.replace('\0', "");
+                                let full_script = full_script.trim_matches('\0').trim().to_string();
 
                                 match crate::JsPlugin::new(crate::js::JsPluginConfig {
                                     script_content: full_script,
@@ -441,8 +456,7 @@ impl PluginLoader {
                                 }) {
                                     Ok(plugin) => {
                                         registry.register(
-                                            &(Arc::new(plugin)
-                                                as Arc<dyn crate::UiPlugin>),
+                                            &(Arc::new(plugin) as Arc<dyn crate::UiPlugin>),
                                         );
                                         dev_log!(
                                             "{} '{}' ({}) {}",
@@ -486,4 +500,3 @@ impl PluginLoader {
         }
     }
 }
-

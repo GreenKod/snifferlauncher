@@ -4,12 +4,15 @@ use sniffer_core::vault::{DataVault, QueryAppsParams};
 #[test]
 fn test_data_vault_basic_crud() {
     let vault = DataVault::new(None);
-    
+
     assert!(vault.get("plugin.plugin_a.test").is_none());
 
     let res = vault.set("plugin.plugin_a.test", "my_value".to_string(), "plugin_a");
     assert!(res.is_ok());
-    assert_eq!(vault.get("plugin.plugin_a.test").as_deref(), Some("my_value"));
+    assert_eq!(
+        vault.get("plugin.plugin_a.test").as_deref(),
+        Some("my_value")
+    );
 
     let rem_res = vault.delete("plugin.plugin_a.test", "plugin_a");
     assert!(rem_res.is_ok());
@@ -19,7 +22,7 @@ fn test_data_vault_basic_crud() {
 #[test]
 fn test_data_vault_apps_query_and_paging() {
     let vault = DataVault::new(None);
-    
+
     let apps = vec![
         AppInfo::new("Alpha".to_string(), "com.app.a".to_string()),
         AppInfo::new("Beta".to_string(), "com.app.b".to_string()),

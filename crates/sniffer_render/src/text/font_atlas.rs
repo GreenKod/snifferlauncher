@@ -381,4 +381,3 @@ pub fn estimate_text_width(atlas: &FontAtlas, text: &str, text_size: f32) -> f32
     }
     width
 }
-

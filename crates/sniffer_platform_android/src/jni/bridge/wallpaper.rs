@@ -3,10 +3,10 @@
 use super::icons::extract_drawable_pixels;
 use super::{context, vm};
 use jni::errors::Error as JniError;
-use jni::{Env, jni_sig, jni_str};
 use jni::objects::JValue;
-use std::sync::atomic::{AtomicBool, Ordering};
+use jni::{Env, jni_sig, jni_str};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct WallpaperLoadResult {
     pub pixels: Vec<u8>,
@@ -14,8 +14,10 @@ pub struct WallpaperLoadResult {
     pub height: u32,
 }
 
-static WALLPAPER_RES_SENDER: OnceLock<crossbeam_channel::Sender<WallpaperLoadResult>> = OnceLock::new();
-static WALLPAPER_RES_RECEIVER: OnceLock<crossbeam_channel::Receiver<WallpaperLoadResult>> = OnceLock::new();
+static WALLPAPER_RES_SENDER: OnceLock<crossbeam_channel::Sender<WallpaperLoadResult>> =
+    OnceLock::new();
+static WALLPAPER_RES_RECEIVER: OnceLock<crossbeam_channel::Receiver<WallpaperLoadResult>> =
+    OnceLock::new();
 static WALLPAPER_FETCHING: AtomicBool = AtomicBool::new(false);
 
 fn init_wallpaper_channel() {
@@ -29,14 +31,29 @@ fn init_wallpaper_channel() {
 fn get_wallpaper_cache_dir_path(env: &mut Env) -> std::path::PathBuf {
     let ctx = context(env);
     let path_res: Result<String, JniError> = (|| {
-        let files_dir = env.call_method(&ctx, jni_str!("getCacheDir"), jni_sig!("()Ljava/io/File;"), &[])?.l()?;
-        let path_obj = env.call_method(&files_dir, jni_str!("getAbsolutePath"), jni_sig!("()Ljava/lang/String;"), &[])?.l()?;
+        let files_dir = env
+            .call_method(
+                &ctx,
+                jni_str!("getCacheDir"),
+                jni_sig!("()Ljava/io/File;"),
+                &[],
+            )?
+            .l()?;
+        let path_obj = env
+            .call_method(
+                &files_dir,
+                jni_str!("getAbsolutePath"),
+                jni_sig!("()Ljava/lang/String;"),
+                &[],
+            )?
+            .l()?;
         let path_jstring = env.as_cast::<jni::objects::JString>(&path_obj)?;
         let path_str = path_jstring.try_to_string(env)?;
         Ok(path_str)
     })();
 
-    let base = path_res.unwrap_or_else(|_| "/data/data/com.greenkod.snifferlauncher/cache".to_string());
+    let base =
+        path_res.unwrap_or_else(|_| "/data/data/com.greenkod.snifferlauncher/cache".to_string());
     let dir = std::path::PathBuf::from(base).join("wallpaper");
     let _ = std::fs::create_dir_all(&dir);
     dir
@@ -82,7 +99,11 @@ pub fn request_system_wallpaper_async(target_w: u32, target_h: u32) {
     std::thread::spawn(move || {
         if let Some((pixels, w, h)) = get_system_wallpaper_pixels(target_w, target_h) {
             if let Some(sender) = WALLPAPER_RES_SENDER.get() {
-                let _ = sender.send(WallpaperLoadResult { pixels, width: w, height: h });
+                let _ = sender.send(WallpaperLoadResult {
+                    pixels,
+                    width: w,
+                    height: h,
+                });
             }
         }
         WALLPAPER_FETCHING.store(false, Ordering::SeqCst);
@@ -162,16 +183,25 @@ pub fn get_system_wallpaper_pixels(target_w: u32, target_h: u32) -> Option<(Vec<
             return Err(JniError::JavaException);
         }
 
-        let w = if target_w == 0 { 540 } else { (target_w / 2).clamp(360, 720) };
-        let h = if target_h == 0 { 960 } else { (target_h / 2).clamp(640, 1280) };
-
-        let rgba_bytes = match extract_drawable_pixels(env, &drawable, w.cast_signed(), h.cast_signed()) {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                let _ = env.exception_clear();
-                return Err(e);
-            }
+        let w = if target_w == 0 {
+            540
+        } else {
+            (target_w / 2).clamp(360, 720)
         };
+        let h = if target_h == 0 {
+            960
+        } else {
+            (target_h / 2).clamp(640, 1280)
+        };
+
+        let rgba_bytes =
+            match extract_drawable_pixels(env, &drawable, w.cast_signed(), h.cast_signed()) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    let _ = env.exception_clear();
+                    return Err(e);
+                }
+            };
 
         save_wallpaper_to_disk(env, &rgba_bytes, w, h);
 
@@ -179,5 +209,3 @@ pub fn get_system_wallpaper_pixels(target_w: u32, target_h: u32) -> Option<(Vec<
     })
     .ok()
 }
-
-

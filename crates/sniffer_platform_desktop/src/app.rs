@@ -1,15 +1,17 @@
-use sniffer_render::draw::{draw_ui, find_clicked_button_with_scroll, find_hovered_button_with_scroll};
+use sniffer_core::scroll_physics::ScrollPhysics;
 use sniffer_core::style::BACKGROUND;
 use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::event::{EventBus, UiEvent};
 use sniffer_core::ui::style_map::StyleMap;
 use sniffer_core::{Action, Point, Renderer, ScreenMetrics, Size, calculate_layout};
-use sniffer_core::scroll_physics::ScrollPhysics;
-use sniffer_render::GlowRenderer;
 use sniffer_plugin::registry::PluginRegistry;
+use sniffer_render::GlowRenderer;
+use sniffer_render::draw::{
+    draw_ui, find_clicked_button_with_scroll, find_hovered_button_with_scroll,
+};
 
-use sniffer_core::dev_log;
 use obfstr::obfstr;
+use sniffer_core::dev_log;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
@@ -62,7 +64,12 @@ pub fn detect_desktop_theme() -> sniffer_core::vault::SystemTheme {
         // Check Windows Personalize registry for AppsUseLightTheme
         use std::process::Command;
         if let Ok(output) = Command::new("reg")
-            .args(["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "/v", "AppsUseLightTheme"])
+            .args([
+                "query",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "/v",
+                "AppsUseLightTheme",
+            ])
             .output()
         {
             let text = String::from_utf8_lossy(&output.stdout);
@@ -91,9 +98,15 @@ impl AppState {
 
         let candidates = [
             // 1. Next to the executable (e.g. target/debug/.plugins or target/release/.plugins)
-            std::env::current_exe().ok().and_then(|p| p.parent().map(|dir| dir.join(".plugins"))),
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|dir| dir.join(".plugins"))),
             // 2. Parent of the profile directory (e.g. target/.plugins)
-            std::env::current_exe().ok().and_then(|p| p.parent().and_then(|d| d.parent()).map(|dir| dir.join(".plugins"))),
+            std::env::current_exe().ok().and_then(|p| {
+                p.parent()
+                    .and_then(|d| d.parent())
+                    .map(|dir| dir.join(".plugins"))
+            }),
             // 3. Project compile-time manifest dir (guarantees cargo run works from anywhere)
             option_env!("CARGO_MANIFEST_DIR").map(|dir| std::path::Path::new(dir).join(".plugins")),
             // 4. Current working directory (.plugins)
@@ -154,7 +167,10 @@ impl Default for AppState {
 fn find_first_scrollview<'a>(
     element: &'a sniffer_core::types::Element,
     layout: &'a sniffer_core::layout::LayoutNode,
-) -> Option<(&'a sniffer_core::types::Element, &'a sniffer_core::layout::LayoutNode)> {
+) -> Option<(
+    &'a sniffer_core::types::Element,
+    &'a sniffer_core::layout::LayoutNode,
+)> {
     if matches!(element, sniffer_core::types::Element::ScrollView { .. }) {
         return Some((element, layout));
     }
@@ -207,7 +223,8 @@ pub fn run_loop(
     let width = f32::from(u16::try_from(phys_w).unwrap_or(0));
     let height = f32::from(u16::try_from(phys_h).unwrap_or(0));
     sniffer_core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
-    sniffer_core::types::SCREEN_HEIGHT.store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
+    sniffer_core::types::SCREEN_HEIGHT
+        .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
     desktop.window.request_redraw();
 

@@ -7,7 +7,8 @@ use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::style_map::StyleMap;
 use sniffer_core::{Rect, ScreenMetrics};
 
-static ICON_LOADER: std::sync::atomic::AtomicPtr<()> = std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+static ICON_LOADER: std::sync::atomic::AtomicPtr<()> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 pub type IconLoaderFn = fn(&str);
 
 pub fn set_icon_loader(f: IconLoaderFn) {
@@ -67,13 +68,25 @@ pub(crate) fn draw_element_contents(
             let mut min_y = f32::MAX;
             let mut max_y = f32::MIN;
             for child_lay in layout.children.iter() {
-                if child_lay.rect.y < min_y { min_y = child_lay.rect.y; }
+                if child_lay.rect.y < min_y {
+                    min_y = child_lay.rect.y;
+                }
                 let bottom = child_lay.rect.y + child_lay.rect.height;
-                if bottom > max_y { max_y = bottom; }
+                if bottom > max_y {
+                    max_y = bottom;
+                }
             }
             let content_height = if min_y <= max_y { max_y - min_y } else { 0.0 };
-            let safe_scroll_y = if scroll_y.is_nan() || scroll_y.is_infinite() { 0.0 } else { *scroll_y };
-            let safe_scroll_x = if scroll_x.is_nan() || scroll_x.is_infinite() { 0.0 } else { *scroll_x };
+            let safe_scroll_y = if scroll_y.is_nan() || scroll_y.is_infinite() {
+                0.0
+            } else {
+                *scroll_y
+            };
+            let safe_scroll_x = if scroll_x.is_nan() || scroll_x.is_infinite() {
+                0.0
+            } else {
+                *scroll_x
+            };
 
             renderer.push_transform(0.0, 0.0, 1.0, 0.0, -safe_scroll_x, -safe_scroll_y);
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
@@ -216,4 +229,3 @@ pub(crate) fn draw_element_contents(
     }
     rendered_children
 }
-
