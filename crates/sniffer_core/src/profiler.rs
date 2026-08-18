@@ -210,7 +210,7 @@ pub fn render_devkit_hud(
     renderer: &mut dyn crate::render_api::Renderer,
     profiler: &FrameProfiler,
     node_count: usize,
-    screen_width: f32,
+    _screen_width: f32,
     root_element: &crate::types::Element,
     layout_tree: &crate::layout::LayoutNode,
 ) {
@@ -235,8 +235,8 @@ pub fn render_devkit_hud(
 
     let w = 240.0_f32;
     let h = 135.0_f32;
-    let x = (screen_width - w - 16.0).max(10.0);
-    let y = 50.0_f32;
+    let x = 16.0_f32;
+    let y = 16.0_f32;
 
     // Outer Card
     renderer.draw_rect(

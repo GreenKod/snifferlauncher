@@ -1,16 +1,17 @@
-use sniffer_render::draw::{draw_ui, find_clicked_button_with_scroll, find_hovered_button};
+use sniffer_render::draw::{draw_ui, find_clicked_button_with_scroll, find_hovered_button_with_scroll};
 use sniffer_core::style::BACKGROUND;
 use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::event::{EventBus, UiEvent};
 use sniffer_core::ui::style_map::StyleMap;
 use sniffer_core::{Action, Point, Renderer, ScreenMetrics, Size, calculate_layout};
+use sniffer_core::scroll_physics::ScrollPhysics;
 use sniffer_render::GlowRenderer;
 use sniffer_plugin::registry::PluginRegistry;
 
-use sniffer_core::{dev_err, dev_log};
+use sniffer_core::dev_log;
 use obfstr::obfstr;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use super::window::DesktopWindow;
 
@@ -35,10 +36,14 @@ pub struct AppState {
     pub is_mouse_down: bool,
     pub focused_input_id: Option<String>,
     pub last_mouse_pos: Point,
+    pub mouse_down_pos: Option<Point>,
+    pub total_drag_dist: f32,
     pub hovered_btn: Option<u64>,
     pub active_scrollview_drag: Option<u64>,
     pub last_drag_delta: (f32, f32),
     pub kinetic_scrolls: Vec<KineticScroll>,
+    pub scroll_physics: HashMap<u64, ScrollPhysics>,
+    pub drag_history: VecDeque<(f32, f32, std::time::Instant)>,
 
     pub event_bus: EventBus,
     pub style_map: StyleMap,
@@ -46,6 +51,8 @@ pub struct AppState {
     pub action_queue: Arc<Mutex<Vec<Action>>>,
     pub plugin_registry: PluginRegistry,
     pub transition_manager: sniffer_core::anim::TransitionManager,
+    #[cfg(feature = "devkit")]
+    pub profiler: Arc<Mutex<sniffer_core::profiler::FrameProfiler>>,
 }
 
 #[must_use]
@@ -108,16 +115,23 @@ impl AppState {
         sniffer_plugin::PluginLoader::new(&plugins_dir)
             .register_all(&mut plugin_registry, &action_queue);
 
+        #[cfg(feature = "devkit")]
+        let profiler = Arc::new(Mutex::new(sniffer_core::profiler::FrameProfiler::new(120)));
+
         Self {
             running: true,
             window_focused: true,
             is_mouse_down: false,
             focused_input_id: None,
             last_mouse_pos: Point::new(-9999.0, -9999.0),
+            mouse_down_pos: None,
+            total_drag_dist: 0.0,
             hovered_btn: None,
             active_scrollview_drag: None,
             last_drag_delta: (0.0, 0.0),
             kinetic_scrolls: Vec::new(),
+            scroll_physics: HashMap::new(),
+            drag_history: VecDeque::new(),
 
             event_bus: EventBus::default(),
             style_map: StyleMap::default(),
@@ -125,6 +139,8 @@ impl AppState {
             action_queue,
             plugin_registry,
             transition_manager: sniffer_core::anim::TransitionManager::default(),
+            #[cfg(feature = "devkit")]
+            profiler,
         }
     }
 }
@@ -138,15 +154,14 @@ impl Default for AppState {
 fn find_first_scrollview<'a>(
     element: &'a sniffer_core::types::Element,
     layout: &'a sniffer_core::layout::LayoutNode,
-) -> Option<(
-    &'a sniffer_core::types::Element,
-    &'a sniffer_core::layout::LayoutNode,
-)> {
-    if let sniffer_core::types::Element::ScrollView { .. } = element {
+) -> Option<(&'a sniffer_core::types::Element, &'a sniffer_core::layout::LayoutNode)> {
+    if matches!(element, sniffer_core::types::Element::ScrollView { .. }) {
         return Some((element, layout));
     }
-    if let sniffer_core::types::Element::Container { children, .. } = element {
-        for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
+    if let sniffer_core::types::Element::Container { children, .. }
+    | sniffer_core::types::Element::SharedView { children, .. } = element
+    {
+        for (child_el, child_lay) in children.iter().zip(&layout.children) {
             if let Some(res) = find_first_scrollview(child_el, child_lay) {
                 return Some(res);
             }
@@ -155,13 +170,29 @@ fn find_first_scrollview<'a>(
     None
 }
 
+fn resolve_active_scroll(
+    scroll_physics: &HashMap<u64, ScrollPhysics>,
+    id_opt: Option<&str>,
+    sx: f32,
+    sy: f32,
+) -> (f32, f32) {
+    if let Some(id_str) = id_opt {
+        let wid = sniffer_core::ui::widget::fnv1a(id_str.as_bytes());
+        if let Some(phys) = scroll_physics.get(&wid) {
+            return (phys.pos_x, phys.pos_y);
+        }
+    }
+    (sx, sy)
+}
+
 #[allow(
     clippy::missing_errors_doc,
     clippy::too_many_lines,
     clippy::similar_names,
     clippy::needless_pass_by_value,
     clippy::cast_possible_truncation,
-    clippy::cast_precision_loss
+    clippy::cast_precision_loss,
+    clippy::cast_possible_wrap
 )]
 pub fn run_loop(
     mut app: AppState,
@@ -210,7 +241,8 @@ pub fn run_loop(
                         desktop.window.request_redraw();
                     }
                     winit::event::WindowEvent::RedrawRequested => {
-                        let now = std::time::Instant::now();
+                        let render_start = std::time::Instant::now();
+                        let now = render_start;
                         let dt = now.duration_since(last_frame_time).as_secs_f32();
                         last_frame_time = now;
 
@@ -227,13 +259,48 @@ pub fn run_loop(
 
                         app.plugin_registry.tick();
 
-                        let root_element = app.plugin_registry.build_ui().unwrap_or_else(|| {
+                        let mut root_element = app.plugin_registry.build_ui().unwrap_or_else(|| {
                             sniffer_core::types::Element::Container {
                                 id: None,
                                 style: sniffer_core::style::Style::default(),
                                 children: vec![],
                             }
                         });
+
+                        sniffer_core::scroll_physics::sync_scroll_physics_from_tree(&root_element, &mut app.scroll_physics);
+
+                        let vmin_px = width.min(height) / 100.0;
+                        let phys_ids: Vec<u64> = app.scroll_physics.keys().copied().collect();
+                        for sv_id in phys_ids {
+                            if let Some(phys) = app.scroll_physics.get_mut(&sv_id) {
+                                let _ = phys.tick(dt);
+
+                                if let Some(snap_width) = phys.snap_x {
+                                    if snap_width > 0.0 {
+                                        let max_page = (phys.page_count.unwrap_or(1) as i32 - 1).max(0);
+                                        let current_page = (phys.pos_x / snap_width).round() as i32;
+                                        let clamped_page = current_page.clamp(0, max_page) as usize;
+
+                                        phys.last_snap_page = clamped_page as i32;
+
+                                        if phys.snap_just_completed && phys.on_snap.is_some() {
+                                            app.event_bus.push(UiEvent::PageSnapped {
+                                                widget_id: sv_id,
+                                                page: clamped_page as i32,
+                                            });
+                                        }
+
+                                        let _ = sniffer_core::scroll_physics::update_indicator_dots_in_element(
+                                            &mut root_element,
+                                            phys.last_snap_page,
+                                            vmin_px,
+                                        );
+                                    }
+                                }
+
+                                sniffer_core::scroll_physics::inject_physics_to_tree(&mut root_element, sv_id, phys.pos_x, phys.pos_y);
+                            }
+                        }
 
                         app.transition_manager.sync_tree(&root_element);
                         let _ = app.transition_manager.tick(dt);
@@ -257,12 +324,47 @@ pub fn run_loop(
                         let layout_tree =
                             calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
 
+                        let get_max_scroll_for_lay =
+                            |lay: &sniffer_core::layout::LayoutNode| -> (f32, f32) {
+                                let view_width = lay.rect.width;
+                                let view_height = lay.rect.height;
+                                let mut max_x = 0.0_f32;
+                                let mut max_y = 0.0_f32;
+                                for child_lay in &lay.children {
+                                    let child_right = child_lay.rect.x + child_lay.rect.width;
+                                    let child_bottom = child_lay.rect.y + child_lay.rect.height;
+                                    if child_right > max_x {
+                                        max_x = child_right;
+                                    }
+                                    if child_bottom > max_y {
+                                        max_y = child_bottom;
+                                    }
+                                }
+                                let content_width = max_x - lay.rect.x;
+                                let content_height = max_y - lay.rect.y;
+
+                                let max_scroll_x =
+                                    if content_width > view_width && view_width > 0.0 {
+                                        content_width - view_width
+                                    } else {
+                                        0.0
+                                    };
+                                let max_scroll_y =
+                                    if content_height > view_height && view_height > 0.0 {
+                                        content_height - view_height
+                                    } else {
+                                        0.0
+                                    };
+                                (max_scroll_x, max_scroll_y)
+                            };
+
                         if input.mouse_moved {
                             let prev_hovered = app.hovered_btn;
-                            let hovered_data = find_hovered_button(
+                            let hovered_data = find_hovered_button_with_scroll(
                                 &root_element,
                                 &layout_tree,
                                 scaled_last_mouse_pos,
+                                &|id_opt, sx, sy| resolve_active_scroll(&app.scroll_physics, id_opt, sx, sy),
                             );
                             app.hovered_btn = hovered_data.map(|(id, _)| id);
 
@@ -303,6 +405,10 @@ pub fn run_loop(
                         }
 
                         if let Some(clicked_pt) = scaled_clicked_pos {
+                            app.mouse_down_pos = Some(clicked_pt);
+                            app.total_drag_dist = 0.0;
+                            app.drag_history.clear();
+
                             if let Some((
                                 sniffer_core::types::Element::ScrollView {
                                     id, capture_drag, ..
@@ -321,102 +427,176 @@ pub fn run_loop(
                                 app.kinetic_scrolls.clear();
                             }
 
-                            if let Some((clicked_btn, rect)) =
+                            if let Some((clicked_btn, _)) =
                                 find_clicked_button_with_scroll(
                                     &root_element,
                                     &layout_tree,
                                     clicked_pt,
-                                    &|_id_opt, sx, sy| (sx, sy),
+                                    &|id_opt, sx, sy| resolve_active_scroll(&app.scroll_physics, id_opt, sx, sy),
                                 )
                             {
                                 app.event_bus.push(UiEvent::PointerDown(clicked_btn));
-                                app.event_bus.push(UiEvent::Click(
-                                    clicked_btn,
-                                    rect.width,
-                                    rect.height,
-                                ));
                             } else {
                                 app.event_bus.push(UiEvent::PointerDown(0));
-                                app.event_bus.push(UiEvent::ClickOutside);
+                            }
+                        }
+
+                        for &(dx, dy) in &input.drag_events {
+                            let s_dx = dx * scale_x;
+                            let s_dy = dy * scale_y;
+                            app.total_drag_dist += s_dx.abs() + s_dy.abs();
+                            app.last_drag_delta = (s_dx, s_dy);
+
+                            app.drag_history.push_back((s_dx, s_dy, std::time::Instant::now()));
+                            if app.drag_history.len() > 8 {
+                                app.drag_history.pop_front();
+                            }
+
+                            if app.active_scrollview_drag.is_none() {
+                                if let Some((
+                                    sniffer_core::types::Element::ScrollView {
+                                        id, capture_drag, ..
+                                    },
+                                    _,
+                                )) = sniffer_render::draw::find_hovered_scrollview(
+                                    &root_element,
+                                    &layout_tree,
+                                    scaled_last_mouse_pos,
+                                ) {
+                                    if capture_drag.unwrap_or(true) {
+                                        app.active_scrollview_drag = id.as_deref().map(|id_str| {
+                                            sniffer_core::ui::widget::fnv1a(id_str.as_bytes())
+                                        });
+                                    }
+                                }
+                            }
+
+                            if let Some(sv_id) = app.active_scrollview_drag {
+                                if let Some(phys) = app.scroll_physics.get_mut(&sv_id) {
+                                    phys.apply_drag(s_dx);
+                                    phys.is_dragging = true;
+                                    phys.snap_target_x = None;
+                                } else {
+                                    let target = sniffer_render::draw::find_hovered_scrollview(
+                                        &root_element,
+                                        &layout_tree,
+                                        scaled_last_mouse_pos,
+                                    );
+                                    let max_scroll = target.map_or((0.0, 0.0), |(_, lay)| {
+                                        get_max_scroll_for_lay(lay)
+                                    });
+                                    app.event_bus.push(UiEvent::Scroll(
+                                        Some(sv_id),
+                                        s_dx,
+                                        s_dy,
+                                        max_scroll.0,
+                                        max_scroll.1,
+                                    ));
+                                }
                             }
                         }
 
                         if input.mouse_released {
-                            if let Some(sv_id) = app.active_scrollview_drag
-                                && (app.last_drag_delta.0.abs() > 0.5
-                                    || app.last_drag_delta.1.abs() > 0.5)
-                            {
-                                let momentum_enabled = if let Some((
-                                    sniffer_core::types::Element::ScrollView {
-                                        momentum_scrolling,
-                                        ..
-                                    },
-                                    _,
-                                )) =
-                                    sniffer_render::draw::find_hovered_scrollview(
+                            if let Some(sv_id) = app.active_scrollview_drag {
+                                if app.scroll_physics.contains_key(&sv_id) {
+                                    let now = std::time::Instant::now();
+                                    let cutoff = now.checked_sub(std::time::Duration::from_millis(150)).unwrap_or(now);
+                                    let mut recent_count = 0;
+                                    let mut total_dx = 0.0;
+                                    let mut first_time = None;
+                                    let mut last_time = None;
+
+                                    for &(dx, _, t) in &app.drag_history {
+                                        if t >= cutoff {
+                                            if first_time.is_none() { first_time = Some(t); }
+                                            last_time = Some(t);
+                                            total_dx += dx;
+                                            recent_count += 1;
+                                        }
+                                    }
+
+                                    let vel_x = if recent_count >= 2 {
+                                        let dt_recent = last_time.unwrap().duration_since(first_time.unwrap()).as_secs_f32().max(0.001);
+                                        total_dx / dt_recent
+                                    } else if let Some(last) = last_time {
+                                        let dt_recent = now.duration_since(last).as_secs_f32().max(0.001);
+                                        app.last_drag_delta.0 / dt_recent
+                                    } else {
+                                        0.0
+                                    };
+
+                                    if let Some(phys) = app.scroll_physics.get_mut(&sv_id) {
+                                        phys.release_drag(vel_x);
+                                    }
+                                } else {
+                                    let momentum_enabled = if let Some((
+                                        sniffer_core::types::Element::ScrollView {
+                                            momentum_scrolling,
+                                            ..
+                                        },
+                                        _,
+                                    )) = sniffer_render::draw::find_hovered_scrollview(
                                         &root_element,
                                         &layout_tree,
                                         scaled_last_mouse_pos,
                                     ) {
-                                    momentum_scrolling.unwrap_or(true)
-                                } else {
-                                    true
-                                };
+                                        momentum_scrolling.unwrap_or(true)
+                                    } else {
+                                        true
+                                    };
 
-                                if momentum_enabled {
-                                    app.kinetic_scrolls.push(KineticScroll {
-                                        sv_id,
-                                        velocity_x: app.last_drag_delta.0,
-                                        velocity_y: app.last_drag_delta.1,
-                                    });
+                                    if momentum_enabled {
+                                        app.kinetic_scrolls.push(KineticScroll {
+                                            sv_id,
+                                            velocity_x: app.last_drag_delta.0,
+                                            velocity_y: app.last_drag_delta.1,
+                                        });
+                                    }
                                 }
                             }
 
-                            let released_btn = find_hovered_button(
+                            let released_btn = find_hovered_button_with_scroll(
                                 &root_element,
                                 &layout_tree,
                                 scaled_last_mouse_pos,
+                                &|id_opt, sx, sy| resolve_active_scroll(&app.scroll_physics, id_opt, sx, sy),
                             )
                             .map(|(id, _)| id);
                             app.event_bus.push(UiEvent::PointerUp(released_btn));
 
-                            app.active_scrollview_drag = None;
-                            app.last_drag_delta = (0.0, 0.0);
-                        }
-
-                        let get_max_scroll_for_lay =
-                            |lay: &sniffer_core::layout::LayoutNode| -> (f32, f32) {
-                                let view_width = lay.rect.width;
-                                let view_height = lay.rect.height;
-                                let mut max_x = 0.0_f32;
-                                let mut max_y = 0.0_f32;
-                                for child_lay in &lay.children {
-                                    let child_right = child_lay.rect.x + child_lay.rect.width;
-                                    let child_bottom = child_lay.rect.y + child_lay.rect.height;
-                                    if child_right > max_x {
-                                        max_x = child_right;
-                                    }
-                                    if child_bottom > max_y {
-                                        max_y = child_bottom;
+                            if app.total_drag_dist < 15.0 {
+                                if let Some(down_pt) = app.mouse_down_pos {
+                                    if let Some((clicked_btn, rect)) =
+                                        find_clicked_button_with_scroll(
+                                            &root_element,
+                                            &layout_tree,
+                                            down_pt,
+                                            &|id_opt, sx, sy| resolve_active_scroll(&app.scroll_physics, id_opt, sx, sy),
+                                        ).or_else(|| {
+                                            find_clicked_button_with_scroll(
+                                                &root_element,
+                                                &layout_tree,
+                                                scaled_last_mouse_pos,
+                                                &|id_opt, sx, sy| resolve_active_scroll(&app.scroll_physics, id_opt, sx, sy),
+                                            )
+                                        })
+                                    {
+                                        app.event_bus.push(UiEvent::Click(
+                                            clicked_btn,
+                                            rect.width,
+                                            rect.height,
+                                        ));
+                                    } else {
+                                        app.event_bus.push(UiEvent::ClickOutside);
                                     }
                                 }
-                                let content_width = max_x - lay.rect.x;
-                                let content_height = max_y - lay.rect.y;
+                            }
 
-                                let max_scroll_x =
-                                    if content_width > view_width && view_width > 0.0 {
-                                        content_width - view_width
-                                    } else {
-                                        0.0
-                                    };
-                                let max_scroll_y =
-                                    if content_height > view_height && view_height > 0.0 {
-                                        content_height - view_height
-                                    } else {
-                                        0.0
-                                    };
-                                (max_scroll_x, max_scroll_y)
-                            };
+                            app.active_scrollview_drag = None;
+                            app.last_drag_delta = (0.0, 0.0);
+                            app.drag_history.clear();
+                            app.mouse_down_pos = None;
+                        }
 
                         for &(x, y) in &input.scroll_events {
                             let target = sniffer_render::draw::find_hovered_scrollview(
@@ -460,74 +640,23 @@ pub fn run_loop(
                                     sniffer_core::ui::widget::fnv1a(id_str.as_bytes())
                                 });
 
-                                let max_scroll = get_max_scroll_for_lay(lay);
-
-                                app.event_bus.push(UiEvent::Scroll(
-                                    sv_id,
-                                    -x * 20.0 * factor,
-                                    -y * 20.0 * factor,
-                                    max_scroll.0,
-                                    max_scroll.1,
-                                ));
-                            }
-                        }
-
-                        let mut total_dx = 0.0;
-                        let mut total_dy = 0.0;
-                        for &(dx, dy) in &input.drag_events {
-                            let s_dx = -dx * scale_x;
-                            let s_dy = -dy * scale_y;
-                            total_dx += s_dx;
-                            total_dy += s_dy;
-
-                            let target = sniffer_render::draw::find_hovered_scrollview(
-                                &root_element,
-                                &layout_tree,
-                                scaled_last_mouse_pos,
-                            )
-                            .or_else(|| find_first_scrollview(&root_element, &layout_tree));
-
-                            if let Some(sv_id) = app.active_scrollview_drag {
-                                if let Some((_, lay)) = target {
-                                    let max_scroll = get_max_scroll_for_lay(lay);
-                                    app.event_bus.push(UiEvent::Scroll(
-                                        Some(sv_id),
-                                        s_dx,
-                                        s_dy,
-                                        max_scroll.0,
-                                        max_scroll.1,
-                                    ));
+                                if let Some(wid) = sv_id {
+                                    if let Some(phys) = app.scroll_physics.get_mut(&wid) {
+                                        let delta = -x * 30.0 - y * 30.0;
+                                        phys.apply_drag(delta);
+                                        phys.release_drag(delta * 4.0);
+                                    } else {
+                                        let max_scroll = get_max_scroll_for_lay(lay);
+                                        app.event_bus.push(UiEvent::Scroll(
+                                            Some(wid),
+                                            -x * 20.0 * factor,
+                                            -y * 20.0 * factor,
+                                            max_scroll.0,
+                                            max_scroll.1,
+                                        ));
+                                    }
                                 }
-                            } else if let Some((
-                                sniffer_core::types::Element::ScrollView {
-                                    id, capture_drag, ..
-                                },
-                                lay,
-                            )) = target
-                            {
-                                if capture_drag.unwrap_or(true)
-                                    && app.active_scrollview_drag.is_none()
-                                {
-                                    app.active_scrollview_drag = id.as_deref().map(|id_str| {
-                                        sniffer_core::ui::widget::fnv1a(id_str.as_bytes())
-                                    });
-                                }
-                                let sv_id = id.as_deref().map(|id_str| {
-                                    sniffer_core::ui::widget::fnv1a(id_str.as_bytes())
-                                });
-                                let max_scroll = get_max_scroll_for_lay(lay);
-                                app.event_bus.push(UiEvent::Scroll(
-                                    sv_id,
-                                    s_dx,
-                                    s_dy,
-                                    max_scroll.0,
-                                    max_scroll.1,
-                                ));
                             }
-                        }
-
-                        if total_dx != 0.0 || total_dy != 0.0 {
-                            app.last_drag_delta = (total_dx, total_dy);
                         }
 
                         app.kinetic_scrolls.retain_mut(|k| {
@@ -577,32 +706,12 @@ pub fn run_loop(
                                             let pixels = [0, 255, 0, 255].repeat((w * h) as usize);
                                             renderer.load_image(&id, &pixels, w, h);
                                             dev_log!("{} {src}", obfstr!("Loaded dummy app icon for"));
-                                        } else {
-                                            let result = image::open(&src);
-                                            match result {
-                                                Ok(img) => {
-                                                    let rgba = img.to_rgba8();
-                                                    let (w, h) = rgba.dimensions();
-                                                    renderer.load_image(&id, rgba.as_raw(), w, h);
-                                                }
-                                                Err(e) => dev_err!("{}: {e}", obfstr!("Failed to load image")),
-                                            }
                                         }
                                     }
-                                    Action::LaunchApp { package_name } => {
-                                        dev_log!("{}: {package_name}", obfstr!("Desktop Preview: Launch App triggered"));
+                                    Action::LaunchApp { package_name, .. } => {
+                                        dev_log!("{} {package_name}", obfstr!("Desktop Preview: Launch App triggered"));
                                     }
-                                    Action::FocusTextInput(id) => {
-                                        desktop.window.set_ime_allowed(true);
-                                        app.focused_input_id = Some(id);
-                                    }
-                                    Action::RequestDefaultLauncher => {
-                                        dev_log!("{}", obfstr!("Desktop Preview: Request Default Launcher triggered"));
-                                    }
-                                    Action::BlurTextInput => {
-                                        desktop.window.set_ime_allowed(false);
-                                        app.focused_input_id = None;
-                                    }
+                                    _ => {}
                                 }
                             }
                         }
@@ -610,7 +719,7 @@ pub fn run_loop(
                         renderer.begin_frame(width, height);
                         renderer.clear(BACKGROUND);
 
-                        draw_ui(
+                        let rendered_nodes = draw_ui(
                             &mut renderer,
                             &root_element,
                             &layout_tree,
@@ -623,8 +732,35 @@ pub fn run_loop(
                             0.0,
                         );
 
+                        #[cfg(feature = "devkit")]
+                        {
+                            if let Ok(prof) = app.profiler.lock() {
+                                sniffer_core::profiler::render_devkit_hud(
+                                    &mut renderer,
+                                    &prof,
+                                    rendered_nodes,
+                                    width,
+                                    &root_element,
+                                    &layout_tree,
+                                );
+                            }
+                        }
+
                         renderer.end_frame();
+                        let draw_end = std::time::Instant::now();
+
                         let _ = desktop.swap_buffers();
+                        let swap_end = std::time::Instant::now();
+
+                        #[cfg(feature = "devkit")]
+                        if let Ok(mut prof) = app.profiler.lock() {
+                            prof.record_frame(render_start, render_start, draw_end, swap_end);
+                            prof.touch_telemetry.active_pointers = usize::from(app.is_mouse_down);
+                            prof.touch_telemetry.touch_x = scaled_last_mouse_pos.x;
+                            prof.touch_telemetry.touch_y = scaled_last_mouse_pos.y;
+                            prof.touch_telemetry.target_element = app.hovered_btn.map_or_else(|| "None".to_string(), |b| format!("btn_{b:x}"));
+                            prof.touch_telemetry.gesture = if app.is_mouse_down { "DRAG / MOUSE".to_string() } else { "HOVER".to_string() };
+                        }
 
                         input = FrameInputState::default();
                     }
@@ -641,9 +777,7 @@ pub fn run_loop(
                 }
 
                 desktop.window.request_redraw();
-                active_event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
-                    std::time::Instant::now() + Duration::from_millis(16),
-                ));
+                active_event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
             }
             _ => {}
         })
@@ -651,4 +785,3 @@ pub fn run_loop(
 
     Ok(())
 }
-

@@ -67,9 +67,9 @@ pub fn handle_winit_event(
         WindowEvent::CursorMoved { position, .. } => {
             let new_pos = Point::new(position.x as f32, position.y as f32);
             if app.is_mouse_down && (app.last_mouse_pos.x - -9999.0).abs() > f32::EPSILON {
-                let dx = new_pos.x - app.last_mouse_pos.x;
-                let dy = new_pos.y - app.last_mouse_pos.y;
-                if dx != 0.0 || dy != 0.0 {
+                let dx = -(new_pos.x - app.last_mouse_pos.x);
+                let dy = -(new_pos.y - app.last_mouse_pos.y);
+                if dx.abs() > 0.001 || dy.abs() > 0.001 {
                     input.drag_events.push((dx, dy));
                 }
             }
