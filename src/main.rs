@@ -1,13 +1,13 @@
-#![allow(clippy::missing_errors_doc)]
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     #[cfg(not(target_os = "android"))]
     {
-        sniffer_platform_desktop::run()?;
+        if let Err(e) = sniffer_platform_desktop::run() {
+            eprintln!("Error running Sniffer desktop: {e}");
+            std::process::exit(1);
+        }
     }
     #[cfg(target_os = "android")]
     {
-        println!("This binary is for desktop preview only. Use cargo-apk to build for Android.");
+        println!("This binary is for desktop preview only. Use cargo-apk or cargo-ndk to build for Android.");
     }
-    Ok(())
 }
