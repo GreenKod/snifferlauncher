@@ -25,41 +25,6 @@ license-files = [
     { path = "LICENSE", hash = 0x0 }
 ]
 
-[[licenses.clarify]]
-name = "sniffer_core"
-expression = "Apache-2.0"
-license-files = [
-    { path = "LICENSE", hash = 0x0 }
-]
-
-[[licenses.clarify]]
-name = "sniffer_render"
-expression = "Apache-2.0"
-license-files = [
-    { path = "LICENSE", hash = 0x0 }
-]
-
-[[licenses.clarify]]
-name = "sniffer_plugin"
-expression = "Apache-2.0"
-license-files = [
-    { path = "LICENSE", hash = 0x0 }
-]
-
-[[licenses.clarify]]
-name = "sniffer_platform_desktop"
-expression = "Apache-2.0"
-license-files = [
-    { path = "LICENSE", hash = 0x0 }
-]
-
-[[licenses.clarify]]
-name = "sniffer_platform_android"
-expression = "Apache-2.0"
-license-files = [
-    { path = "LICENSE", hash = 0x0 }
-]
-
 [licenses.private]
 ignore = true
 
@@ -67,6 +32,7 @@ ignore = true
 ignore = [
     "RUSTSEC-2024-0436", # paste crate is unmaintained, but wasmi depends on it
     "RUSTSEC-2024-0370", # unmaintained advisory
+    "RUSTSEC-2026-0192", # ttf-parser is unmaintained (transitive dependency of winit/sctk-adwaita)
 ]
 
 [bans]
