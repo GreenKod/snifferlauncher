@@ -144,6 +144,9 @@ jobs:
             -D clippy::cargo \
             -A clippy::multiple-crate-versions
 
+      - name: Run Unit & Integration Tests (cargo test)
+        run: cargo test --locked --workspace --all-features
+
       - name: Linux Release Build Check
         run: cargo build --locked --release --workspace --all-features
 
@@ -191,6 +194,17 @@ jobs:
           cargo --version
           cargo check --locked --target x86_64-pc-windows-gnu
           cargo clippy --locked --workspace --all-targets --all-features --target x86_64-pc-windows-gnu -- -D warnings -D clippy::pedantic -D clippy::nursery -D clippy::cargo -A clippy::multiple-crate-versions
+
+      - name: Windows (GNU/64-bit) Tests
+        shell: pwsh
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
+        run: |
+          $msys2Root = "${{ steps.msys2.outputs.msys2-location }}"
+          $mingwRoot = Join-Path $msys2Root "mingw64"
+          $env:Path = "$mingwRoot\bin;$msys2Root\usr\bin;$env:Path"
+          $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
+          cargo test --locked --workspace --all-features --target x86_64-pc-windows-gnu
 
       - name: Windows Release Build Check
         shell: pwsh
