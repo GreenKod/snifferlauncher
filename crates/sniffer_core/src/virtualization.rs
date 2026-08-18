@@ -5,8 +5,8 @@
 //! Hızlı kaydırma (fling) anında pencere yarıçapını (radius) dinamik genişletir.
 //! Pencere dışındaki sayfaların çocuklarını sökerek `page_cache` ve `ElementPool`'a aktarır.
 
-use std::collections::{HashMap, HashSet, VecDeque};
 use crate::types::Element;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Taffy layout'a girecek varsayılan sayfa yarıçapı (current ± 1)
 pub const PAGE_WINDOW_RADIUS: usize = 1;
@@ -132,7 +132,12 @@ impl VirtualPageManager {
     /// Sürükleme veya fling esnasında scroll offset'i %50 eşiğini geçtiğinde
     /// Erken Pre-materialization tetikler.
     /// Sayfa penceresi değiştiyse `true` döner ve re-layout tetiklenir.
-    pub fn update_predicted_page(&mut self, predicted_page: usize, root: &mut Element, velocity: f32) -> bool {
+    pub fn update_predicted_page(
+        &mut self,
+        predicted_page: usize,
+        root: &mut Element,
+        velocity: f32,
+    ) -> bool {
         self.current_page = predicted_page;
         self.virtualize_tree_with_velocity(root, velocity);
         false // Force false to prevent mid-swipe Taffy layout recalculation CPU spikes
@@ -216,11 +221,20 @@ impl VirtualPageManager {
         out_page_count: &mut usize,
     ) -> Option<&'a mut Vec<Element>> {
         let pager = Self::find_element_by_id_mut(root, "app_grid_pager")?;
-        if let Element::ScrollView { children, page_count, .. } = pager {
+        if let Element::ScrollView {
+            children,
+            page_count,
+            ..
+        } = pager
+        {
             if let Some(pc) = page_count {
                 *out_page_count = *pc as usize;
             }
-            if let Some(Element::Container { id, children: track_children, .. }) = children.first_mut()
+            if let Some(Element::Container {
+                id,
+                children: track_children,
+                ..
+            }) = children.first_mut()
                 && id.as_deref() == Some("app_grid_track")
             {
                 return Some(track_children);
@@ -253,4 +267,3 @@ impl VirtualPageManager {
         None
     }
 }
-

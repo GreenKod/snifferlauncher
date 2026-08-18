@@ -45,7 +45,7 @@ pub fn init_icon_worker_pool() {
         thread::spawn(move || {
             let jvm = vm();
             let _ = jvm.attach_current_thread::<_, (), JniError>(|env: &mut Env| {
-                // Prepare a Looper for this thread because some OEM's AdaptiveIconDrawables 
+                // Prepare a Looper for this thread because some OEM's AdaptiveIconDrawables
                 // require a Looper to run animations or resolve state.
                 if let Ok(looper_class) = env.find_class(jni_str!("android/os/Looper")) {
                     let _ = env.call_static_method(
@@ -58,7 +58,9 @@ pub fn init_icon_worker_pool() {
 
                 while let Ok(req) = req_rx_clone.recv() {
                     let _ = env.with_local_frame(128, |env| {
-                        if let Some((pixels, width, height)) = get_app_icon_pixels_inner(env, &req.package_name) {
+                        if let Some((pixels, width, height)) =
+                            get_app_icon_pixels_inner(env, &req.package_name)
+                        {
                             let _ = res_tx_clone.send(IconLoadResult {
                                 package_name: req.package_name.clone(),
                                 pixels,
@@ -136,12 +138,25 @@ pub(crate) fn extract_drawable_pixels(
 
     // Get DisplayMetrics to ensure AdaptiveIconDrawable scales properly on custom ROMs
     let ctx = super::context(env);
-    let display_metrics = env.call_method(&ctx, jni_str!("getResources"), jni_sig!("()Landroid/content/res/Resources;"), &[])
-        .and_then(|res| env.call_method(&res.l()?, jni_str!("getDisplayMetrics"), jni_sig!("()Landroid/util/DisplayMetrics;"), &[]))
+    let display_metrics = env
+        .call_method(
+            &ctx,
+            jni_str!("getResources"),
+            jni_sig!("()Landroid/content/res/Resources;"),
+            &[],
+        )
+        .and_then(|res| {
+            env.call_method(
+                &res.l()?,
+                jni_str!("getDisplayMetrics"),
+                jni_sig!("()Landroid/util/DisplayMetrics;"),
+                &[],
+            )
+        })
         .and_then(|dm| dm.l());
 
     let bitmap_class = env.find_class(jni_str!("android/graphics/Bitmap"))?;
-    
+
     let bitmap = if let Ok(dm) = display_metrics {
         env.call_static_method(
             bitmap_class,
@@ -178,12 +193,27 @@ pub(crate) fn extract_drawable_pixels(
     )?;
 
     // Ensure the canvas is clear
-    let _ = env.call_method(&canvas, jni_str!("drawColor"), jni_sig!("(I)V"), &[JValue::Int(0)]);
+    let _ = env.call_method(
+        &canvas,
+        jni_str!("drawColor"),
+        jni_sig!("(I)V"),
+        &[JValue::Int(0)],
+    );
     let _ = env.exception_clear();
 
     // Force the drawable to be visible and fully opaque (fixes Tecno/MIUI silent draw failure)
-    let _ = env.call_method(drawable, jni_str!("setAlpha"), jni_sig!("(I)V"), &[JValue::Int(255)]);
-    let _ = env.call_method(drawable, jni_str!("setVisible"), jni_sig!("(ZZ)Z"), &[JValue::Bool(true), JValue::Bool(false)]);
+    let _ = env.call_method(
+        drawable,
+        jni_str!("setAlpha"),
+        jni_sig!("(I)V"),
+        &[JValue::Int(255)],
+    );
+    let _ = env.call_method(
+        drawable,
+        jni_str!("setVisible"),
+        jni_sig!("(ZZ)Z"),
+        &[JValue::Bool(true), JValue::Bool(false)],
+    );
     let _ = env.exception_clear();
 
     env.call_method(
@@ -240,14 +270,29 @@ pub(crate) fn extract_drawable_pixels(
 fn get_icon_cache_dir_path(env: &mut Env) -> std::path::PathBuf {
     let ctx = context(env);
     let path_res: Result<String, JniError> = (|| {
-        let files_dir = env.call_method(&ctx, jni_str!("getCacheDir"), jni_sig!("()Ljava/io/File;"), &[])?.l()?;
-        let path_obj = env.call_method(&files_dir, jni_str!("getAbsolutePath"), jni_sig!("()Ljava/lang/String;"), &[])?.l()?;
+        let files_dir = env
+            .call_method(
+                &ctx,
+                jni_str!("getCacheDir"),
+                jni_sig!("()Ljava/io/File;"),
+                &[],
+            )?
+            .l()?;
+        let path_obj = env
+            .call_method(
+                &files_dir,
+                jni_str!("getAbsolutePath"),
+                jni_sig!("()Ljava/lang/String;"),
+                &[],
+            )?
+            .l()?;
         let path_jstring = env.as_cast::<jni::objects::JString>(&path_obj)?;
         let path_str = path_jstring.try_to_string(env)?;
         Ok(path_str)
     })();
 
-    let base = path_res.unwrap_or_else(|_| "/data/data/com.greenkod.snifferlauncher/cache".to_string());
+    let base =
+        path_res.unwrap_or_else(|_| "/data/data/com.greenkod.snifferlauncher/cache".to_string());
     let dir = std::path::PathBuf::from(base).join("icons");
     let _ = std::fs::create_dir_all(&dir);
     dir
@@ -299,7 +344,10 @@ pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
     .ok()
 }
 
-pub(crate) fn get_app_icon_pixels_inner(env: &mut Env, package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
+pub(crate) fn get_app_icon_pixels_inner(
+    env: &mut Env,
+    package_name: &str,
+) -> Option<(Vec<u8>, u32, u32)> {
     if let Some(cached) = load_icon_from_disk(env, package_name) {
         return Some(cached);
     }
@@ -386,5 +434,3 @@ pub(crate) fn get_app_icon_pixels_inner(env: &mut Env, package_name: &str) -> Op
 
     result.ok()
 }
-
-

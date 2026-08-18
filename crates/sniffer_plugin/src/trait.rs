@@ -58,4 +58,3 @@ pub trait UiPlugin: Send + Sync {
     /// Called when the plugin is being unloaded.
     fn on_unload(&self) {}
 }
-

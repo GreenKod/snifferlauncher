@@ -1,5 +1,5 @@
-use std::sync::RwLock;
 use sniffer_core::types::AppInfo;
+use std::sync::RwLock;
 
 pub trait HostPlatformBridge: Send + Sync {
     fn get_application_list(&self) -> Result<Vec<AppInfo>, String> {

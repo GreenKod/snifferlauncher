@@ -7,5 +7,5 @@ pub mod r#trait;
 pub use js::JsPlugin;
 pub use loader::PluginLoader;
 pub use registry::PluginRegistry;
-pub use r#trait::UiPlugin;
 pub use sniffer_core::{dev_err, dev_log};
+pub use r#trait::UiPlugin;

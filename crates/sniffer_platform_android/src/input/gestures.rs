@@ -133,5 +133,3 @@ pub fn keycode_to_char(keycode: Keycode) -> Option<char> {
         _ => None,
     }
 }
-
-

@@ -10,4 +10,3 @@ pub use data_map::{DataMap, DataValue};
 pub use event::{EventBus, UiEvent};
 pub use style_map::StyleMap;
 pub use widget::{Widget, WidgetId, ids};
-

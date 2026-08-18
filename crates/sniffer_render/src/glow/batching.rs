@@ -1,6 +1,6 @@
 use super::GlowRenderer;
-use sniffer_core::math::Rect;
 use glow::HasContext;
+use sniffer_core::math::Rect;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -84,8 +84,11 @@ impl GlowRenderer {
 
             let u = self.shape_uniforms.clone();
 
-            self.gl
-                .uniform_2_f32(u.u_resolution.as_ref(), self.resolution.0, self.resolution.1);
+            self.gl.uniform_2_f32(
+                u.u_resolution.as_ref(),
+                self.resolution.0,
+                self.resolution.1,
+            );
             self.gl.uniform_2_f32(u.u_rect_pos.as_ref(), rect.x, rect.y);
             self.gl
                 .uniform_2_f32(u.u_rect_size.as_ref(), rect.width, rect.height);
@@ -99,7 +102,8 @@ impl GlowRenderer {
                 col_top[3],
             );
             self.gl.uniform_1_f32(u.u_radius.as_ref(), radius);
-            self.gl.uniform_1_f32(u.u_border_width.as_ref(), border_width);
+            self.gl
+                .uniform_1_f32(u.u_border_width.as_ref(), border_width);
             self.gl.uniform_4_f32(
                 u.u_border_color.as_ref(),
                 b_col[0],
@@ -125,7 +129,14 @@ impl GlowRenderer {
         }
     }
 
-    pub(crate) fn draw_shadow_impl(&mut self, rect: Rect, radius: f32, offset_y: f32, spread: f32, color: u32) {
+    pub(crate) fn draw_shadow_impl(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        offset_y: f32,
+        spread: f32,
+        color: u32,
+    ) {
         let mut col = unpack_color(color);
         col[3] *= self.global_alpha;
         unsafe {
@@ -147,8 +158,11 @@ impl GlowRenderer {
             let shape_size_x = spread.mul_add(2.0, rect.width);
             let shape_size_y = spread.mul_add(2.0, rect.height);
 
-            self.gl
-                .uniform_2_f32(u.u_resolution.as_ref(), self.resolution.0, self.resolution.1);
+            self.gl.uniform_2_f32(
+                u.u_resolution.as_ref(),
+                self.resolution.0,
+                self.resolution.1,
+            );
             self.gl
                 .uniform_2_f32(u.u_rect_pos.as_ref(), shadow_rect.x, shadow_rect.y);
             self.gl.uniform_2_f32(
@@ -188,8 +202,11 @@ impl GlowRenderer {
                 height: radius * 2.0,
             };
 
-            self.gl
-                .uniform_2_f32(u.u_resolution.as_ref(), self.resolution.0, self.resolution.1);
+            self.gl.uniform_2_f32(
+                u.u_resolution.as_ref(),
+                self.resolution.0,
+                self.resolution.1,
+            );
             self.gl.uniform_2_f32(u.u_rect_pos.as_ref(), rect.x, rect.y);
             self.gl
                 .uniform_2_f32(u.u_rect_size.as_ref(), rect.width, rect.height);
@@ -208,4 +225,3 @@ impl GlowRenderer {
         }
     }
 }
-

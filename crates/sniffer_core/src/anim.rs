@@ -241,4 +241,3 @@ impl TransitionManager {
         self.states.get(id).map(|s| &s.current_style)
     }
 }
-

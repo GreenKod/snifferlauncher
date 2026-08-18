@@ -4,13 +4,13 @@ pub mod state;
 pub use physics_sync::ScrollPhysics;
 pub use state::{AppState, KineticScroll};
 
-use sniffer_render::draw::draw_ui;
-use sniffer_core::ui::event::UiEvent;
-use sniffer_core::{calculate_layout, Renderer, ScreenMetrics, Size};
-use sniffer_core::dev_err;
-use sniffer_core::dev_log;
 use android_activity::{AndroidApp, MainEvent, PollEvent};
 use obfstr::obfstr;
+use sniffer_core::dev_err;
+use sniffer_core::dev_log;
+use sniffer_core::ui::event::UiEvent;
+use sniffer_core::{Renderer, ScreenMetrics, Size, calculate_layout};
+use sniffer_render::draw::draw_ui;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -66,7 +66,11 @@ pub fn android_main(app: AndroidApp) {
     let (initial_width, initial_height) = app.native_window().map_or((1080.0, 1920.0), |window| {
         let w = f32::from(u16::try_from(window.width()).unwrap_or(1080));
         let h = f32::from(u16::try_from(window.height()).unwrap_or(1920));
-        if w > 0.0 && h > 0.0 { (w, h) } else { (1080.0, 1920.0) }
+        if w > 0.0 && h > 0.0 {
+            (w, h)
+        } else {
+            (1080.0, 1920.0)
+        }
     });
 
     let initial_root = sniffer_core::types::Element::Container {
@@ -74,7 +78,15 @@ pub fn android_main(app: AndroidApp) {
         style: sniffer_core::style::Style::default(),
         children: vec![],
     };
-    let initial_layout = Arc::new(sniffer_core::layout::LayoutNode::new(initial_root.clone(), sniffer_core::Rect { x: 0.0, y: 0.0, width: initial_width, height: initial_height }));
+    let initial_layout = Arc::new(sniffer_core::layout::LayoutNode::new(
+        initial_root.clone(),
+        sniffer_core::Rect {
+            x: 0.0,
+            y: 0.0,
+            width: initial_width,
+            height: initial_height,
+        },
+    ));
 
     let mut root_element = initial_root.clone();
 
@@ -106,7 +118,10 @@ pub fn android_main(app: AndroidApp) {
                         if egl_state.is_none() {
                             match EglContextState::new() {
                                 Ok(s) => egl_state = Some(s),
-                                Err(e) => dev_err!("{}: {e}", obfstr!("[EGL Error] Failed to create EGL state")),
+                                Err(e) => dev_err!(
+                                    "{}: {e}",
+                                    obfstr!("[EGL Error] Failed to create EGL state")
+                                ),
                             }
                         }
                         if let Some(ref mut egl) = egl_state {
@@ -149,7 +164,7 @@ pub fn android_main(app: AndroidApp) {
                         if let Ok(mut q) = action_queue_clone.lock() {
                             let mut unhandled = Vec::new();
                             let mut loaded_textures = 0;
-                            
+
                             for action in q.drain(..) {
                                 if loaded_textures >= 16 {
                                     unhandled.push(action);
@@ -157,19 +172,34 @@ pub fn android_main(app: AndroidApp) {
                                 }
                                 match action {
                                     sniffer_core::Action::LoadImage { id: _, src } => {
-                                        if let Some(pkg_name) = src.strip_prefix(obfstr!("app-icon://")) {
+                                        if let Some(pkg_name) =
+                                            src.strip_prefix(obfstr!("app-icon://"))
+                                        {
                                             crate::jni::bridge::request_async_app_icon(pkg_name);
                                         } else {
-                                            let asset_path = format!("{}/{}", obfstr!(".plugins"), src);
-                                            if let Ok(cstr) = std::ffi::CString::new(asset_path.clone()) {
-                                                if let Some(mut asset) = render_app_clone.asset_manager().open(cstr.as_c_str()) {
+                                            let asset_path =
+                                                format!("{}/{}", obfstr!(".plugins"), src);
+                                            if let Ok(cstr) =
+                                                std::ffi::CString::new(asset_path.clone())
+                                            {
+                                                if let Some(mut asset) = render_app_clone
+                                                    .asset_manager()
+                                                    .open(cstr.as_c_str())
+                                                {
                                                     use std::io::Read;
                                                     let mut buffer = Vec::new();
                                                     if asset.read_to_end(&mut buffer).is_ok() {
-                                                        if let Ok(img) = image::load_from_memory(&buffer) {
+                                                        if let Ok(img) =
+                                                            image::load_from_memory(&buffer)
+                                                        {
                                                             let rgba = img.to_rgba8();
                                                             let (w, h) = rgba.dimensions();
-                                                            renderer.load_image(&src, rgba.as_raw(), w, h);
+                                                            renderer.load_image(
+                                                                &src,
+                                                                rgba.as_raw(),
+                                                                w,
+                                                                h,
+                                                            );
                                                             loaded_textures += 1;
                                                         }
                                                     }
@@ -182,7 +212,7 @@ pub fn android_main(app: AndroidApp) {
                                     }
                                 }
                             }
-                            
+
                             if !unhandled.is_empty() {
                                 *q = unhandled;
                             }
@@ -190,18 +220,18 @@ pub fn android_main(app: AndroidApp) {
 
                         let render_start = std::time::Instant::now();
                         let current_state = render_state_clone.read().unwrap().clone();
-                        
+
                         let width = current_state.metrics.physical_width;
                         let height = current_state.metrics.physical_height;
 
-
                         while let Some(res) = crate::jni::bridge::poll_async_app_icon() {
-                            let image_id = format!("{}{}", obfstr!("app-icon://"), res.package_name);
+                            let image_id =
+                                format!("{}{}", obfstr!("app-icon://"), res.package_name);
                             renderer.load_image(&image_id, &res.pixels, res.width, res.height);
                         }
 
                         renderer.begin_frame(width, height);
-                        
+
                         // Perform Shader Pre-warm on the very first actual frame
                         if !current_state.shaders_warmed_up {
                             renderer.warm_up_shaders();
@@ -270,24 +300,31 @@ pub fn android_main(app: AndroidApp) {
         if crate::jni::bridge::apps::take_app_list_updated() {
             if let Ok(apps) = crate::jni::get_application_list() {
                 state.plugin_registry.vault().update_system_apps(apps);
-                state.plugin_registry.broadcast("vault.changed:system.apps", "{}");
+                state
+                    .plugin_registry
+                    .broadcast("vault.changed:system.apps", "{}");
                 state.plugin_registry.broadcast("system.apps", "{}");
                 state.cached_layout = None;
                 state.layout_dirty = true;
             }
         }
 
-        let current_ui_version = sniffer_core::types::UI_VERSION.load(std::sync::atomic::Ordering::Relaxed);
+        let current_ui_version =
+            sniffer_core::types::UI_VERSION.load(std::sync::atomic::Ordering::Relaxed);
         let mut ui_changed = current_ui_version != state.last_ui_version;
 
         let physics_active = state
             .scroll_physics
             .values()
             .any(|p| p.is_dragging || p.vel_x.abs() > 0.5 || p.snap_target_x.is_some());
-            
+
         let is_empty_tree = matches!(&root_element, sniffer_core::types::Element::Container { children, .. } if children.is_empty());
         let mut needs_redraw = !state.kinetic_scrolls.is_empty()
-            || state.transition_manager.states.values().any(|s| s.is_active)
+            || state
+                .transition_manager
+                .states
+                .values()
+                .any(|s| s.is_active)
             || physics_active
             || ui_changed
             || is_empty_tree;
@@ -298,127 +335,166 @@ pub fn android_main(app: AndroidApp) {
             Duration::from_millis(8)
         };
 
-        app.poll_events(Some(poll_timeout), |event| {
-            match event {
-                PollEvent::Wake | PollEvent::Timeout => {
-                    if !state.kinetic_scrolls.is_empty()
-                        || state.transition_manager.states.values().any(|s| s.is_active)
-                    {
-                        needs_redraw = true;
-                    }
+        app.poll_events(Some(poll_timeout), |event| match event {
+            PollEvent::Wake | PollEvent::Timeout => {
+                if !state.kinetic_scrolls.is_empty()
+                    || state
+                        .transition_manager
+                        .states
+                        .values()
+                        .any(|s| s.is_active)
+                {
+                    needs_redraw = true;
                 }
-                PollEvent::Main(main_event) => match main_event {
-                    MainEvent::InitWindow { .. } => {
-                        if let Some(window) = app.native_window() {
-                            let width = f32::from(u16::try_from(window.width()).unwrap_or(0));
-                            let height = f32::from(u16::try_from(window.height()).unwrap_or(0));
-                            let (top_sa, bot_sa) = crate::jni::get_safe_area(&app)
-                                .map(|(top, bottom)| {
-                                    (
-                                        f32::from(i16::try_from(top).unwrap_or(0)),
-                                        f32::from(i16::try_from(bottom).unwrap_or(0)),
-                                    )
-                                })
-                                .unwrap_or((0.0, 0.0));
-                            let content_h = height - top_sa - bot_sa;
-                            sniffer_core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
-                            sniffer_core::types::SCREEN_HEIGHT.store(content_h.to_bits(), std::sync::atomic::Ordering::Relaxed);
-                            state.event_bus.push(UiEvent::WindowResized(width, height));
-                            
-                            let native_window_ptr = window.ptr().as_ptr().cast::<std::ffi::c_void>() as usize;
-                            let _ = render_tx.send(RenderMessage::InitWindow(native_window_ptr, width, height));
-                        }
-                        state.cached_layout = None;
-                        state.cached_max_scroll.clear();
-                        state.kinetic_scrolls.clear();
-                        state.active_scrollview_drag = None;
-                        state.virtual_page_manager.invalidate_on_resize(&mut root_element);
-                        needs_redraw = true;
-                    }
-                    MainEvent::WindowResized { .. }
-                    | MainEvent::ContentRectChanged { .. }
-                    | MainEvent::RedrawNeeded { .. } => {
-                        if let Some(window) = app.native_window() {
-                            let width = f32::from(u16::try_from(window.width()).unwrap_or(0));
-                            let height = f32::from(u16::try_from(window.height()).unwrap_or(0));
-                            let (top_sa, bot_sa) = crate::jni::get_safe_area(&app)
-                                .map(|(top, bottom)| {
-                                    (
-                                        f32::from(i16::try_from(top).unwrap_or(0)),
-                                        f32::from(i16::try_from(bottom).unwrap_or(0)),
-                                    )
-                                })
-                                .unwrap_or((0.0, 0.0));
-                            let content_h = height - top_sa - bot_sa;
-                            sniffer_core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
-                            sniffer_core::types::SCREEN_HEIGHT.store(content_h.to_bits(), std::sync::atomic::Ordering::Relaxed);
-                            state.event_bus.push(UiEvent::WindowResized(width, height));
-                            
-                            let native_window_ptr = window.ptr().as_ptr().cast::<std::ffi::c_void>() as usize;
-                            let _ = render_tx.send(RenderMessage::WindowResized(native_window_ptr, width, height));
-                        }
-                        state.cached_layout = None;
-                        state.cached_max_scroll.clear();
-                        state.kinetic_scrolls.clear();
-                        state.active_scrollview_drag = None;
-                        for phys in state.scroll_physics.values_mut() {
-                            phys.vel_x = 0.0;
-                            phys.vel_y = 0.0;
-                            phys.snap_target_x = None;
-                        }
-                        state.virtual_page_manager.invalidate_on_resize(&mut root_element);
-                        needs_redraw = true;
-                    }
-                    MainEvent::InputAvailable => {
-                        if let Ok(mut iter) = app.input_events_iter() {
-                            loop {
-                                let had_event = iter.next(|input_event| {
-                                    let layout_clone = if let Some(ref cached) = state.cached_layout {
-                                        cached.clone()
-                                    } else {
-                                        let (w, h) = app.native_window().map_or((1080.0, 1920.0), |win| (f32::from(u16::try_from(win.width()).unwrap_or(1080)), f32::from(u16::try_from(win.height()).unwrap_or(1920))));
-                                        Arc::new(sniffer_core::layout::LayoutNode::new(root_element.clone(), sniffer_core::Rect { x: 0.0, y: 0.0, width: w, height: h })) 
-                                    };
-                                    super::input::handle_input_event(
-                                        input_event,
-                                        &mut state,
-                                        &root_element,
-                                        &layout_clone,
-                                    )
-                                });
+            }
+            PollEvent::Main(main_event) => match main_event {
+                MainEvent::InitWindow { .. } => {
+                    if let Some(window) = app.native_window() {
+                        let width = f32::from(u16::try_from(window.width()).unwrap_or(0));
+                        let height = f32::from(u16::try_from(window.height()).unwrap_or(0));
+                        let (top_sa, bot_sa) = crate::jni::get_safe_area(&app)
+                            .map(|(top, bottom)| {
+                                (
+                                    f32::from(i16::try_from(top).unwrap_or(0)),
+                                    f32::from(i16::try_from(bottom).unwrap_or(0)),
+                                )
+                            })
+                            .unwrap_or((0.0, 0.0));
+                        let content_h = height - top_sa - bot_sa;
+                        sniffer_core::types::SCREEN_WIDTH
+                            .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                        sniffer_core::types::SCREEN_HEIGHT
+                            .store(content_h.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                        state.event_bus.push(UiEvent::WindowResized(width, height));
 
-                                if !had_event {
-                                    break;
-                                }
+                        let native_window_ptr =
+                            window.ptr().as_ptr().cast::<std::ffi::c_void>() as usize;
+                        let _ = render_tx.send(RenderMessage::InitWindow(
+                            native_window_ptr,
+                            width,
+                            height,
+                        ));
+                    }
+                    state.cached_layout = None;
+                    state.cached_max_scroll.clear();
+                    state.kinetic_scrolls.clear();
+                    state.active_scrollview_drag = None;
+                    state
+                        .virtual_page_manager
+                        .invalidate_on_resize(&mut root_element);
+                    needs_redraw = true;
+                }
+                MainEvent::WindowResized { .. }
+                | MainEvent::ContentRectChanged { .. }
+                | MainEvent::RedrawNeeded { .. } => {
+                    if let Some(window) = app.native_window() {
+                        let width = f32::from(u16::try_from(window.width()).unwrap_or(0));
+                        let height = f32::from(u16::try_from(window.height()).unwrap_or(0));
+                        let (top_sa, bot_sa) = crate::jni::get_safe_area(&app)
+                            .map(|(top, bottom)| {
+                                (
+                                    f32::from(i16::try_from(top).unwrap_or(0)),
+                                    f32::from(i16::try_from(bottom).unwrap_or(0)),
+                                )
+                            })
+                            .unwrap_or((0.0, 0.0));
+                        let content_h = height - top_sa - bot_sa;
+                        sniffer_core::types::SCREEN_WIDTH
+                            .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                        sniffer_core::types::SCREEN_HEIGHT
+                            .store(content_h.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                        state.event_bus.push(UiEvent::WindowResized(width, height));
+
+                        let native_window_ptr =
+                            window.ptr().as_ptr().cast::<std::ffi::c_void>() as usize;
+                        let _ = render_tx.send(RenderMessage::WindowResized(
+                            native_window_ptr,
+                            width,
+                            height,
+                        ));
+                    }
+                    state.cached_layout = None;
+                    state.cached_max_scroll.clear();
+                    state.kinetic_scrolls.clear();
+                    state.active_scrollview_drag = None;
+                    for phys in state.scroll_physics.values_mut() {
+                        phys.vel_x = 0.0;
+                        phys.vel_y = 0.0;
+                        phys.snap_target_x = None;
+                    }
+                    state
+                        .virtual_page_manager
+                        .invalidate_on_resize(&mut root_element);
+                    needs_redraw = true;
+                }
+                MainEvent::InputAvailable => {
+                    if let Ok(mut iter) = app.input_events_iter() {
+                        loop {
+                            let had_event = iter.next(|input_event| {
+                                let layout_clone = if let Some(ref cached) = state.cached_layout {
+                                    cached.clone()
+                                } else {
+                                    let (w, h) =
+                                        app.native_window().map_or((1080.0, 1920.0), |win| {
+                                            (
+                                                f32::from(
+                                                    u16::try_from(win.width()).unwrap_or(1080),
+                                                ),
+                                                f32::from(
+                                                    u16::try_from(win.height()).unwrap_or(1920),
+                                                ),
+                                            )
+                                        });
+                                    Arc::new(sniffer_core::layout::LayoutNode::new(
+                                        root_element.clone(),
+                                        sniffer_core::Rect {
+                                            x: 0.0,
+                                            y: 0.0,
+                                            width: w,
+                                            height: h,
+                                        },
+                                    ))
+                                };
+                                super::input::handle_input_event(
+                                    input_event,
+                                    &mut state,
+                                    &root_element,
+                                    &layout_clone,
+                                )
+                            });
+
+                            if !had_event {
+                                break;
                             }
                         }
-                        needs_redraw = true;
                     }
-                    MainEvent::TerminateWindow { .. } => {
-                        let _ = render_tx.send(RenderMessage::TerminateWindow);
-                    }
-                    MainEvent::LowMemory => {
-                        let _ = render_tx.send(RenderMessage::LowMemory);
-                        state.cached_layout = None;
-                        state.layout_dirty = true;
-                    }
-                    MainEvent::Destroy => {
-                        let _ = render_tx.send(RenderMessage::Destroy);
-                        state.running = false;
-                    }
-                    _ => {}
-                },
+                    needs_redraw = true;
+                }
+                MainEvent::TerminateWindow { .. } => {
+                    let _ = render_tx.send(RenderMessage::TerminateWindow);
+                }
+                MainEvent::LowMemory => {
+                    let _ = render_tx.send(RenderMessage::LowMemory);
+                    state.cached_layout = None;
+                    state.layout_dirty = true;
+                }
+                MainEvent::Destroy => {
+                    let _ = render_tx.send(RenderMessage::Destroy);
+                    state.running = false;
+                }
                 _ => {}
-            }
+            },
+            _ => {}
         });
 
         if needs_redraw {
             let mut width = state.cached_screen_size.0;
             let mut height = state.cached_screen_size.1;
-            
+
             if let Some(window) = app.native_window() {
                 width = f32::from(u16::try_from(window.width()).expect("window width fits in u16"));
-                height = f32::from(u16::try_from(window.height()).expect("window height fits in u16"));
+                height =
+                    f32::from(u16::try_from(window.height()).expect("window height fits in u16"));
             }
 
             if width < 1.0 || height < 1.0 {
@@ -444,8 +520,10 @@ pub fn android_main(app: AndroidApp) {
                 state.cached_max_scroll.clear();
 
                 let content_h = height - state.cached_safe_area.0 - state.cached_safe_area.1;
-                sniffer_core::types::SCREEN_WIDTH.store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
-                sniffer_core::types::SCREEN_HEIGHT.store(content_h.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                sniffer_core::types::SCREEN_WIDTH
+                    .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
+                sniffer_core::types::SCREEN_HEIGHT
+                    .store(content_h.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
                 ui_changed = true;
             }
@@ -460,10 +538,14 @@ pub fn android_main(app: AndroidApp) {
 
             if screen_changed || is_first_frame {
                 let content_h = height - state.cached_safe_area.0 - state.cached_safe_area.1;
-                state.virtual_page_manager.on_viewport_resized(width, content_h, &mut root_element);
+                state
+                    .virtual_page_manager
+                    .on_viewport_resized(width, content_h, &mut root_element);
             }
 
-            state.virtual_page_manager.virtualize_tree(&mut root_element);
+            state
+                .virtual_page_manager
+                .virtualize_tree(&mut root_element);
             physics_sync::sync_scroll_physics_from_tree(&root_element, &mut state.scroll_physics);
             state.transition_manager.sync_tree(&root_element);
             let _ = state.transition_manager.tick(dt);
@@ -471,12 +553,7 @@ pub fn android_main(app: AndroidApp) {
             let (safe_area_top, safe_area_bottom) = state.cached_safe_area;
             let (density, scaled_density) = state.cached_density;
 
-            let metrics = ScreenMetrics::from_scale(
-                width,
-                height,
-                density,
-                scaled_density,
-            );
+            let metrics = ScreenMetrics::from_scale(width, height, density, scaled_density);
 
             if let Some(ref cached) = state.cached_layout {
                 let cached_is_landscape = cached.rect.width > cached.rect.height;
@@ -484,11 +561,15 @@ pub fn android_main(app: AndroidApp) {
                 if cached_is_landscape != window_is_landscape {
                     state.cached_layout = None;
                     state.layout_dirty = true;
-                    state.virtual_page_manager.invalidate_on_resize(&mut root_element);
+                    state
+                        .virtual_page_manager
+                        .invalidate_on_resize(&mut root_element);
                 }
             }
 
-            let layout_tree = if !state.layout_dirty && let Some(ref cached) = state.cached_layout {
+            let layout_tree = if !state.layout_dirty
+                && let Some(ref cached) = state.cached_layout
+            {
                 cached.clone()
             } else {
                 state.last_ui_version = current_ui_version;
@@ -505,7 +586,9 @@ pub fn android_main(app: AndroidApp) {
             };
 
             let get_max_scroll = |target_id: Option<u64>| -> f32 {
-                target_id.and_then(|id| state.cached_max_scroll.get(&id).copied()).unwrap_or(0.0)
+                target_id
+                    .and_then(|id| state.cached_max_scroll.get(&id).copied())
+                    .unwrap_or(0.0)
             };
 
             state.kinetic_scrolls.retain_mut(|k| {
@@ -538,11 +621,9 @@ pub fn android_main(app: AndroidApp) {
                             let current_page = (phys.pos_x / snap_width).round() as i32;
                             let clamped_page = current_page.clamp(0, max_page) as usize;
 
-                            let page_window_changed = state.virtual_page_manager.update_predicted_page(
-                                clamped_page,
-                                &mut root_element,
-                                phys.vel_x,
-                            );
+                            let page_window_changed = state
+                                .virtual_page_manager
+                                .update_predicted_page(clamped_page, &mut root_element, phys.vel_x);
 
                             if page_window_changed {
                                 state.cached_layout = None;
@@ -600,7 +681,10 @@ pub fn android_main(app: AndroidApp) {
                         }
                         _ => {
                             if let Err(e) = crate::jni::intent::launch_action(action) {
-                                sniffer_core::dev_err!("{}: {e}", obfstr!("Failed to launch action"));
+                                sniffer_core::dev_err!(
+                                    "{}: {e}",
+                                    obfstr!("Failed to launch action")
+                                );
                             }
                         }
                     }
@@ -627,5 +711,3 @@ pub fn android_main(app: AndroidApp) {
         }
     }
 }
-
-

@@ -1,4 +1,4 @@
-use crate::{dev_err};
+use crate::dev_err;
 use obfstr::obfstr;
 use std::sync::Mutex;
 
@@ -76,4 +76,3 @@ mod tests {
         ));
     }
 }
-

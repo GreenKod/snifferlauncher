@@ -1,13 +1,13 @@
 use super::{context, vm};
+use jni::errors::Error as JniError;
+use jni::objects::{JString, JValue};
+use jni::{Env, jni_sig, jni_str};
+use obfstr::obfstr;
 use sniffer_core::dev_log;
 use sniffer_core::types::AppInfo;
-use jni::errors::Error as JniError;
-use jni::{Env, jni_sig, jni_str};
-use jni::objects::{JString, JValue};
-use obfstr::obfstr;
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 static APP_LIST_CACHE: RwLock<Option<Vec<AppInfo>>> = RwLock::new(None);
 static APP_LIST_UPDATED: AtomicBool = AtomicBool::new(false);
@@ -20,12 +20,27 @@ fn get_apps_cache_path() -> Option<String> {
     let jvm = vm();
     jvm.attach_current_thread_for_scope::<_, _, JniError>(|env| {
         let ctx = context(env);
-        let files_dir = env.call_method(&ctx, jni_str!("getCacheDir"), jni_sig!("()Ljava/io/File;"), &[])?.l()?;
-        let path_obj = env.call_method(&files_dir, jni_str!("getAbsolutePath"), jni_sig!("()Ljava/lang/String;"), &[])?.l()?;
+        let files_dir = env
+            .call_method(
+                &ctx,
+                jni_str!("getCacheDir"),
+                jni_sig!("()Ljava/io/File;"),
+                &[],
+            )?
+            .l()?;
+        let path_obj = env
+            .call_method(
+                &files_dir,
+                jni_str!("getAbsolutePath"),
+                jni_sig!("()Ljava/lang/String;"),
+                &[],
+            )?
+            .l()?;
         let path_jstring = env.as_cast::<JString>(&path_obj)?;
         let path_str = path_jstring.try_to_string(env)?;
         Ok(format!("{}/apps_cache.json", path_str))
-    }).ok()
+    })
+    .ok()
 }
 
 pub fn init_app_list_cache() {
@@ -67,7 +82,7 @@ pub fn get_application_list() -> Result<Vec<AppInfo>, String> {
             return Ok(cached.clone());
         }
     }
-    
+
     // Try to load from disk synchronously on cold boot
     if let Some(path) = get_apps_cache_path() {
         if let Ok(content) = std::fs::read_to_string(&path) {
@@ -79,7 +94,7 @@ pub fn get_application_list() -> Result<Vec<AppInfo>, String> {
             }
         }
     }
-    
+
     Ok(Vec::new())
 }
 
@@ -209,13 +224,19 @@ fn fetch_application_list_internal() -> Result<Vec<AppInfo>, String> {
             app_list.len()
         );
         for app in &app_list {
-            dev_log!("{} - {} ({})", obfstr!("[DEBUG]"), app.name, app.package_name);
+            dev_log!(
+                "{} - {} ({})",
+                obfstr!("[DEBUG]"),
+                app.name,
+                app.package_name
+            );
         }
         for app in AppInfo::search_by_name(&app_list, obfstr!("sett")) {
             dev_log!(
                 "{} \n - {} ({})",
                 obfstr!("[DEBUG] Search result:"),
-                app.name, app.package_name
+                app.name,
+                app.package_name
             );
         }
     }
@@ -243,11 +264,7 @@ pub fn request_permissions(permissions: &[String]) -> Result<Vec<String>, String
 
             for (index, permission) in permissions.iter().enumerate() {
                 let j_permission = env.new_string(permission)?;
-                permission_array.set_element(
-                    env,
-                    index.try_into().unwrap_or(0),
-                    &j_permission,
-                )?;
+                permission_array.set_element(env, index.try_into().unwrap_or(0), &j_permission)?;
             }
 
             let activity_class = env.find_class(jni_str!("android/app/Activity"))?;
@@ -306,5 +323,3 @@ pub fn open_default_home_picker() {
         Ok(())
     });
 }
-
-

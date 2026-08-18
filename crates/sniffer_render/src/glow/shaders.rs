@@ -37,4 +37,3 @@ pub(crate) unsafe fn compile_program(
         Ok(program)
     }
 }
-

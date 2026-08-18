@@ -124,4 +124,3 @@ macro_rules! tw {
         $crate::style::Style::from_tailwind($classes)
     };
 }
-

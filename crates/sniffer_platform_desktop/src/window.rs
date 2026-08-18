@@ -119,4 +119,3 @@ impl DesktopWindow {
         Ok(())
     }
 }
-

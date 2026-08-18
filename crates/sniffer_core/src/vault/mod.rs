@@ -3,8 +3,8 @@
 //! Provides a high-performance, thread-safe, and reactive in-memory data store with
 //! persistence and native fuzzy indexing for launcher applications.
 
-use crate::types::AppInfo;
 use crate::dev_log;
+use crate::types::AppInfo;
 use obfstr::obfstr;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -196,10 +196,7 @@ impl DataVault {
             return serde_json::to_string(&apps).ok();
         }
         if key == "system.app_count" {
-            let count = self
-                .system_apps
-                .read()
-                .map_or(0, |g| g.len());
+            let count = self.system_apps.read().map_or(0, |g| g.len());
             return Some(count.to_string());
         }
 
@@ -292,16 +289,24 @@ impl DataVault {
     ///
     /// # Errors
     /// Returns error if file_name contains illegal path traversal characters or disk write fails.
-    pub fn save_file(&self, file_name: &str, data: &[u8], plugin_id: &str) -> Result<String, String> {
+    pub fn save_file(
+        &self,
+        file_name: &str,
+        data: &[u8],
+        plugin_id: &str,
+    ) -> Result<String, String> {
         let clean_name = std::path::Path::new(file_name)
             .file_name()
             .and_then(|n| n.to_str())
             .ok_or_else(|| obfstr!("Invalid file name").to_string())?;
 
-        let cache_dir_guard = self.cache_dir.read().map_err(|_| obfstr!("Cache lock error").to_string())?;
-        let cache_dir = cache_dir_guard.as_ref().ok_or_else(|| {
-            obfstr!("No cache directory configured for DataVault").to_string()
-        })?;
+        let cache_dir_guard = self
+            .cache_dir
+            .read()
+            .map_err(|_| obfstr!("Cache lock error").to_string())?;
+        let cache_dir = cache_dir_guard
+            .as_ref()
+            .ok_or_else(|| obfstr!("No cache directory configured for DataVault").to_string())?;
 
         let files_dir = cache_dir.join(format!("vault_{plugin_id}")).join("files");
         if !files_dir.exists() {
@@ -309,7 +314,8 @@ impl DataVault {
         }
 
         let target_file = files_dir.join(clean_name);
-        std::fs::write(&target_file, data).map_err(|e| format!("{}: {e}", obfstr!("Failed to write file")))?;
+        std::fs::write(&target_file, data)
+            .map_err(|e| format!("{}: {e}", obfstr!("Failed to write file")))?;
 
         dev_log!(
             "{} '{}' {} '{}'",
@@ -331,7 +337,10 @@ impl DataVault {
 
         let cache_dir_guard = self.cache_dir.read().ok()?;
         let cache_dir = cache_dir_guard.as_ref()?;
-        let target_file = cache_dir.join(format!("vault_{plugin_id}")).join("files").join(clean_name);
+        let target_file = cache_dir
+            .join(format!("vault_{plugin_id}"))
+            .join("files")
+            .join(clean_name);
 
         if target_file.exists() {
             std::fs::read(&target_file).ok()
@@ -347,12 +356,18 @@ impl DataVault {
             .and_then(|n| n.to_str())
             .ok_or_else(|| obfstr!("Invalid file name").to_string())?;
 
-        let cache_dir_guard = self.cache_dir.read().map_err(|_| obfstr!("Cache lock error").to_string())?;
-        let cache_dir = cache_dir_guard.as_ref().ok_or_else(|| {
-            obfstr!("No cache directory configured for DataVault").to_string()
-        })?;
+        let cache_dir_guard = self
+            .cache_dir
+            .read()
+            .map_err(|_| obfstr!("Cache lock error").to_string())?;
+        let cache_dir = cache_dir_guard
+            .as_ref()
+            .ok_or_else(|| obfstr!("No cache directory configured for DataVault").to_string())?;
 
-        let target_file = cache_dir.join(format!("vault_{plugin_id}")).join("files").join(clean_name);
+        let target_file = cache_dir
+            .join(format!("vault_{plugin_id}"))
+            .join("files")
+            .join(clean_name);
 
         if target_file.exists() {
             std::fs::remove_file(&target_file)
@@ -397,7 +412,10 @@ impl DataVault {
         let clean_name = std::path::Path::new(file_name).file_name()?.to_str()?;
         let cache_dir_guard = self.cache_dir.read().ok()?;
         let cache_dir = cache_dir_guard.as_ref()?;
-        let target_file = cache_dir.join(format!("vault_{plugin_id}")).join("files").join(clean_name);
+        let target_file = cache_dir
+            .join(format!("vault_{plugin_id}"))
+            .join("files")
+            .join(clean_name);
 
         if target_file.exists() {
             Some(target_file)
@@ -463,10 +481,13 @@ impl DataVault {
                     for (k, v) in map {
                         store.insert(k, v);
                     }
-                    dev_log!("{} '{}'", obfstr!("[DataVault] Loaded persistent vault for"), file_name);
+                    dev_log!(
+                        "{} '{}'",
+                        obfstr!("[DataVault] Loaded persistent vault for"),
+                        file_name
+                    );
                 }
             }
         }
     }
 }
-

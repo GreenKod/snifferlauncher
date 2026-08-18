@@ -123,19 +123,27 @@ pub(crate) fn update_max_scroll_cache(
                 let mut min_y = f32::MAX;
                 let mut max_y = f32::MIN;
                 for child in &lay.children {
-                    if child.rect.y < min_y { min_y = child.rect.y; }
-                    if child.rect.y + child.rect.height > max_y { max_y = child.rect.y + child.rect.height; }
+                    if child.rect.y < min_y {
+                        min_y = child.rect.y;
+                    }
+                    if child.rect.y + child.rect.height > max_y {
+                        max_y = child.rect.y + child.rect.height;
+                    }
                 }
-                let max_scroll = if min_y <= max_y { (max_y - min_y - view_height).max(0.0) } else { 0.0 };
+                let max_scroll = if min_y <= max_y {
+                    (max_y - min_y - view_height).max(0.0)
+                } else {
+                    0.0
+                };
                 state.cached_max_scroll.insert(sv_id, max_scroll);
             }
         }
-        if let sniffer_core::types::Element::Container { children, .. } | sniffer_core::types::Element::ScrollView { children, .. } = el {
+        if let sniffer_core::types::Element::Container { children, .. }
+        | sniffer_core::types::Element::ScrollView { children, .. } = el
+        {
             for (child, child_lay) in children.iter().zip(lay.children.iter()) {
                 search.push((child, child_lay));
             }
         }
     }
 }
-
-

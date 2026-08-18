@@ -21,4 +21,3 @@ pub const CARD_CONTACTS_HOVER: u32 = 0x0036_A3B8;
 pub const CARD_CAMERA_HOVER: u32 = 0x002D_8091;
 pub const ICON_SURFACE: u32 = 0x0000_0000; // Transparent to remove the ugly box
 pub const HEADER_SURFACE: u32 = 0x0015_232C;
-

@@ -1,16 +1,16 @@
+use crate::UiPlugin;
+use crate::dev_err;
+use crate::js::HostApiConfig;
+use crate::js::engine::create_engine;
+use crate::js::register_host_api;
+use crate::registry::{ApiMap, BroadcastQueue};
+use crossbeam_channel::{Sender, unbounded};
+use rquickjs::Value;
+use sniffer_core::WidgetId;
+use sniffer_core::types::Element;
 use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::event::UiEvent;
 use sniffer_core::ui::style_map::StyleMap;
-use sniffer_core::WidgetId;
-use sniffer_core::types::Element;
-use crate::dev_err;
-use crate::js::engine::create_engine;
-use crate::js::register_host_api;
-use crate::js::HostApiConfig;
-use crate::registry::{ApiMap, BroadcastQueue};
-use crate::UiPlugin;
-use crossbeam_channel::{Sender, unbounded};
-use rquickjs::Value;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -128,7 +128,10 @@ impl JsPlugin {
                         let msg = exc.message().unwrap_or_default();
                         let stack = exc.stack().unwrap_or_default();
                         dev_err!("SCRIPT FAIL {plugin_id}: {msg} | {stack}");
-                        let _ = std::fs::write(format!("/data/user/0/com.greenkod.snifferlauncher/{plugin_id}.js"), &script_content);
+                        let _ = std::fs::write(
+                            format!("/data/user/0/com.greenkod.snifferlauncher/{plugin_id}.js"),
+                            &script_content,
+                        );
                         return Err(format!("Script eval error in plugin: {msg}\n{stack}"));
                     }
                     return Err(format!("Script eval error in plugin: {e}"));
@@ -206,7 +209,9 @@ impl JsPlugin {
                                 runtime.run_gc();
                             }
                             context.with(|ctx| {
-                                if let Ok(handler) = ctx.globals().get::<_, rquickjs::Function>("_onTimerTick") {
+                                if let Ok(handler) =
+                                    ctx.globals().get::<_, rquickjs::Function>("_onTimerTick")
+                                {
                                     let _ = handler.call::<_, ()>(());
                                 }
                             });
@@ -214,7 +219,10 @@ impl JsPlugin {
                     }
                     PluginMsg::Broadcast { channel, payload } => {
                         context.with(|ctx| {
-                            if let Ok(handler) = ctx.globals().get::<_, rquickjs::Function>("_dispatchBroadcast") {
+                            if let Ok(handler) = ctx
+                                .globals()
+                                .get::<_, rquickjs::Function>("_dispatchBroadcast")
+                            {
                                 let _ = handler.call::<_, ()>((channel, payload));
                             }
                         });
@@ -226,8 +234,9 @@ impl JsPlugin {
                     } => {
                         let mut result: Option<String> = None;
                         context.with(|ctx| {
-                            if let Ok(handler) =
-                                ctx.globals().get::<_, rquickjs::Function>(obfstr::obfstr!("_handleApiCall"))
+                            if let Ok(handler) = ctx
+                                .globals()
+                                .get::<_, rquickjs::Function>(obfstr::obfstr!("_handleApiCall"))
                                 && let Ok(ret) = handler.call::<_, rquickjs::Value>((name, payload))
                                 && ret.is_string()
                             {
@@ -304,4 +313,3 @@ impl UiPlugin for JsPlugin {
         let _ = self.msg_tx.send(PluginMsg::Unload);
     }
 }
-

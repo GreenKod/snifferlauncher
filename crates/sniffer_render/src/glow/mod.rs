@@ -1,8 +1,8 @@
-use sniffer_core::render_api::Renderer;
 use sniffer_core::math::Rect;
+use sniffer_core::render_api::Renderer;
 
-use crate::text::font_atlas::{self, FontAtlas};
 use crate::dev_err;
+use crate::text::font_atlas::{self, FontAtlas};
 use glow::HasContext;
 use obfstr::obfstr;
 
@@ -148,11 +148,21 @@ impl GlowRenderer {
                 crate::secure::decrypt(enc::IMAGE_DESKTOP_FS),
             );
 
-            let shape_program =
-                shaders::compile_program(&gl, shape_vertex_src.as_str(), shape_fragment_src.as_str())?;
-            let text_program = shaders::compile_program(&gl, text_vertex_src.as_str(), text_fragment_src.as_str())?;
-            let image_program =
-                shaders::compile_program(&gl, image_vertex_src.as_str(), image_fragment_src.as_str())?;
+            let shape_program = shaders::compile_program(
+                &gl,
+                shape_vertex_src.as_str(),
+                shape_fragment_src.as_str(),
+            )?;
+            let text_program = shaders::compile_program(
+                &gl,
+                text_vertex_src.as_str(),
+                text_fragment_src.as_str(),
+            )?;
+            let image_program = shaders::compile_program(
+                &gl,
+                image_vertex_src.as_str(),
+                image_fragment_src.as_str(),
+            )?;
 
             let (font_texture, font_atlas, atlas_width, atlas_height) =
                 if let Some(font_bytes) = font_data {
@@ -160,14 +170,18 @@ impl GlowRenderer {
                         dev_err!(
                             "{} ({}x{})",
                             obfstr!("[DEBUG] Using TTF font atlas"),
-                            atlas.atlas_width, atlas.atlas_height
+                            atlas.atlas_width,
+                            atlas.atlas_height
                         );
                         let tex = atlas.texture;
                         let w = atlas.atlas_width;
                         let h = atlas.atlas_height;
                         (tex, Some(atlas), w, h)
                     } else {
-                        dev_err!("{}", obfstr!("[DEBUG] TTF build failed, falling back to bitmap"));
+                        dev_err!(
+                            "{}",
+                            obfstr!("[DEBUG] TTF build failed, falling back to bitmap")
+                        );
                         text::create_bitmap_font_atlas(&gl)?
                     }
                 } else {
@@ -257,13 +271,13 @@ impl GlowRenderer {
 
     pub fn warm_up_shaders(&mut self) {
         use sniffer_core::math::Rect;
-        
+
         let dummy_rect = Rect::new(0.0, 0.0, 1.0, 1.0);
         let alpha_zero = 0x00FFFFFF; // Transparent
-        
+
         // Use a dummy resolution to avoid zero vectors in shaders
         self.resolution = (1080.0, 1920.0);
-        
+
         // Warm up all shader variants with a dummy zero-alpha pass
         self.draw_rect_impl(dummy_rect, alpha_zero, 0.0, 0.0, None);
         self.draw_rect_impl(dummy_rect, alpha_zero, 0.0, 1.0, Some(alpha_zero));
@@ -272,7 +286,7 @@ impl GlowRenderer {
         self.draw_shadow_impl(dummy_rect, 0.0, 5.0, 10.0, alpha_zero);
         self.draw_circle_impl(0.0, 0.0, 1.0, alpha_zero);
         text::draw_text_impl(self, "W", 0.0, 0.0, 12.0, alpha_zero);
-        
+
         // Warm up GPU state changes
         unsafe {
             self.gl.enable(glow::SCISSOR_TEST);
@@ -311,7 +325,14 @@ impl Renderer for GlowRenderer {
         border_width: f32,
         border_color: Option<u32>,
     ) {
-        self.draw_rect_gradient_impl(rect, color_top, color_bottom, radius, border_width, border_color);
+        self.draw_rect_gradient_impl(
+            rect,
+            color_top,
+            color_bottom,
+            radius,
+            border_width,
+            border_color,
+        );
     }
 
     fn draw_shadow(&mut self, rect: Rect, radius: f32, offset_y: f32, spread: f32, color: u32) {
@@ -401,11 +422,9 @@ impl Renderer for GlowRenderer {
             b1.mul_add(p[3], p[0] * b0),
             b1.mul_add(p[4], p[1] * b0),
             b1.mul_add(p[5], p[2] * b0),
-
             b4.mul_add(p[3], p[0] * b3),
             b4.mul_add(p[4], p[1] * b3),
             b4.mul_add(p[5], p[2] * b3),
-
             p[6] + b7.mul_add(p[3], p[0] * b6),
             p[7] + b7.mul_add(p[4], p[1] * b6),
             p[8] + b7.mul_add(p[5], p[2] * b6),
@@ -468,13 +487,9 @@ impl Renderer for GlowRenderer {
     }
 
     fn text_ascent(&self, size: f32) -> f32 {
-        self.font_atlas.as_ref().map_or(
-            size * 0.75,
-            |atlas| {
-                let scale = size / atlas.rasterize_size;
-                atlas.ascent * scale
-            },
-        )
+        self.font_atlas.as_ref().map_or(size * 0.75, |atlas| {
+            let scale = size / atlas.rasterize_size;
+            atlas.ascent * scale
+        })
     }
 }
-

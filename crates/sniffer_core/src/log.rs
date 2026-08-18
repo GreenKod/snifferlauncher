@@ -1,7 +1,11 @@
 #[cfg(target_os = "android")]
 #[allow(unused_extern_crates)]
 unsafe extern "C" {
-    fn __android_log_write(prio: i32, tag: *const std::ffi::c_char, text: *const std::ffi::c_char) -> i32;
+    fn __android_log_write(
+        prio: i32,
+        tag: *const std::ffi::c_char,
+        text: *const std::ffi::c_char,
+    ) -> i32;
 }
 
 #[cfg(target_os = "android")]
@@ -38,4 +42,3 @@ macro_rules! dev_err {
         eprintln!("{msg}");
     }};
 }
-

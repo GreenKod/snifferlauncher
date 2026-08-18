@@ -6,13 +6,13 @@ pub mod host_bridge;
 pub mod permission_manager;
 pub mod plugin;
 
-use sniffer_core::types::Element;
-use sniffer_core::vault::DataVault;
 use crate::dev_log;
 use crate::registry::{ApiMap, BroadcastQueue};
 use crossbeam_channel::Sender;
 use obfstr::obfstr;
 use rquickjs::Function;
+use sniffer_core::types::Element;
+use sniffer_core::vault::DataVault;
 use std::sync::{Arc, Mutex};
 
 pub use plugin::{JsPlugin, JsPluginConfig, PluginMsg};
@@ -53,10 +53,15 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     // host_get_default_settings
     let default_settings_json =
         serde_json::to_string(&default_settings).unwrap_or_else(|_| "{}".to_string());
-    let get_default_settings_func =
-        Function::new(ctx.clone(), move || -> String { default_settings_json.clone() }).unwrap();
+    let get_default_settings_func = Function::new(ctx.clone(), move || -> String {
+        default_settings_json.clone()
+    })
+    .unwrap();
     globals
-        .set(obfstr!("host_get_default_settings"), get_default_settings_func)
+        .set(
+            obfstr!("host_get_default_settings"),
+            get_default_settings_func,
+        )
         .unwrap();
 
     // host_log
@@ -78,14 +83,20 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         f32::from_bits(sniffer_core::types::SCREEN_WIDTH.load(std::sync::atomic::Ordering::Relaxed))
     })
     .unwrap();
-    globals.set(obfstr!("host_screen_width"), get_width_func).unwrap();
+    globals
+        .set(obfstr!("host_screen_width"), get_width_func)
+        .unwrap();
 
     // host_screen_height
     let get_height_func = Function::new(ctx.clone(), || -> f32 {
-        f32::from_bits(sniffer_core::types::SCREEN_HEIGHT.load(std::sync::atomic::Ordering::Relaxed))
+        f32::from_bits(
+            sniffer_core::types::SCREEN_HEIGHT.load(std::sync::atomic::Ordering::Relaxed),
+        )
     })
     .unwrap();
-    globals.set(obfstr!("host_screen_height"), get_height_func).unwrap();
+    globals
+        .set(obfstr!("host_screen_height"), get_height_func)
+        .unwrap();
 
     // host_get_local_time
     let get_local_time_func = Function::new(ctx.clone(), || -> String {
@@ -129,11 +140,5 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     );
 
     // Register Native Data Vault bindings
-    bindings_vault::register_vault_bindings(
-        ctx,
-        &globals,
-        plugin_id,
-        vault,
-    );
+    bindings_vault::register_vault_bindings(ctx, &globals, plugin_id, vault);
 }
-

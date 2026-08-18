@@ -179,4 +179,3 @@ impl ScreenMetrics {
         self.logical_width() >= 600.0
     }
 }
-

@@ -135,8 +135,10 @@ pub fn request_default_launcher() -> Result<(), String> {
                     .l()?;
 
                 if !intent.is_null() {
-                    add_new_task_flag(env, &intent).map_err(|_| jni::errors::Error::JavaException)?;
-                    start_activity(env, &ctx, &intent).map_err(|_| jni::errors::Error::JavaException)?;
+                    add_new_task_flag(env, &intent)
+                        .map_err(|_| jni::errors::Error::JavaException)?;
+                    start_activity(env, &ctx, &intent)
+                        .map_err(|_| jni::errors::Error::JavaException)?;
                     return Ok(());
                 }
             }
@@ -251,11 +253,7 @@ pub fn launch_app(package_name: &str) -> Result<(), String> {
                     )?
                     .l()?;
                 let act_name = env
-                    .get_field(
-                        &act_info,
-                        jni_str!("name"),
-                        jni_sig!("Ljava/lang/String;"),
-                    )?
+                    .get_field(&act_info, jni_str!("name"), jni_sig!("Ljava/lang/String;"))?
                     .l()?;
                 let comp_name = env.new_object(
                     jni_str!("android/content/ComponentName"),
@@ -353,5 +351,3 @@ pub fn start_view_uri(uri: &str) -> Result<(), String> {
     })
     .map_err(|e| e.to_string())
 }
-
-

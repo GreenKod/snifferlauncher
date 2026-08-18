@@ -8,12 +8,12 @@ pub use culling::{
     find_hovered_button_with_scroll, find_hovered_scrollview, is_aabb_visible,
 };
 
+use sniffer_core::ScreenMetrics;
 use sniffer_core::layout::LayoutNode;
 use sniffer_core::render_api::Renderer;
 use sniffer_core::types::Element;
 use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::style_map::StyleMap;
-use sniffer_core::ScreenMetrics;
 
 /// Platform-agnostic traversal to draw the UI elements using the Renderer interface.
 #[allow(clippy::too_many_lines)]
@@ -58,8 +58,12 @@ pub fn draw_ui(
 
     let mut tx = base_style.transform.translate_x;
     let mut ty = base_style.transform.translate_y;
-    if tx.is_nan() || tx.is_infinite() { tx = 0.0; }
-    if ty.is_nan() || ty.is_infinite() { ty = 0.0; }
+    if tx.is_nan() || tx.is_infinite() {
+        tx = 0.0;
+    }
+    if ty.is_nan() || ty.is_infinite() {
+        ty = 0.0;
+    }
 
     let screen_x = rect.x + tx - accumulated_scroll_x;
     let screen_y = rect.y + ty - accumulated_scroll_y;
@@ -75,7 +79,9 @@ pub fn draw_ui(
     let is_offscreen = if is_animating {
         false
     } else {
-        screen_w > 0.0 && screen_h > 0.0 && !is_aabb_visible(node_rect, viewport_rect, margin_x, margin_y)
+        screen_w > 0.0
+            && screen_h > 0.0
+            && !is_aabb_visible(node_rect, viewport_rect, margin_x, margin_y)
     };
 
     if is_offscreen {
@@ -183,4 +189,3 @@ pub fn draw_ui(
 
     1 + children_count
 }
-

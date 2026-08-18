@@ -372,4 +372,3 @@ pub trait Application {
     /// the view can adapt padding, font sizes, and element heights to the device.
     fn view(state: &Self::State, metrics: &crate::ScreenMetrics) -> Element;
 }
-
