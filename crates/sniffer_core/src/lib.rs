@@ -9,6 +9,7 @@ pub mod types;
 pub mod ui;
 pub mod vault;
 pub mod virtualization;
+pub mod scroll_physics;
 #[cfg(feature = "devkit")]
 pub mod profiler;
 

@@ -160,21 +160,21 @@ broadcastEvent("dock.ready", { ready: true });
 // 4. UI Bileşen Üretimi (Virtual DOM Ağacı)
 function getDockContainer(isLandscape) {
     if (isLandscape) {
-        // Yatay (Landscape) Mod: Sağda Dikey Dock
+        // Yatay (Landscape) Mod: Sağda Dikey Ergonomik Dock (vmin ölçekli)
         return Container("dock_root_container", {
-            width: px(vw(13.0)),
+            width: px(vmin(14.0)),
             height: pct(100),
             background_color: hex("#00000000"),
             flex_direction: "Column",
             justify_content: "Center",
             align_items: "Center",
-            padding: padXY(vmin(1.0), vmin(2.0)),
-            gap: vh(2.8),
+            padding: padXY(vmin(1.0), vmin(1.0)),
+            gap: vmin(2.5),
         }, dockState.essentialApps.map(function(app) {
-            const iconSize = vw(8.5);
+            const iconSize = vmin(9.5);
             const iconRadius = iconSize / 2.0;
-            const touchW = vw(13.0);
-            const touchH = vw(13.0);
+            const touchW = vmin(12.5);
+            const touchH = vmin(12.5);
             
             return Container("dock_app_btn_" + (app.package_name || app.id), {
                 width: px(touchW),
@@ -194,21 +194,21 @@ function getDockContainer(isLandscape) {
                     align_items: "Center",
                 }, [
                     app.package_name ? Image("dock_img_" + app.id, "app-icon://" + app.package_name, {
-                        width: px(iconSize * 0.84),
-                        height: px(iconSize * 0.84),
-                        border_radius: (iconSize * 0.84) / 2.0,
+                        width: px(iconSize * 0.88),
+                        height: px(iconSize * 0.88),
+                        border_radius: (iconSize * 0.88) / 2.0,
                         object_fit: "Cover"
                     }) : Container("dock_circle_" + app.id, {
-                        width: px(iconSize * 0.84),
-                        height: px(iconSize * 0.84),
-                        border_radius: (iconSize * 0.84) / 2.0,
+                        width: px(iconSize * 0.88),
+                        height: px(iconSize * 0.88),
+                        border_radius: (iconSize * 0.88) / 2.0,
                         background_color: hex(app.color),
                         justify_content: "Center",
                         align_items: "Center",
                     }, [
                         Label("dock_app_icon_" + app.id, app.iconLetter, {
                             text_color: hex("#FFFFFF"),
-                            text_size: vw(2.2),
+                            text_size: vmin(3.8),
                             width: "Auto",
                         })
                     ])

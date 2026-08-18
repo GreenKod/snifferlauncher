@@ -4,12 +4,17 @@
 
 function getGridConfig(isLandscape) {
     if (isLandscape) {
-        // Yatay Ekran (Landscape): 7 Sütun x 4 Satır (Sol %87vw Grid, Sağ %13vw Dock)
+        // Yatay Ekran (Landscape): 7 Sütun x 4 Satır (Sol Grid, Sağ %14vmin Ergonomik Dock)
         const cols = 7;
         const rows = 4;
         const totalSlots = cols * rows; // 28
 
-        const cardW = 10.2;
+        const screenW = vw(100);
+        const dockWPx = vmin(14.0);
+        const availableGridWPx = Math.max(100, screenW - dockWPx);
+        const gridWVw = (availableGridWPx / screenW) * 100.0;
+
+        const cardW = 10.0;
         const cardH = 18.0;
         const gapX = 1.8;
         const gapY = 4.0;
@@ -19,13 +24,13 @@ function getGridConfig(isLandscape) {
             cols,
             rows,
             totalSlots,
-            gridW: 87.0,
+            gridW: gridWVw,
             gridH: 100.0,
             cardW,
             cardH,
             gapX,
             gapY,
-            taskManagerW: 13.0,
+            taskManagerW: 14.0,
             taskManagerH: 100.0,
         };
     } else {
