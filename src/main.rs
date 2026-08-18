@@ -3,7 +3,7 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(not(target_os = "android"))]
     {
-        snifferlauncher::platform::desktop::run()?;
+        sniffer_platform_desktop::run()?;
     }
     #[cfg(target_os = "android")]
     {

@@ -20,28 +20,14 @@ default = ["devkit"]
 devkit = []
 
 [dependencies]
-glow = "0.17.0"
-glutin = "0.32.2"
-glutin-winit = "0.5.0"
-winit = "0.30.5"
-swash = { version = "0.2.9", features = ["scale"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-rquickjs = { version = "0.7", features = ["macro", "classes", "bindgen", "array-buffer"] }
-postcard = { version = "1.0", default-features = false, features = ["alloc"] }
-image = { version = "0.25.1", default-features = false, features = ["png", "jpeg"] }
-taffy = "0.5"
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-obfstr = "0.4"
-crossbeam-channel = "0.5"
+sniffer_core = { path = "crates/sniffer_core", features = ["devkit"] }
+sniffer_render = { path = "crates/sniffer_render" }
+sniffer_plugin = { path = "crates/sniffer_plugin" }
+sniffer_platform_desktop = { path = "crates/sniffer_platform_desktop" }
 
 [target.'cfg(target_os = "android")'.dependencies]
+sniffer_platform_android = { path = "crates/sniffer_platform_android" }
 android-activity = { version = "0.6.1", features = ["native-activity"] }
-jni = { version = "0.22.4" }
-ndk-context = { version = "0.1.1" }
-ndk = "0.9.0"
-ndk-sys = "0.6.0"
-khronos-egl = { version = "6.0", features = ["dynamic"] }
 
 [package.metadata.android]
 package = "com.greenkod.snifferlauncher"
@@ -68,9 +54,11 @@ key_alias = "androiddebugkey"
 key_password = "android"
 
 [profile.dev]
-opt-level = 3
-strip = true
-lto = "fat"
+opt-level = 1
+debug = false
+strip = false
+lto = "off"
+codegen-units = 256
 
 [profile.dev.package."*"]
 opt-level = 3
@@ -86,11 +74,46 @@ panic = "abort"
 warnings = "deny"
 
 [workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
 cargo = { level = "deny", priority = -1 }
 
 multiple_crate_versions = "allow"
+cargo_common_metadata = "allow"
+module_name_repetitions = "allow"
+missing_panics_doc = "allow"
+missing_errors_doc = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"
+option_if_let_else = "allow"
+manual_let_else = "allow"
+missing_const_for_fn = "allow"
+redundant_pub_crate = "allow"
+redundant_else = "allow"
+needless_pass_by_value = "allow"
+similar_names = "allow"
+too_many_lines = "allow"
+significant_drop_tightening = "allow"
+ignored_unit_patterns = "allow"
+case_sensitive_file_extension_comparisons = "allow"
+items_after_statements = "allow"
+unreadable_literal = "allow"
+if_not_else = "allow"
+single_match_else = "allow"
+collapsible_if = "allow"
+type_complexity = "allow"
+missing_safety_doc = "allow"
+suboptimal_flops = "allow"
+too_many_arguments = "allow"
+cast_lossless = "allow"
+manual_is_multiple_of = "allow"
+elidable_lifetime_names = "allow"
+explicit_iter_loop = "allow"
+float_cmp = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
 
 [lints]
 workspace = true
@@ -114,6 +137,13 @@ state_not_needed = "true"
 clear_task_on_launch = "true"
 
 [workspace]
+members = [
+    "crates/sniffer_core",
+    "crates/sniffer_render",
+    "crates/sniffer_plugin",
+    "crates/sniffer_platform_android",
+    "crates/sniffer_platform_desktop",
+]
 exclude = [".plugins"]
 
 [[package.metadata.android.application.activity.intent_filter]]

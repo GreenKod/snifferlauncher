@@ -31,9 +31,6 @@ function AppCardComponent(app, pageIndex, index, cfg) {
         align_items: "Center",
         justify_content: "Center",
         gap: cardH * 0.04,
-        shadow_color: hex("#33000000"),
-        shadow_offset_y: vmin(0.2),
-        shadow_spread: vmin(0.3),
     }, [
         Container("p" + pageIndex + "_icon_" + index, {
             width: px(iconSize),
