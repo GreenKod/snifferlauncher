@@ -42,7 +42,7 @@ jobs:
           filters: .github/paths.yaml
 
   # ==========================================
-  # STAGE 1: Quick Pre-flight Checks (Blazing Fast)
+  # STAGE 1: Quick Pre-flight Checks (Parallel)
   # ==========================================
   pre-flight:
     name: Quick Pre-flight Checks
@@ -68,17 +68,12 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Run Typos Spell Check
-        uses: crate-ci/typos@master
+        uses: crate-ci/typos@v1
 
-      - name: Run cargo-deny
+      - name: Run cargo-deny (Licenses & Advisories)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
-
-      - name: Run cargo-audit
-        uses: rustsec/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@main
@@ -89,14 +84,14 @@ jobs:
           cargo machete
 
   # ==========================================
-  # STAGE 2: Platform Verifications
+  # STAGE 2: Parallel Platform Verifications
   # ==========================================
 
   # Linux (Desktop) Verification
   validate-linux:
     name: Linux Desktop Verification
     runs-on: ubuntu-latest
-    needs: pre-flight
+    needs: changes
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -138,7 +133,7 @@ jobs:
   validate-windows:
     name: Windows Native Verification
     runs-on: windows-latest
-    needs: pre-flight
+    needs: changes
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -166,7 +161,7 @@ jobs:
   validate-macos-aarch64:
     name: macOS Verification (Apple Silicon)
     runs-on: macos-14
-    needs: pre-flight
+    needs: changes
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -195,7 +190,7 @@ jobs:
   validate-android:
     name: Android Multi-Architecture Verification
     runs-on: ubuntu-latest
-    needs: pre-flight
+    needs: changes
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
