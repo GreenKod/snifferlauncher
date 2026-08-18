@@ -8,6 +8,8 @@ fn main() {
     }
     #[cfg(target_os = "android")]
     {
-        println!("This binary is for desktop preview only. Use cargo-apk or cargo-ndk to build for Android.");
+        println!(
+            "This binary is for desktop preview only. Use cargo-apk or cargo-ndk to build for Android."
+        );
     }
 }
