@@ -1819,9 +1819,7 @@ dependencies = [
 name = "sniffer_core"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "obfstr",
- "postcard",
  "serde",
  "serde_json",
  "swash",
@@ -1833,7 +1831,6 @@ name = "sniffer_platform_android"
 version = "0.1.0"
 dependencies = [
  "android-activity",
- "chrono",
  "crossbeam-channel",
  "glow",
  "image",
@@ -1843,7 +1840,6 @@ dependencies = [
  "ndk-context",
  "ndk-sys",
  "obfstr",
- "serde",
  "serde_json",
  "sniffer_core",
  "sniffer_plugin",
@@ -1854,15 +1850,11 @@ dependencies = [
 name = "sniffer_platform_desktop"
 version = "0.1.0"
 dependencies = [
- "chrono",
- "crossbeam-channel",
  "glow",
  "glutin",
  "glutin-winit",
  "image",
  "obfstr",
- "serde",
- "serde_json",
  "sniffer_core",
  "sniffer_plugin",
  "sniffer_render",
