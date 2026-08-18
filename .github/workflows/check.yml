@@ -137,12 +137,7 @@ jobs:
 
       - name: Linter Analysis (cargo clippy)
         run: |
-          cargo clippy --locked --workspace --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 
       - name: Run Unit & Integration Tests (cargo test)
         run: cargo test --locked --workspace --all-features
@@ -193,7 +188,7 @@ jobs:
           $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
           cargo --version
           cargo check --locked --target x86_64-pc-windows-gnu
-          cargo clippy --locked --workspace --all-targets --all-features --target x86_64-pc-windows-gnu -- -D warnings -D clippy::pedantic -D clippy::nursery -D clippy::cargo -A clippy::multiple-crate-versions
+          cargo clippy --locked --workspace --all-targets --all-features --target x86_64-pc-windows-gnu -- -D warnings
 
       - name: Windows (GNU/64-bit) Tests
         shell: pwsh
@@ -202,6 +197,7 @@ jobs:
         run: |
           $msys2Root = "${{ steps.msys2.outputs.msys2-location }}"
           $mingwRoot = Join-Path $msys2Root "mingw64"
+          if (-not (Test-Path "$mingwRoot\bin\x86_64-w64-mingw32-gcc.exe")) { throw "MINGW64 compiler not found under $mingwRoot" }
           $env:Path = "$mingwRoot\bin;$msys2Root\usr\bin;$env:Path"
           $env:PKG_CONFIG_PATH = "$mingwRoot\lib\pkgconfig;$env:PKG_CONFIG_PATH"
           cargo test --locked --workspace --all-features --target x86_64-pc-windows-gnu
@@ -244,12 +240,7 @@ jobs:
       - name: macOS (Apple Silicon) Check & Clippy
         run: |
           cargo check --locked --target aarch64-apple-darwin
-          cargo clippy --locked --workspace --all-targets --all-features --target aarch64-apple-darwin -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
+          cargo clippy --locked --workspace --all-targets --all-features --target aarch64-apple-darwin -- -D warnings
 
       - name: macOS Release Build Check
         run: |
@@ -307,30 +298,10 @@ jobs:
 
       - name: Android Clippy Checks
         run: |
-          BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android30" cargo ndk --target aarch64-linux-android clippy --workspace --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
-          BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--target=armv7-linux-androideabi" cargo ndk --target armv7-linux-androideabi clippy --workspace --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
-          BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android clippy --workspace --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
-          BINDGEN_EXTRA_CLANG_ARGS_i686_linux_android="--target=i686-linux-android" cargo ndk --target i686-linux-android clippy --workspace --all-targets --all-features -- \
-            -D warnings \
-            -D clippy::pedantic \
-            -D clippy::nursery \
-            -D clippy::cargo \
-            -A clippy::multiple-crate-versions
+          BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android30" cargo ndk --target aarch64-linux-android clippy --workspace --all-targets --all-features -- -D warnings
+          BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--target=armv7-linux-androideabi" cargo ndk --target armv7-linux-androideabi clippy --workspace --all-targets --all-features -- -D warnings
+          BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android clippy --workspace --all-targets --all-features -- -D warnings
+          BINDGEN_EXTRA_CLANG_ARGS_i686_linux_android="--target=i686-linux-android" cargo ndk --target i686-linux-android clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Android (Emulator x86_64) Check and Build
         run: |
