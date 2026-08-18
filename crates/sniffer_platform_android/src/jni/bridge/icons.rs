@@ -146,14 +146,15 @@ pub(crate) fn extract_drawable_pixels(
             &[],
         )
         .and_then(|res| {
+            let res_obj = res.l()?;
             env.call_method(
-                &res.l()?,
+                &res_obj,
                 jni_str!("getDisplayMetrics"),
                 jni_sig!("()Landroid/util/DisplayMetrics;"),
                 &[],
-            )
-        })
-        .and_then(|dm| dm.l());
+            )?
+            .l()
+        });
 
     let bitmap_class = env.find_class(jni_str!("android/graphics/Bitmap"))?;
 
