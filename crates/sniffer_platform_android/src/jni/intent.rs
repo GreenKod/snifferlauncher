@@ -190,7 +190,7 @@ pub fn launch_app(package_name: &str) -> Result<(), String> {
             .l()?;
 
         let intent = if intent.is_null() {
-            let _ = env.exception_clear();
+            env.exception_clear();
             let intent_cls = env.find_class(jni_str!("android/content/Intent"))?;
             let action_main = env
                 .get_static_field(

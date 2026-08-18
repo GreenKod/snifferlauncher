@@ -44,11 +44,11 @@ impl sniffer_plugin::js::host_bridge::HostPlatformBridge for AndroidHostBridge {
         crate::jni::intent::launch_app(package_name)
     }
     fn open_default_home_picker(&self) -> Result<(), String> {
-        let _ = crate::jni::bridge::open_default_home_picker();
+        crate::jni::bridge::open_default_home_picker();
         Ok(())
     }
     fn request_permissions(&self, perms: &[String]) {
-        let _ = crate::jni::bridge::request_permissions(perms);
+        crate::jni::bridge::request_permissions(perms);
     }
 }
 
@@ -488,14 +488,14 @@ pub fn android_main(app: AndroidApp) {
         });
 
         if needs_redraw {
-            let mut width = state.cached_screen_size.0;
-            let mut height = state.cached_screen_size.1;
-
-            if let Some(window) = app.native_window() {
-                width = f32::from(u16::try_from(window.width()).expect("window width fits in u16"));
-                height =
-                    f32::from(u16::try_from(window.height()).expect("window height fits in u16"));
-            }
+            let (width, height) = if let Some(window) = app.native_window() {
+                (
+                    f32::from(u16::try_from(window.width()).expect("window width fits in u16")),
+                    f32::from(u16::try_from(window.height()).expect("window height fits in u16")),
+                )
+            } else {
+                state.cached_screen_size
+            };
 
             if width < 1.0 || height < 1.0 {
                 continue;

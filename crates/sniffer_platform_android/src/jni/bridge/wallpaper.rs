@@ -136,7 +136,7 @@ pub fn get_system_wallpaper_pixels(target_w: u32, target_h: u32) -> Option<(Vec<
         let wp_mgr_cls = match env.find_class(jni_str!("android/app/WallpaperManager")) {
             Ok(cls) => cls,
             Err(e) => {
-                let _ = env.exception_clear();
+                env.exception_clear();
                 return Err(e);
             }
         };
@@ -149,7 +149,7 @@ pub fn get_system_wallpaper_pixels(target_w: u32, target_h: u32) -> Option<(Vec<
         ) {
             Ok(val) => val.l()?,
             Err(e) => {
-                let _ = env.exception_clear();
+                env.exception_clear();
                 return Err(e);
             }
         };
@@ -162,7 +162,7 @@ pub fn get_system_wallpaper_pixels(target_w: u32, target_h: u32) -> Option<(Vec<
         ) {
             Ok(val) => val.l()?,
             Err(_) => {
-                let _ = env.exception_clear();
+                env.exception_clear();
                 match env.call_method(
                     &wp_mgr,
                     jni_str!("peekDrawable"),
@@ -171,7 +171,7 @@ pub fn get_system_wallpaper_pixels(target_w: u32, target_h: u32) -> Option<(Vec<
                 ) {
                     Ok(val) => val.l()?,
                     Err(e2) => {
-                        let _ = env.exception_clear();
+                        env.exception_clear();
                         return Err(e2);
                     }
                 }
@@ -179,7 +179,7 @@ pub fn get_system_wallpaper_pixels(target_w: u32, target_h: u32) -> Option<(Vec<
         };
 
         if drawable.is_null() {
-            let _ = env.exception_clear();
+            env.exception_clear();
             return Err(JniError::JavaException);
         }
 
@@ -198,7 +198,7 @@ pub fn get_system_wallpaper_pixels(target_w: u32, target_h: u32) -> Option<(Vec<
             match extract_drawable_pixels(env, &drawable, w.cast_signed(), h.cast_signed()) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    let _ = env.exception_clear();
+                    env.exception_clear();
                     return Err(e);
                 }
             };

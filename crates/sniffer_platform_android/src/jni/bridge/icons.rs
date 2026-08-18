@@ -125,7 +125,7 @@ pub(crate) fn extract_drawable_pixels(
         jni_sig!("()Landroid/graphics/drawable/Drawable;"),
         &[],
     );
-    let _ = env.exception_clear(); // It's fine if mutate fails
+    env.exception_clear(); // It's fine if mutate fails
 
     let config_class = env.find_class(jni_str!("android/graphics/Bitmap$Config"))?;
     let argb8888 = env
@@ -171,7 +171,7 @@ pub(crate) fn extract_drawable_pixels(
         )?
         .l()?
     } else {
-        let _ = env.exception_clear();
+        env.exception_clear();
         env.call_static_method(
             bitmap_class,
             jni_str!("createBitmap"),
@@ -199,7 +199,7 @@ pub(crate) fn extract_drawable_pixels(
         jni_sig!("(I)V"),
         &[JValue::Int(0)],
     );
-    let _ = env.exception_clear();
+    env.exception_clear();
 
     // Force the drawable to be visible and fully opaque (fixes Tecno/MIUI silent draw failure)
     let _ = env.call_method(
@@ -214,7 +214,7 @@ pub(crate) fn extract_drawable_pixels(
         jni_sig!("(ZZ)Z"),
         &[JValue::Bool(true), JValue::Bool(false)],
     );
-    let _ = env.exception_clear();
+    env.exception_clear();
 
     env.call_method(
         drawable,
@@ -363,7 +363,7 @@ pub(crate) fn get_app_icon_pixels_inner(
         ) {
             Ok(val) => val.l()?,
             Err(e) => {
-                let _ = env.exception_clear();
+                env.exception_clear();
                 return Err(e);
             }
         };
@@ -378,7 +378,7 @@ pub(crate) fn get_app_icon_pixels_inner(
         ) {
             Ok(val) => val.l()?,
             Err(_) => {
-                let _ = env.exception_clear();
+                env.exception_clear();
                 let app_info = match env.call_method(
                     &pm,
                     jni_str!("getApplicationInfo"),
@@ -387,7 +387,7 @@ pub(crate) fn get_app_icon_pixels_inner(
                 ) {
                     Ok(val) => val.l()?,
                     Err(e2) => {
-                        let _ = env.exception_clear();
+                        env.exception_clear();
                         return Err(e2);
                     }
                 };
@@ -402,7 +402,7 @@ pub(crate) fn get_app_icon_pixels_inner(
                 ) {
                     Ok(val) => val.l()?,
                     Err(e3) => {
-                        let _ = env.exception_clear();
+                        env.exception_clear();
                         return Err(e3);
                     }
                 }
@@ -410,7 +410,7 @@ pub(crate) fn get_app_icon_pixels_inner(
         };
 
         if drawable.is_null() {
-            let _ = env.exception_clear();
+            env.exception_clear();
             return Err(JniError::JavaException);
         }
 
@@ -420,7 +420,7 @@ pub(crate) fn get_app_icon_pixels_inner(
         let rgba_bytes = match extract_drawable_pixels(env, &drawable, width, height) {
             Ok(bytes) => bytes,
             Err(e) => {
-                let _ = env.exception_clear();
+                env.exception_clear();
                 return Err(e);
             }
         };
