@@ -116,27 +116,28 @@ pub(crate) fn update_max_scroll_cache(
     state.cached_max_scroll.clear();
     let mut search = vec![(root_element, layout_tree)];
     while let Some((el, lay)) = search.pop() {
-        if let sniffer_core::types::Element::ScrollView { id, .. } = el {
-            if let Some(id_str) = id {
-                let sv_id = sniffer_core::ui::widget::fnv1a(id_str.as_bytes());
-                let view_height = lay.rect.height;
-                let mut min_y = f32::MAX;
-                let mut max_y = f32::MIN;
-                for child in &lay.children {
-                    if child.rect.y < min_y {
-                        min_y = child.rect.y;
-                    }
-                    if child.rect.y + child.rect.height > max_y {
-                        max_y = child.rect.y + child.rect.height;
-                    }
+        if let sniffer_core::types::Element::ScrollView {
+            id: Some(id_str), ..
+        } = el
+        {
+            let sv_id = sniffer_core::ui::widget::fnv1a(id_str.as_bytes());
+            let view_height = lay.rect.height;
+            let mut min_y = f32::MAX;
+            let mut max_y = f32::MIN;
+            for child in &lay.children {
+                if child.rect.y < min_y {
+                    min_y = child.rect.y;
                 }
-                let max_scroll = if min_y <= max_y {
-                    (max_y - min_y - view_height).max(0.0)
-                } else {
-                    0.0
-                };
-                state.cached_max_scroll.insert(sv_id, max_scroll);
+                if child.rect.y + child.rect.height > max_y {
+                    max_y = child.rect.y + child.rect.height;
+                }
             }
+            let max_scroll = if min_y <= max_y {
+                (max_y - min_y - view_height).max(0.0)
+            } else {
+                0.0
+            };
+            state.cached_max_scroll.insert(sv_id, max_scroll);
         }
         if let sniffer_core::types::Element::Container { children, .. }
         | sniffer_core::types::Element::ScrollView { children, .. } = el

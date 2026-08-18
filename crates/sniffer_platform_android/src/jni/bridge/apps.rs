@@ -268,14 +268,12 @@ pub fn request_permissions(permissions: &[String]) -> Result<Vec<String>, String
             }
 
             let activity_class = env.find_class(jni_str!("android/app/Activity"))?;
-            let request_permissions_method = env.call_static_method(
+            let _res = env.call_static_method(
                 activity_class,
                 jni_str!("requestPermissions"),
                 jni_sig!("(Landroid/app/Activity;[Ljava/lang/String;I)V"),
                 &[],
             )?;
-
-            let _ = request_permissions_method;
 
             Ok(permissions.to_vec())
         })

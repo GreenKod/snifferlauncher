@@ -126,8 +126,9 @@ pub fn get_density() -> (f32, f32) {
     .unwrap_or((1.0_f32, 1.0_f32))
 }
 
-/// Sets `FLAG_SHOW_WALLPAPER` on the Activity's window so the system wallpaper
-/// is composited behind the (transparent-cleared) OpenGL surface by the OS compositor.
+/// Sets `FLAG_SHOW_WALLPAPER` on the Activity's window.
+///
+/// This allows the system wallpaper to be composited behind the transparent OpenGL surface.
 /// This is the official Android API for launchers and works on all API levels.
 pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
     let jvm = vm();
@@ -157,7 +158,7 @@ pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
             jni_sig!("(I)V"),
             &[JValue::Int(0x0010_0000i32)], // FLAG_SHOW_WALLPAPER
         );
-        let _ = env.exception_clear();
+        env.exception_clear();
 
         // window.setFormat(PixelFormat.TRANSLUCENT = -3)
         let _ = env.call_method(
@@ -166,7 +167,7 @@ pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
             jni_sig!("(I)V"),
             &[JValue::Int(-3i32)],
         );
-        let _ = env.exception_clear();
+        env.exception_clear();
 
         // window.setBackgroundDrawable(null)
         let _ = env.call_method(
@@ -175,7 +176,7 @@ pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
             jni_sig!("(Landroid/graphics/drawable/Drawable;)V"),
             &[JValue::Object(&jni::objects::JObject::null())],
         );
-        let _ = env.exception_clear();
+        env.exception_clear();
 
         Ok(())
     });
