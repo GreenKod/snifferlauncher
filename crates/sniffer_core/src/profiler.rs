@@ -215,10 +215,10 @@ pub fn render_devkit_hud(
     root_element: &crate::types::Element,
     layout_tree: &crate::layout::LayoutNode,
 ) {
-    // 1. Dokunma ve Hitbox Alanlarını Çiz
+    // 1. Draw touch & hitbox bounding areas
     draw_touch_hitboxes(renderer, root_element, layout_tree);
 
-    // 2. Aktif Dokunma Noktası (Pointer Telemetry Visualizer)
+    // 2. Active Pointer / Touch Telemetry Visualizer
     if profiler.touch_telemetry.touch_x > 0.0 || profiler.touch_telemetry.touch_y > 0.0 {
         let tx = profiler.touch_telemetry.touch_x;
         let ty = profiler.touch_telemetry.touch_y;
@@ -227,7 +227,7 @@ pub fn render_devkit_hud(
         renderer.draw_circle(tx, ty, 4.0, 0xFFF5_9E0B);
     }
 
-    // 3. Devkit HUD Bilgi Kartı
+    // 3. Devkit HUD Info Card
     let fps = profiler.current_fps();
     let avg_ms = profiler.average_frame_time_ms();
     let cpu_ms = profiler.avg_cpu_ms();

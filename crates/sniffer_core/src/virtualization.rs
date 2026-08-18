@@ -1,22 +1,21 @@
-//! Faz 5: Virtual Page Window Manager & Element Recycling Pool
+//! Virtual Page Window Manager & Element Recycling Pool
 //!
-//! JS'den gelen tam Element AST ağacını alıp layout hesaplamadan önce budar.
-//! Sadece aktif sayfa ve komşularının (current_page ± 1) çocuklarını korur.
-//! Hızlı kaydırma (fling) anında pencere yarıçapını (radius) dinamik genişletir.
-//! Pencere dışındaki sayfaların çocuklarını sökerek `page_cache` ve `ElementPool`'a aktarır.
+//! Prunes the full Element AST tree before layout calculation.
+//! Keeps only active and adjacent (current_page ± 1) page children.
+//! Dynamically expands prefetch window during high-speed fling gestures.
+//! Moves off-screen page children to `page_cache` and `ElementPool`.
 
 use crate::types::Element;
 use std::collections::{HashMap, HashSet, VecDeque};
 
-/// Taffy layout'a girecek varsayılan sayfa yarıçapı (current ± 1)
+/// Default page window radius entering Taffy layout (current ± 1)
 pub const PAGE_WINDOW_RADIUS: usize = 1;
 
-/// ElementPool maksimum kapasitesi (56 eleman = 2 sayfa kartı)
+/// Maximum ElementPool capacity (56 elements = 2 pages of cards)
 pub const POOL_MAX_CAPACITY: usize = 56;
 
-/// Recycled Element Havuzu.
-/// Ekrandan çıkan kart elemanları (AppCardComponent, EmptySlotComponent vb.)
-/// bellekten yok edilmeyip bu havuzda saklanır.
+/// Recycled Element Pool.
+/// Off-screen card elements are preserved in this pool rather than being deallocated.
 #[derive(Debug)]
 pub struct ElementPool {
     pool: VecDeque<Element>,
@@ -32,26 +31,26 @@ impl ElementPool {
         }
     }
 
-    /// Bir elemanı pool'a geri verir. Kapasite aşıldığında Rust RAII ile drop edilir.
+    /// Recycles an element into the pool. Dropped via RAII when capacity is exceeded.
     pub fn recycle(&mut self, element: Element) {
         if self.pool.len() < self.max_capacity {
             self.pool.push_back(element);
         }
     }
 
-    /// Bir sayfanın tüm çocuk elemanlarını toplu olarak havuza aktarır.
+    /// Recycles an entire batch of child elements into the pool.
     pub fn recycle_all(&mut self, children: Vec<Element>) {
         for child in children {
             self.recycle(child);
         }
     }
 
-    /// Havuzdan kullanıma hazır bir eleman alır.
+    /// Retrieves an available element from the pool.
     pub fn take(&mut self) -> Option<Element> {
         self.pool.pop_front()
     }
 
-    /// Havuzdaki mevcut eleman sayısı.
+    /// Number of elements currently available in the pool.
     #[must_use]
     pub fn available(&self) -> usize {
         self.pool.len()
@@ -64,23 +63,23 @@ impl Default for ElementPool {
     }
 }
 
-/// Sanal sayfa penceresi yöneticisi.
-/// JS'den gelen 140+ elemanlık ağacı Taffy layout öncesi budar (strip).
-/// Hızlı kaydırma (fling) sırasında pencereyi dinamik genişletir (Pre-materialization).
+/// Virtual page window manager.
+/// Prunes the 140+ element AST tree before Taffy layout calculation.
+/// Expands window dynamically during fling gestures (pre-materialization).
 #[derive(Debug)]
 pub struct VirtualPageManager {
-    /// Stripped sayfa çocukları saklama deposu (page_index -> children)
+    /// Stripped page children storage (page_index -> children)
     page_cache: HashMap<usize, Vec<Element>>,
-    /// Recycled element havuzu
+    /// Recycled element pool
     pub element_pool: ElementPool,
-    /// Şu an materialized (children yüklü) sayfa indeksleri
+    /// Currently materialized page indices
     #[allow(dead_code)]
     materialized: HashSet<usize>,
-    /// Aktif sayfa indeksi
+    /// Currently active page index
     current_page: usize,
-    /// Toplam sayfa sayısı
+    /// Total page count
     total_pages: usize,
-    /// Virtualization devrede mi
+    /// Whether virtualization is active
     active: bool,
 }
 
@@ -103,35 +102,34 @@ impl VirtualPageManager {
         }
     }
 
-    /// Aktif sayfa indeksini döndürür.
+    /// Returns the active page index.
     #[must_use]
     pub const fn current_page(&self) -> usize {
         self.current_page
     }
 
-    /// Aktif sayfa indeksini doğrudan ayarlar ve tree ile senkronize eder.
+    /// Directly sets the active page index and synchronizes the tree.
     pub fn set_active_page(&mut self, page_idx: usize, root: &mut Element) {
         self.current_page = page_idx;
         self.virtualize_tree(root);
     }
 
-    /// Standard virtualize_tree (hız 0 var sayılarak).
+    /// Standard virtualize_tree (assuming zero velocity).
     pub fn virtualize_tree(&mut self, root: &mut Element) {
         self.virtualize_tree_with_velocity(root, 0.0);
     }
 
-    /// Kaydırma hızına (velocity) göre DINAMIK PREFETCH WINDOW uygulayan virtualization.
-    /// Hızlı fling anında (|velocity| > 400) pencere yarıçapı 2 veya 3 sayfaya genişletilerek
-    /// pop-in ve siyah ekran %100 önlenir.
+    /// Virtualization with dynamic prefetch window based on scroll velocity.
+    /// During fast flings (|velocity| > 400), window radius expands to 2-3 pages
+    /// to eliminate pop-in or black frames.
     pub fn virtualize_tree_with_velocity(&mut self, _root: &mut Element, _velocity: f32) {
         // Virtualization is disabled to prevent mid-swipe layout recalculation CPU spikes.
         // With <10 pages, Taffy can handle the full tree effortlessly.
         self.active = false;
     }
 
-    /// Sürükleme veya fling esnasında scroll offset'i %50 eşiğini geçtiğinde
-    /// Erken Pre-materialization tetikler.
-    /// Sayfa penceresi değiştiyse `true` döner ve re-layout tetiklenir.
+    /// Triggers pre-materialization when scroll offset crosses 50% threshold.
+    /// Returns true if the page window changed, triggering re-layout.
     pub fn update_predicted_page(
         &mut self,
         predicted_page: usize,
@@ -143,15 +141,14 @@ impl VirtualPageManager {
         false // Force false to prevent mid-swipe Taffy layout recalculation CPU spikes
     }
 
-    /// Sayfa snap tamamlandığında veya sayfa değiştiğinde çağrılır.
+    /// Invoked when page snap completes or active page changes.
     pub fn on_page_changed(&mut self, new_page: usize, root: &mut Element) {
         self.current_page = new_page;
         self.virtualize_tree(root);
     }
 
-    /// Viewport boyutu veya yönü değiştiğinde (rotation/resize) önbellekleri geçersiz kılar,
-    /// tüm sayfaların stub container boyutlarını (`new_w`, `new_h`) güncelleyerek
-    /// yeni ekran oranlarına göre zorunlu re-virtualization tetikler.
+    /// Invalidates caches on viewport resize or rotation,
+    /// updating stub container dimensions and forcing re-virtualization.
     pub fn on_viewport_resized(&mut self, _new_w: f32, _new_h: f32, root: &mut Element) {
         let cached_keys: Vec<usize> = self.page_cache.keys().copied().collect();
         for page_idx in cached_keys {
@@ -165,7 +162,7 @@ impl VirtualPageManager {
         self.virtualize_tree(root);
     }
 
-    /// Ekran boyutu veya yönü değiştiğinde (rotation/resize) önbellekleri geçersiz kılar.
+    /// Invalidates caches on viewport dimension or orientation changes.
     pub fn invalidate_on_resize(&mut self, root: &mut Element) {
         let cached_keys: Vec<usize> = self.page_cache.keys().copied().collect();
         for page_idx in cached_keys {
@@ -179,8 +176,8 @@ impl VirtualPageManager {
         self.virtualize_tree(root);
     }
 
-    /// Belirtilen sayfanın çocuklarını söküp cache veya pool'a taşır.
-    /// Sayfa container'ı boş stub olarak kalır.
+    /// Strips children of a specific page and moves them to cache or pool.
+    /// The page container remains as an empty stub.
     pub fn strip_page(&mut self, page_idx: usize, page_el: &mut Element) {
         let children_to_strip = match page_el {
             Element::Container { children, .. } | Element::ScrollView { children, .. } => {
@@ -199,7 +196,7 @@ impl VirtualPageManager {
         }
     }
 
-    /// Belirtilen sayfanın çocuklarını cache'den veya pool'dan geri yükler.
+    /// Restores children of a specific page from cache or pool.
     pub fn restore_page(&mut self, page_idx: usize, page_el: &mut Element) {
         let children_target = match page_el {
             Element::Container { children, .. } | Element::ScrollView { children, .. } => children,
@@ -215,7 +212,7 @@ impl VirtualPageManager {
         }
     }
 
-    /// AST ağacı içinde "app_grid_pager" -> "app_grid_track" alt çocuklarını bulur.
+    /// Locates "app_grid_pager" -> "app_grid_track" children inside the AST tree.
     fn find_track_children_mut<'a>(
         root: &'a mut Element,
         out_page_count: &mut usize,
@@ -243,7 +240,7 @@ impl VirtualPageManager {
         None
     }
 
-    /// AST içinde verilen ID'ye sahip elemanı özyinelemeli (recursive DFS) olarak bulur.
+    /// Recursively finds an element by ID within the AST tree (DFS).
     pub fn find_element_by_id_mut<'a>(
         element: &'a mut Element,
         target_id: &str,

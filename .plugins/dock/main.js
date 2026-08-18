@@ -4,14 +4,14 @@
 
 host_log("[Dock Plugin] Initializing Clean Android Dock plugin...");
 
-// 1. İzinleri Talep Et (INPUT, IPC, UI)
+// 1. Request Permissions (INPUT, IPC, UI)
 const granted = requestPermissions([
     "plugin.permission.INPUT",
     "plugin.permission.IPC",
     "plugin.permission.UI"
 ]);
 
-// 2. Temel Sistem Uygulamaları (Telefon, Mesajlar, Kamera, Ayarlar)
+// 2. Essential System Apps (Phone, Messages, Camera, Settings)
 const ESSENTIAL_APPS_CONFIG = [
     { id: "phone", name: "Telefon", iconLetter: "T", color: "#22C55E", keywords: ["dialer", "phone", "telefon", "contacts", "rehber"] },
     { id: "messages", name: "Mesajlar", iconLetter: "M", color: "#3B82F6", keywords: ["messaging", "mms", "mesaj", "message", "sms", "chat"] },
@@ -26,7 +26,7 @@ const dockState = {
 };
 
 /**
- * DataVault üzerinden sistemde yüklü olan temel uygulamaları eşleştirir.
+ * Matches installed essential system applications using DataVault.
  */
 function refreshEssentialApps() {
     if (typeof Vault === "undefined" || typeof Vault.queryApps !== "function") {
@@ -81,7 +81,7 @@ function refreshEssentialApps() {
         dockState.essentialApps = matched;
         dockState.detectedPackages = detected;
 
-        // Click için ID ve Hash tablosu oluştur
+        // Build ID and Hash map for click hit testing
         const map = {};
         for (let i = 0; i < matched.length; i++) {
             const app = matched[i];
@@ -111,10 +111,10 @@ function refreshEssentialApps() {
     }
 }
 
-// Başlangıçta eşle
+// Initial match
 refreshEssentialApps();
 
-// Sistem uygulamaları güncellendiğinde dock'u otomatik güncelle
+// Automatically update dock when system applications change
 if (typeof subscribeChannel === "function") {
     subscribeChannel("vault.changed:system.apps", function() {
         refreshEssentialApps();
@@ -137,7 +137,7 @@ if (typeof subscribeChannel === "function") {
     });
 }
 
-// 3. Eklentiler Arası API Kayıtları (Inter-Plugin APIs)
+// 3. Inter-Plugin API Registrations
 registerApi("dock.getUI", function(payload) {
     const isLandscape = payload && payload.isLandscape;
     refreshEssentialApps();
@@ -154,13 +154,13 @@ registerApi("dock.handleClick", function(payload) {
     return { success: false };
 });
 
-// Başlangıçta hazır olduğunu bildir
+// Notify readiness on initialization
 broadcastEvent("dock.ready", { ready: true });
 
-// 4. UI Bileşen Üretimi (Virtual DOM Ağacı)
+// 4. UI Component Generation (Virtual DOM Tree)
 function getDockContainer(isLandscape) {
     if (isLandscape) {
-        // Yatay (Landscape) Mod: Sağda Dikey Ergonomik Dock (vmin ölçekli)
+        // Landscape Mode: Right Vertical Ergonomic Dock (vmin scaled)
         return Container("dock_root_container", {
             width: px(vmin(14.0)),
             height: pct(100),
@@ -217,7 +217,7 @@ function getDockContainer(isLandscape) {
         }));
     }
 
-    // Dikey (Portrait) Mod: Altta Yüzen Kusursuz Şeffaf Android Dock (Dengeli Ergonomik Hitbox)
+    // Portrait Mode: Floating Translucent Android Dock
     return Container("dock_root_container", {
         width: pct(100),
         height: px(vh(18.0)),
@@ -286,7 +286,7 @@ function getDockContainer(isLandscape) {
     ]);
 }
 
-// 5. Olay Dinleyicisi
+// 5. Event Listener
 globalThis.onEvent = function(eventJsonString) {
     const e = typeof eventJsonString === "string" ? JSON.parse(eventJsonString) : eventJsonString;
 

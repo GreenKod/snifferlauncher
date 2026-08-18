@@ -3,7 +3,7 @@
 host_log("[Clock Widget] Started and registering APIs...");
 
 registerApi("clock.getTime", function(payload) {
-    host_log("[Clock Widget] Gelen İstek: " + JSON.stringify(payload));
+    host_log("[Clock Widget] Request received: " + JSON.stringify(payload));
     return getTimeData(payload?.utcOffset);
 });
 

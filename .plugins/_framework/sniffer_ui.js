@@ -171,11 +171,11 @@ function Image(id, src, style) {
  *   momentum_scrolling, capture_drag,
  *   style,
  *   --- Rust-managed scroll physics ---
- *   snap_x: number|null,      // Yatay snap aralığı px (pager modu). null = serbest
- *   snap_y: number|null,      // Dikey snap aralığı px. null = serbest
- *   rubber_band: number|null, // Kenar elastikiyeti 0.0–1.0. null = sert kenar
- *   page_count: number|null,  // Toplam sayfa sayısı (snap_x ile)
- *   on_snap: string|null,     // Snap tamamlanınca JS callback adı
+ *   snap_x: number|null,      // Horizontal snap interval px (pager mode). null = free scroll
+ *   snap_y: number|null,      // Vertical snap interval px. null = free scroll
+ *   rubber_band: number|null, // Boundary elasticity 0.0–1.0. null = rigid boundary
+ *   page_count: number|null,  // Total page count (used with snap_x)
+ *   on_snap: string|null,     // JS callback name when snap completes
  * }
  * @param {Array}  children
  */

@@ -6,8 +6,8 @@ function renderClockCard() {
 
     return CardWidget({
         id: "clock-widget-card",
-        title: "SAAT & TARİH",
-        subtitle: `Türkiye Zamanı (UTC+${offset})`,
+        title: "CLOCK & DATE",
+        subtitle: `Local Time (UTC+${offset})`,
         content: [
             Label("clock-card-time", now.time, {
                 text_color: Theme.colors.accent,

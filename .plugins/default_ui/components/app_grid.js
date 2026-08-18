@@ -105,7 +105,7 @@ function PageIndicatorDots(totalPages, currentPage, isLandscape) {
     for (let p = 0; p < totalPages; p++) {
         const isActive = p === currentPage;
         if (isLandscape) {
-            // Yatay Ekranda: Sağ tarafta Dikey Gösterge Noktaları
+            // Landscape Mode: Vertical indicator dots on the right side
             dots.push(Container("page_dot_" + p, {
                 width: px(vmin(1.6)),
                 height: px(isActive ? vmin(3.6) : vmin(1.6)),
@@ -114,7 +114,7 @@ function PageIndicatorDots(totalPages, currentPage, isLandscape) {
                 transition: { duration: 0.2 },
             }, []));
         } else {
-            // Dikey Ekranda: Alt tarafta Yatay Gösterge Noktaları
+            // Portrait Mode: Horizontal indicator dots on the bottom
             dots.push(Container("page_dot_" + p, {
                 width: px(isActive ? vmin(3.6) : vmin(1.6)),
                 height: px(vmin(1.6)),

@@ -28,12 +28,12 @@ function ModuleListComponent() {
             align_items: "Center",
             padding: padXY(vmin(2.0), vmin(0.0)),
         }, [
-            Label("app_grid_title", `Uygulamalar (${filteredApps.length} / 48)`, {
+            Label("app_grid_title", `Applications (${filteredApps.length} / 48)`, {
                 text_color: hex("#FFFFFF"),
                 text_size: vmin(5.0),
                 width: "Auto",
             }),
-            Label("app_grid_subtitle", "İlk 48 Uygulama", {
+            Label("app_grid_subtitle", "First 48 Apps", {
                 text_color: hex("#FF0055"),
                 text_size: vmin(3.5),
                 width: "Auto",

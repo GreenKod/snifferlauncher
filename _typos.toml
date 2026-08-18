@@ -1,0 +1,33 @@
+[files]
+extend-exclude = [
+    "logcat.txt",
+    "*.log",
+    "*.bin",
+    "*.keystore",
+    "android/res/**",
+    "scratch/**",
+    ".plugins/**/.cache/**",
+]
+
+[default.extend-words]
+# Hex / base64 / project abbreviations / vendor symbols
+ba = "ba"
+ded = "ded"
+curosr = "curosr"
+thie = "thie"
+unsupport = "unsupport"
+tabe = "tabe"
+Tabe = "Tabe"
+mis = "mis"
+Controll = "Controll"
+CHANAGE = "CHANAGE"
+wid = "wid"
+vmin = "vmin"
+vmax = "vmax"
+devkit = "devkit"
+quickjs = "quickjs"
+taffy = "taffy"
+obfstr = "obfstr"
+gl = "gl"
+egl = "egl"
+fnv1a = "fnv1a"
