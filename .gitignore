@@ -17,11 +17,18 @@ target/
 # --- Android Build & Private SDK Configuration ---
 local.properties
 **/local.properties
-.gradle/
-build/
-/build/
+# --- Build Distributions & Binaries ---
+/dist/
+dist/
+mr_builder
+mr_builder.exe
+logcat*
+*.log
+dump_*
 *.apk
 *.aab
+assets/test.png
+.plugins/**/test.*
 
 # --- Security & Private Signing Keys (Never commit to VCS) ---
 *.keystore
@@ -30,6 +37,8 @@ build/
 *.pem
 *.key
 release.*
+/keystores/
+keystores/
 
 # --- Native Data Vault & Runtime Caches ---
 **/.cache/
@@ -38,8 +47,6 @@ release.*
 target/**/.plugins/.cache/
 **/vault_*.json
 **/apps_cache.json
-*.log
-logcat.txt
 *.tmp
 /scratch/
 scratch/
@@ -58,8 +65,3 @@ scratch/
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# --- Scratch ---
-scratch/
-keystores/
-/keystores/
