@@ -202,7 +202,7 @@ fn collect_glyph_data(
                     Content::Mask => img.data,
                     Content::SubpixelMask => {
                         let mut gray = Vec::with_capacity(img.data.len() / 3);
-                        for chunk in img.data.chunks_exact(3) {
+                        for chunk in img.data.as_chunks::<3>().0 {
                             let g =
                                 (u32::from(chunk[0]) + u32::from(chunk[1]) + u32::from(chunk[2]))
                                     / 3;
@@ -213,7 +213,7 @@ fn collect_glyph_data(
                     }
                     Content::Color => {
                         let mut gray = Vec::with_capacity(img.data.len() / 4);
-                        for chunk in img.data.chunks_exact(4) {
+                        for chunk in img.data.as_chunks::<4>().0 {
                             gray.push(chunk[3]);
                         }
                         gray
