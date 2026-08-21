@@ -61,3 +61,5 @@ desktop.ini
 
 # --- Scratch ---
 scratch/
+keystores/
+/keystores/
