@@ -12,8 +12,9 @@ use sniffer_render::draw::{
 
 use obfstr::obfstr;
 use sniffer_core::dev_log;
+use sniffer_pkg::PackageRegistry;
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use super::window::DesktopWindow;
 
@@ -52,6 +53,7 @@ pub struct AppState {
     pub data_map: DataMap,
     pub action_queue: Arc<Mutex<Vec<Action>>>,
     pub plugin_registry: PluginRegistry,
+    pub pkg_registry: Arc<RwLock<PackageRegistry>>,
     pub transition_manager: sniffer_core::anim::TransitionManager,
     #[cfg(feature = "devkit")]
     pub profiler: Arc<Mutex<sniffer_core::profiler::FrameProfiler>>,
@@ -125,6 +127,13 @@ impl AppState {
             .vault()
             .set_cache_dir(plugins_dir.join(obfstr::obfstr!(".cache")));
 
+        let mut pkg_reg = PackageRegistry::new(plugin_registry.vault());
+        pkg_reg.register_service(Arc::new(sniffer_pkg::perf_monitor::PerfMonitorPackage::new()));
+        pkg_reg.register_widget(Arc::new(sniffer_pkg::scroll_view::ScrollViewPackage::new()));
+
+        let pkg_registry = Arc::new(RwLock::new(pkg_reg));
+        plugin_registry.set_pkg_registry(Arc::clone(&pkg_registry));
+
         sniffer_plugin::PluginLoader::new(&plugins_dir)
             .register_all(&mut plugin_registry, &action_queue);
 
@@ -151,6 +160,7 @@ impl AppState {
             data_map: DataMap::default(),
             action_queue,
             plugin_registry,
+            pkg_registry,
             transition_manager: sniffer_core::anim::TransitionManager::default(),
             #[cfg(feature = "devkit")]
             profiler,
@@ -161,6 +171,18 @@ impl AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+fn collect_layout_rects<'a>(
+    node: &'a sniffer_core::layout::LayoutNode,
+    map: &mut HashMap<&'a str, sniffer_core::math::Rect>,
+) {
+    if let Some(id) = node.element.id() {
+        map.insert(id, node.rect);
+    }
+    for child in &node.children {
+        collect_layout_rects(child, map);
     }
 }
 
@@ -234,6 +256,9 @@ pub fn run_loop(
             winit::event::Event::WindowEvent { event, .. } => {
                 match &event {
                     winit::event::WindowEvent::CloseRequested => {
+                        if let Ok(mut reg) = app.pkg_registry.write() {
+                            reg.unload_all();
+                        }
                         app.running = false;
                         active_event_loop.exit();
                         return;
@@ -275,6 +300,9 @@ pub fn run_loop(
                             .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
                         app.plugin_registry.tick();
+                        if let Ok(mut reg) = app.pkg_registry.write() {
+                            reg.tick_all(dt);
+                        }
 
                         let mut root_element = app.plugin_registry.build_ui().unwrap_or_else(|| {
                             sniffer_core::types::Element::Container {
@@ -748,6 +776,12 @@ pub fn run_loop(
                             0.0,
                             0.0,
                         );
+
+                        let mut layout_rects = HashMap::new();
+                        collect_layout_rects(&layout_tree, &mut layout_rects);
+                        if let Ok(mut reg) = app.pkg_registry.write() {
+                            reg.render_widgets(&mut renderer, &layout_rects, None);
+                        }
 
                         #[cfg(feature = "devkit")]
                         {
