@@ -50,6 +50,7 @@ pub struct TextUniforms {
     pub u_uv_start: Option<glow::UniformLocation>,
     pub u_uv_end: Option<glow::UniformLocation>,
     pub u_transform: Option<glow::UniformLocation>,
+    pub u_is_color: Option<glow::UniformLocation>,
 }
 
 pub struct GlowRenderer {
@@ -228,6 +229,7 @@ impl GlowRenderer {
                 u_uv_start: gl.get_uniform_location(text_program, "u_uv_start"),
                 u_uv_end: gl.get_uniform_location(text_program, "u_uv_end"),
                 u_transform: gl.get_uniform_location(text_program, "u_transform"),
+                u_is_color: gl.get_uniform_location(text_program, "u_is_color"),
             };
 
             Ok(Self {
@@ -254,20 +256,9 @@ impl GlowRenderer {
     }
 
     pub fn trim_memory(&mut self) {
-        use glow::HasContext;
-        unsafe {
-            let gl = &self.gl;
-            self.texture_cache.textures.retain(|key, handle| {
-                if key.as_str() == "__system_wallpaper__" {
-                    true
-                } else {
-                    gl.delete_texture(handle.texture);
-                    false
-                }
-            });
-            self.texture_cache.total_vram_bytes = 0;
-        }
+        self.trim_memory_level(textures::MemoryTrimLevel::Critical);
     }
+
 
     pub fn warm_up_shaders(&mut self) {
         use sniffer_core::math::Rect;
@@ -349,6 +340,7 @@ impl Renderer for GlowRenderer {
 
     fn begin_frame(&mut self, width: f32, height: f32) {
         self.resolution = (width, height);
+        self.texture_cache.current_frame = self.texture_cache.current_frame.wrapping_add(1);
         unsafe {
             self.gl
                 .viewport(0, 0, f32_to_i32(width), f32_to_i32(height));

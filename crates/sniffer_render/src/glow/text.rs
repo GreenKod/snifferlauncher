@@ -72,6 +72,11 @@ pub(crate) fn draw_text_impl(
     size: f32,
     color: u32,
 ) {
+    if let Some(mut atlas) = renderer.font_atlas.take() {
+        atlas.ensure_glyphs(&renderer.gl, text);
+        renderer.font_atlas = Some(atlas);
+    }
+
     let mut col = unpack_color(color);
     col[3] *= renderer.global_alpha;
     unsafe {
@@ -120,6 +125,11 @@ pub(crate) fn draw_text_impl(
                     continue;
                 }
 
+                let is_color_val = if glyph.is_color { 1 } else { 0 };
+                renderer
+                    .gl
+                    .uniform_1_i32(u.u_is_color.as_ref(), is_color_val);
+
                 let gw =
                     f32::from(u16::try_from(glyph.width).expect("glyph width fits in u16")) * scale;
                 let gh = f32::from(u16::try_from(glyph.height).expect("glyph height fits in u16"))
@@ -158,6 +168,7 @@ pub(crate) fn draw_text_impl(
                 curr_x = glyph.advance_width.mul_add(scale, curr_x);
             }
         } else {
+            renderer.gl.uniform_1_i32(u.u_is_color.as_ref(), 0);
             let char_width = size;
             let char_height = size;
             let gap = size * 0.1;
