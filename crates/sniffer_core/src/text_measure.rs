@@ -25,7 +25,11 @@ impl<'a> TextMeasurer<'a> {
 
         for c in text.chars() {
             let glyph_id = charmap.map(c);
-            let advance = glyph_metrics.advance_width(glyph_id);
+            let advance = if glyph_id == 0 {
+                units_per_em * 0.8
+            } else {
+                glyph_metrics.advance_width(glyph_id)
+            };
             width = advance.mul_add(scale_factor, width);
         }
 

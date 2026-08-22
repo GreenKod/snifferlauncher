@@ -3,31 +3,232 @@ use glow::HasContext;
 use sniffer_core::math::Rect;
 use sniffer_core::render_api::Renderer;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryTrimLevel {
+    /// Evict until under max_vram_bytes
+    Normal,
+    /// Evict 50% oldest unpinned textures under memory pressure
+    Moderate,
+    /// Evict all non-system textures
+    Critical,
+}
+
 pub struct TextureHandle {
     pub texture: glow::Texture,
     pub width: f32,
     pub height: f32,
     pub size_bytes: usize,
-    pub last_used: u64,
+    pub last_frame: u64,
+    prev: Option<usize>,
+    next: Option<usize>,
 }
 
 pub struct LruTextureCache {
-    pub textures: std::collections::HashMap<String, TextureHandle>,
-    pub access_counter: u64,
+    nodes: Vec<Option<TextureHandle>>,
+    keys: Vec<Option<String>>,
+    free_indices: Vec<usize>,
+    map: std::collections::HashMap<String, usize>,
+    head: Option<usize>, // Most recently used
+    tail: Option<usize>, // Least recently used
     pub total_vram_bytes: usize,
     pub max_vram_bytes: usize,
     pub max_textures: usize,
+    pub current_frame: u64,
 }
 
 impl Default for LruTextureCache {
     fn default() -> Self {
         Self {
-            textures: std::collections::HashMap::new(),
-            access_counter: 0,
+            nodes: Vec::with_capacity(128),
+            keys: Vec::with_capacity(128),
+            free_indices: Vec::new(),
+            map: std::collections::HashMap::with_capacity(128),
+            head: None,
+            tail: None,
             total_vram_bytes: 0,
-            max_vram_bytes: 256 * 1024 * 1024,
-            max_textures: 2048,
+            max_vram_bytes: 128 * 1024 * 1024, // 128 MB VRAM limit
+            max_textures: 1024,
+            current_frame: 0,
         }
+    }
+}
+
+impl LruTextureCache {
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    #[must_use]
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.map.contains_key(key)
+    }
+
+    fn detach(&mut self, idx: usize) {
+        let (prev, next) = match self.nodes.get(idx).and_then(Option::as_ref) {
+            Some(node) => (node.prev, node.next),
+            None => return,
+        };
+
+        if let Some(p) = prev {
+            if let Some(Some(p_node)) = self.nodes.get_mut(p) {
+                p_node.next = next;
+            }
+        } else {
+            self.head = next;
+        }
+
+        if let Some(n) = next {
+            if let Some(Some(n_node)) = self.nodes.get_mut(n) {
+                n_node.prev = prev;
+            }
+        } else {
+            self.tail = prev;
+        }
+
+        if let Some(Some(node)) = self.nodes.get_mut(idx) {
+            node.prev = None;
+            node.next = None;
+        }
+    }
+
+    fn attach_head(&mut self, idx: usize) {
+        let old_head = self.head;
+        if let Some(Some(node)) = self.nodes.get_mut(idx) {
+            node.prev = None;
+            node.next = old_head;
+        }
+
+        if let Some(h) = old_head {
+            if let Some(Some(h_node)) = self.nodes.get_mut(h) {
+                h_node.prev = Some(idx);
+            }
+        } else {
+            self.tail = Some(idx);
+        }
+
+        self.head = Some(idx);
+    }
+
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut TextureHandle> {
+        let idx = *self.map.get(key)?;
+        self.detach(idx);
+        self.attach_head(idx);
+        if let Some(Some(node)) = self.nodes.get_mut(idx) {
+            node.last_frame = self.current_frame;
+            Some(node)
+        } else {
+            None
+        }
+    }
+
+    pub fn pin(&mut self, key: &str, frame: u64) {
+        if let Some(&idx) = self.map.get(key) {
+            self.detach(idx);
+            self.attach_head(idx);
+            if let Some(Some(node)) = self.nodes.get_mut(idx) {
+                node.last_frame = frame;
+            }
+        }
+    }
+
+    pub fn remove(&mut self, key: &str) -> Option<TextureHandle> {
+        let idx = self.map.remove(key)?;
+        self.detach(idx);
+
+        let handle = self.nodes.get_mut(idx)?.take()?;
+        self.keys[idx] = None;
+        self.free_indices.push(idx);
+        Some(handle)
+    }
+
+    pub fn insert(
+        &mut self,
+        key: String,
+        texture: glow::Texture,
+        width: f32,
+        height: f32,
+        size_bytes: usize,
+    ) -> Option<TextureHandle> {
+        if let Some(&idx) = self.map.get(&key) {
+            self.detach(idx);
+            self.attach_head(idx);
+            let old = self.nodes.get_mut(idx)?.take();
+            self.nodes[idx] = Some(TextureHandle {
+                texture,
+                width,
+                height,
+                size_bytes,
+                last_frame: self.current_frame,
+                prev: None,
+                next: None,
+            });
+            // Re-link head
+            self.detach(idx);
+            self.attach_head(idx);
+            return old;
+        }
+
+        let idx = if let Some(free_idx) = self.free_indices.pop() {
+            self.nodes[free_idx] = Some(TextureHandle {
+                texture,
+                width,
+                height,
+                size_bytes,
+                last_frame: self.current_frame,
+                prev: None,
+                next: None,
+            });
+            self.keys[free_idx] = Some(key.clone());
+            free_idx
+        } else {
+            let new_idx = self.nodes.len();
+            self.nodes.push(Some(TextureHandle {
+                texture,
+                width,
+                height,
+                size_bytes,
+                last_frame: self.current_frame,
+                prev: None,
+                next: None,
+            }));
+            self.keys.push(Some(key.clone()));
+            new_idx
+        };
+
+        self.map.insert(key, idx);
+        self.attach_head(idx);
+        None
+    }
+
+    /// Finds the least-recently used key for eviction, preferring unpinned textures.
+    #[must_use]
+    pub fn pop_lru_candidate(&self, skip_wallpaper: bool, current_frame: u64) -> Option<String> {
+        let mut curr = self.tail;
+        let mut fallback: Option<String> = None;
+
+        while let Some(idx) = curr {
+            if let (Some(Some(node)), Some(Some(key))) = (self.nodes.get(idx), self.keys.get(idx)) {
+                if !skip_wallpaper || key.as_str() != "__system_wallpaper__" {
+                    if node.last_frame < current_frame {
+                        return Some(key.clone());
+                    }
+                    if fallback.is_none() {
+                        fallback = Some(key.clone());
+                    }
+                }
+                curr = node.prev;
+            } else {
+                break;
+            }
+        }
+
+        fallback
     }
 }
 
@@ -39,48 +240,44 @@ impl GlowRenderer {
         width: u32,
         height: u32,
     ) {
-        if let Some(existing) = self.texture_cache.textures.get(id) {
-            if existing.width as u32 == width && existing.height as u32 == height {
-                self.texture_cache.access_counter += 1;
-                if let Some(handle) = self.texture_cache.textures.get_mut(id) {
-                    handle.last_used = self.texture_cache.access_counter;
-                }
+        let w_f32 = width as f32;
+        let h_f32 = height as f32;
+        let new_size = (width as usize) * (height as usize) * 4;
+
+        if let Some(handle) = self.texture_cache.get_mut(id) {
+            if (handle.width - w_f32).abs() < f32::EPSILON
+                && (handle.height - h_f32).abs() < f32::EPSILON
+            {
                 return;
             }
         }
 
-        if let Some(removed) = self.texture_cache.textures.remove(id) {
+        if let Some(removed) = self.texture_cache.remove(id) {
             unsafe {
                 self.gl.delete_texture(removed.texture);
             }
-            let old_size = removed.size_bytes;
-            self.texture_cache.total_vram_bytes =
-                self.texture_cache.total_vram_bytes.saturating_sub(old_size);
+            self.texture_cache.total_vram_bytes = self
+                .texture_cache
+                .total_vram_bytes
+                .saturating_sub(removed.size_bytes);
         }
 
-        let new_size = (width as usize) * (height as usize) * 4;
-
         unsafe {
+            let current_frame = self.texture_cache.current_frame;
             while (self.texture_cache.total_vram_bytes + new_size
                 > self.texture_cache.max_vram_bytes
-                || self.texture_cache.textures.len() >= self.texture_cache.max_textures)
-                && self.texture_cache.textures.len() > 1
+                || self.texture_cache.len() >= self.texture_cache.max_textures)
+                && self.texture_cache.len() > 1
             {
-                let lru_key = self
-                    .texture_cache
-                    .textures
-                    .iter()
-                    .filter(|(k, _)| k.as_str() != "__system_wallpaper__")
-                    .min_by_key(|(_, v)| v.last_used)
-                    .map(|(k, _)| k.clone());
-
-                if let Some(evict_key) = lru_key {
-                    if let Some(removed) = self.texture_cache.textures.remove(&evict_key) {
+                if let Some(evict_key) = self.texture_cache.pop_lru_candidate(true, current_frame) {
+                    if let Some(removed) = self.texture_cache.remove(&evict_key) {
                         self.gl.delete_texture(removed.texture);
                         self.texture_cache.total_vram_bytes = self
                             .texture_cache
                             .total_vram_bytes
                             .saturating_sub(removed.size_bytes);
+                    } else {
+                        break;
                     }
                 } else {
                     break;
@@ -130,24 +327,94 @@ impl GlowRenderer {
                 i32::try_from(glow::CLAMP_TO_EDGE).unwrap(),
             );
 
-            self.texture_cache.access_counter += 1;
             self.texture_cache.total_vram_bytes += new_size;
-            #[allow(clippy::cast_precision_loss)]
-            self.texture_cache.textures.insert(
-                id.to_string(),
-                TextureHandle {
-                    texture: tex,
-                    width: width as f32,
-                    height: height as f32,
-                    size_bytes: new_size,
-                    last_used: self.texture_cache.access_counter,
-                },
-            );
+            let old_tex = self
+                .texture_cache
+                .insert(id.to_string(), tex, w_f32, h_f32, new_size);
+            if let Some(old) = old_tex {
+                self.gl.delete_texture(old.texture);
+                self.texture_cache.total_vram_bytes = self
+                    .texture_cache
+                    .total_vram_bytes
+                    .saturating_sub(old.size_bytes);
+            }
         }
     }
 
     pub(crate) fn has_image_impl(&self, id: &str) -> bool {
-        self.texture_cache.textures.contains_key(id)
+        self.texture_cache.contains_key(id)
+    }
+
+    pub fn trim_memory_level(&mut self, level: MemoryTrimLevel) {
+        unsafe {
+            match level {
+                MemoryTrimLevel::Normal => {
+                    let current_frame = self.texture_cache.current_frame;
+                    while self.texture_cache.total_vram_bytes > self.texture_cache.max_vram_bytes
+                        && self.texture_cache.len() > 1
+                    {
+                        if let Some(key) = self.texture_cache.pop_lru_candidate(true, current_frame)
+                        {
+                            if let Some(removed) = self.texture_cache.remove(&key) {
+                                self.gl.delete_texture(removed.texture);
+                                self.texture_cache.total_vram_bytes = self
+                                    .texture_cache
+                                    .total_vram_bytes
+                                    .saturating_sub(removed.size_bytes);
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                MemoryTrimLevel::Moderate => {
+                    let current_frame = self.texture_cache.current_frame;
+                    let target = self.texture_cache.max_vram_bytes / 2;
+                    while self.texture_cache.total_vram_bytes > target
+                        && self.texture_cache.len() > 1
+                    {
+                        if let Some(key) = self.texture_cache.pop_lru_candidate(true, current_frame)
+                        {
+                            if let Some(removed) = self.texture_cache.remove(&key) {
+                                self.gl.delete_texture(removed.texture);
+                                self.texture_cache.total_vram_bytes = self
+                                    .texture_cache
+                                    .total_vram_bytes
+                                    .saturating_sub(removed.size_bytes);
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                MemoryTrimLevel::Critical => {
+                    let mut keys_to_delete = Vec::new();
+                    let current_frame = self.texture_cache.current_frame;
+                    while let Some(key) = self
+                        .texture_cache
+                        .pop_lru_candidate(true, current_frame + 1)
+                    {
+                        if key.as_str() == "__system_wallpaper__" {
+                            break;
+                        }
+                        keys_to_delete.push(key);
+                    }
+                    for key in keys_to_delete {
+                        if let Some(removed) = self.texture_cache.remove(&key) {
+                            self.gl.delete_texture(removed.texture);
+                            self.texture_cache.total_vram_bytes = self
+                                .texture_cache
+                                .total_vram_bytes
+                                .saturating_sub(removed.size_bytes);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[allow(dead_code)]
@@ -167,7 +434,7 @@ impl GlowRenderer {
 
     pub(crate) fn load_wallpaper_impl(&mut self, rgba_pixels: &[u8], width: u32, height: u32) {
         unsafe {
-            if let Some(removed) = self.texture_cache.textures.remove("__system_wallpaper__") {
+            if let Some(removed) = self.texture_cache.remove("__system_wallpaper__") {
                 self.gl.delete_texture(removed.texture);
                 self.texture_cache.total_vram_bytes = self
                     .texture_cache
@@ -198,11 +465,10 @@ impl GlowRenderer {
         radius: f32,
         object_fit: sniffer_core::style::ObjectFit,
     ) {
-        self.texture_cache.access_counter += 1;
-        let current_access = self.texture_cache.access_counter;
+        let current_frame = self.texture_cache.current_frame;
 
-        if let Some(handle) = self.texture_cache.textures.get_mut(id) {
-            handle.last_used = current_access;
+        if let Some(handle) = self.texture_cache.get_mut(id) {
+            handle.last_frame = current_frame;
             let tex = handle.texture;
             let img_w = handle.width;
             let img_h = handle.height;
