@@ -55,6 +55,7 @@ pub struct JsPluginConfig {
     pub default_settings: serde_json::Value,
     pub cached_ui: Option<Element>,
     pub cache_path: Option<std::path::PathBuf>,
+    pub pkg_registry: Option<Arc<std::sync::RwLock<sniffer_pkg::PackageRegistry>>>,
 }
 
 impl JsPlugin {
@@ -85,6 +86,7 @@ impl JsPlugin {
         let broadcast_queue = config.broadcast_queue;
         let default_settings = config.default_settings;
         let cache_path = config.cache_path;
+        let pkg_registry = config.pkg_registry;
         let msg_tx_worker = msg_tx.clone();
 
         thread::spawn(move || {
@@ -111,6 +113,7 @@ impl JsPlugin {
                         granted_permissions,
                         default_settings,
                         cache_path,
+                        pkg_registry,
                     },
                 );
 
