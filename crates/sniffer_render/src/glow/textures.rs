@@ -269,9 +269,7 @@ impl GlowRenderer {
                 || self.texture_cache.len() >= self.texture_cache.max_textures)
                 && self.texture_cache.len() > 1
             {
-                if let Some(evict_key) =
-                    self.texture_cache.pop_lru_candidate(true, current_frame)
-                {
+                if let Some(evict_key) = self.texture_cache.pop_lru_candidate(true, current_frame) {
                     if let Some(removed) = self.texture_cache.remove(&evict_key) {
                         self.gl.delete_texture(removed.texture);
                         self.texture_cache.total_vram_bytes = self
@@ -330,13 +328,9 @@ impl GlowRenderer {
             );
 
             self.texture_cache.total_vram_bytes += new_size;
-            let old_tex = self.texture_cache.insert(
-                id.to_string(),
-                tex,
-                w_f32,
-                h_f32,
-                new_size,
-            );
+            let old_tex = self
+                .texture_cache
+                .insert(id.to_string(), tex, w_f32, h_f32, new_size);
             if let Some(old) = old_tex {
                 self.gl.delete_texture(old.texture);
                 self.texture_cache.total_vram_bytes = self
@@ -359,8 +353,7 @@ impl GlowRenderer {
                     while self.texture_cache.total_vram_bytes > self.texture_cache.max_vram_bytes
                         && self.texture_cache.len() > 1
                     {
-                        if let Some(key) =
-                            self.texture_cache.pop_lru_candidate(true, current_frame)
+                        if let Some(key) = self.texture_cache.pop_lru_candidate(true, current_frame)
                         {
                             if let Some(removed) = self.texture_cache.remove(&key) {
                                 self.gl.delete_texture(removed.texture);
@@ -382,8 +375,7 @@ impl GlowRenderer {
                     while self.texture_cache.total_vram_bytes > target
                         && self.texture_cache.len() > 1
                     {
-                        if let Some(key) =
-                            self.texture_cache.pop_lru_candidate(true, current_frame)
+                        if let Some(key) = self.texture_cache.pop_lru_candidate(true, current_frame)
                         {
                             if let Some(removed) = self.texture_cache.remove(&key) {
                                 self.gl.delete_texture(removed.texture);
@@ -402,8 +394,9 @@ impl GlowRenderer {
                 MemoryTrimLevel::Critical => {
                     let mut keys_to_delete = Vec::new();
                     let current_frame = self.texture_cache.current_frame;
-                    while let Some(key) =
-                        self.texture_cache.pop_lru_candidate(true, current_frame + 1)
+                    while let Some(key) = self
+                        .texture_cache
+                        .pop_lru_candidate(true, current_frame + 1)
                     {
                         if key.as_str() == "__system_wallpaper__" {
                             break;
@@ -546,4 +539,3 @@ impl GlowRenderer {
         }
     }
 }
-

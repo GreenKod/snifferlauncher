@@ -238,7 +238,10 @@ impl FontAtlas {
             }
 
             if self.shelf_y + gh + PADDING > atlas_h {
-                dev_err!("[FontAtlas] Warning: Atlas texture is full, cannot pack '{}'", character);
+                dev_err!(
+                    "[FontAtlas] Warning: Atlas texture is full, cannot pack '{}'",
+                    character
+                );
                 return;
             }
 
@@ -254,13 +257,17 @@ impl FontAtlas {
 
                     if glyph_data.is_color {
                         let src_idx = ((row * gw + col) * 4) as usize;
-                        if src_idx + 4 <= glyph_data.bitmap.len() && dst_idx + 4 <= self.atlas_pixels.len() {
+                        if src_idx + 4 <= glyph_data.bitmap.len()
+                            && dst_idx + 4 <= self.atlas_pixels.len()
+                        {
                             self.atlas_pixels[dst_idx..dst_idx + 4]
                                 .copy_from_slice(&glyph_data.bitmap[src_idx..src_idx + 4]);
                         }
                     } else {
                         let src_idx = (row * gw + col) as usize;
-                        if src_idx < glyph_data.bitmap.len() && dst_idx + 4 <= self.atlas_pixels.len() {
+                        if src_idx < glyph_data.bitmap.len()
+                            && dst_idx + 4 <= self.atlas_pixels.len()
+                        {
                             let val = glyph_data.bitmap[src_idx];
                             self.atlas_pixels[dst_idx] = val;
                             self.atlas_pixels[dst_idx + 1] = val;
@@ -587,4 +594,3 @@ pub fn estimate_text_width(atlas: &FontAtlas, text: &str, text_size: f32) -> f32
     }
     width
 }
-

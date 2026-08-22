@@ -259,7 +259,6 @@ impl GlowRenderer {
         self.trim_memory_level(textures::MemoryTrimLevel::Critical);
     }
 
-
     pub fn warm_up_shaders(&mut self) {
         use sniffer_core::math::Rect;
 

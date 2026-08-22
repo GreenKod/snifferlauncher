@@ -125,7 +125,7 @@ pub(crate) fn draw_text_impl(
                     continue;
                 }
 
-                let is_color_val = if glyph.is_color { 1 } else { 0 };
+                let is_color_val = i32::from(glyph.is_color);
                 renderer
                     .gl
                     .uniform_1_i32(u.u_is_color.as_ref(), is_color_val);

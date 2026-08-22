@@ -11,7 +11,13 @@ fn test_lru_cache_basic_insert_and_contains() {
     assert!(cache.is_empty());
     assert_eq!(cache.len(), 0);
 
-    cache.insert("icon_1".to_string(), dummy_texture(1), 96.0, 96.0, 96 * 96 * 4);
+    cache.insert(
+        "icon_1".to_string(),
+        dummy_texture(1),
+        96.0,
+        96.0,
+        96 * 96 * 4,
+    );
     assert!(!cache.is_empty());
     assert_eq!(cache.len(), 1);
     assert!(cache.contains_key("icon_1"));
