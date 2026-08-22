@@ -192,10 +192,7 @@ impl PackageRegistry {
     /// Returns [`PackageError::DynLoad`] if the library cannot be loaded or
     /// the required symbol is missing.
     #[cfg(feature = "dynamic")]
-    pub unsafe fn load_service_dynamic(
-        &mut self,
-        path: &Path,
-    ) -> Result<(), PackageError> {
+    pub unsafe fn load_service_dynamic(&mut self, path: &Path) -> Result<(), PackageError> {
         // SAFETY: propagated from the caller.
         let (pkg, handle) = unsafe { crate::loader::load_service_dylib(path) }?;
         // Store the handle before registering — registration may call on_init
@@ -203,6 +200,17 @@ impl PackageRegistry {
         self.dylib_handles.push(handle);
         self.register_service(pkg);
         Ok(())
+    }
+
+    /// Register a service package along with its dynamic library handle.
+    #[cfg(feature = "dynamic")]
+    pub fn register_dynamic_service(
+        &mut self,
+        pkg: Arc<dyn LauncherPackage>,
+        handle: crate::loader::DynamicHandle,
+    ) {
+        self.dylib_handles.push(handle);
+        self.register_service(pkg);
     }
 
     /// Load and register a **widget** package from a shared library at `path`.
@@ -216,15 +224,23 @@ impl PackageRegistry {
     /// Returns [`PackageError::DynLoad`] if the library cannot be loaded or
     /// the required symbol is missing.
     #[cfg(feature = "dynamic")]
-    pub unsafe fn load_widget_dynamic(
-        &mut self,
-        path: &Path,
-    ) -> Result<(), PackageError> {
+    pub unsafe fn load_widget_dynamic(&mut self, path: &Path) -> Result<(), PackageError> {
         // SAFETY: propagated from the caller.
         let (pkg, handle) = unsafe { crate::loader::load_widget_dylib(path) }?;
         self.dylib_handles.push(handle);
         self.register_widget(pkg);
         Ok(())
+    }
+
+    /// Register a widget package along with its dynamic library handle.
+    #[cfg(feature = "dynamic")]
+    pub fn register_dynamic_widget(
+        &mut self,
+        pkg: Arc<dyn WidgetPackage>,
+        handle: crate::loader::DynamicHandle,
+    ) {
+        self.dylib_handles.push(handle);
+        self.register_widget(pkg);
     }
 
     // -----------------------------------------------------------------------

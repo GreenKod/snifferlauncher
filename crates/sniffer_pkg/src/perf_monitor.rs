@@ -24,8 +24,8 @@ use crate::package::{LauncherPackage, MemoryTrimLevel, PackageKind, PackageMeta}
 use sniffer_core::vault::DataVault;
 // sysinfo 0.32: all methods are direct on System / Cpu structs; no trait imports needed.
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
     Arc, Mutex,
+    atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
 };
 use std::thread;
 use std::time::Duration;
@@ -219,7 +219,8 @@ impl LauncherPackage for PerfMonitorPackage {
             FPS_EMA_ALPHA * instant_fps + (1.0 - FPS_EMA_ALPHA) * prev_fps
         };
 
-        self.fps_ema_bits.store(new_fps.to_bits(), Ordering::Relaxed);
+        self.fps_ema_bits
+            .store(new_fps.to_bits(), Ordering::Relaxed);
     }
 
     /// Adjusts the background polling interval to reduce CPU / battery use.
@@ -272,13 +273,11 @@ impl LauncherPackage for PerfMonitorPackage {
                 let val: serde_json::Value = serde_json::from_str(payload)
                     .map_err(|e| PackageError::InvalidDescriptor(e.to_string()))?;
 
-                let requested = val["interval_ms"]
-                    .as_u64()
-                    .ok_or_else(|| {
-                        PackageError::InvalidDescriptor(
-                            "missing or invalid 'interval_ms' field (expected u64)".into(),
-                        )
-                    })?;
+                let requested = val["interval_ms"].as_u64().ok_or_else(|| {
+                    PackageError::InvalidDescriptor(
+                        "missing or invalid 'interval_ms' field (expected u64)".into(),
+                    )
+                })?;
 
                 let clamped = requested.clamp(POLL_INTERVAL_MIN_MS, POLL_INTERVAL_MAX_MS);
                 self.poll_interval_ms.store(clamped, Ordering::Relaxed);
@@ -484,7 +483,8 @@ mod tests {
         let vault = make_vault();
         let mut pkg = PerfMonitorPackage::new();
 
-        pkg.on_init(Arc::clone(&vault)).expect("on_init must succeed");
+        pkg.on_init(Arc::clone(&vault))
+            .expect("on_init must succeed");
         // Give the background thread a moment to start.
         std::thread::sleep(Duration::from_millis(300));
 

@@ -1,0 +1,23 @@
+[package]
+id = "com.sniffer.scroll_view"
+name = "Native GPU ScrollView & Pager Widget"
+version = "0.1.0"
+kind = "widget"
+description = "High-performance GPU-accelerated scroll container with momentum and rubber-band physics"
+authors = ["Sniffer Core Team <dev@sniffer.internal>"]
+license = "Apache-2.0"
+min_engine_version = "0.1.0"
+
+[entry]
+symbol = "sniffer_widget_create"
+library_name = "pkg_scroll"
+
+[widget]
+default_z_index = 0
+supports_clipping = true
+supports_transform = true
+
+[permissions]
+system = []
+
+[dependencies]

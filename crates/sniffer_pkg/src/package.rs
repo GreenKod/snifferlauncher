@@ -201,12 +201,7 @@ pub trait WidgetPackage: Send + Sync {
     /// node.  `clip_rect` is the nearest ancestor clip region, if any.
     ///
     /// Push/pop clip rects and transforms symmetrically.
-    fn on_render(
-        &self,
-        renderer: &mut dyn Renderer,
-        layout_rect: Rect,
-        clip_rect: Option<Rect>,
-    );
+    fn on_render(&self, renderer: &mut dyn Renderer, layout_rect: Rect, clip_rect: Option<Rect>);
 
     /// Called when the OS signals memory pressure.
     ///

@@ -47,9 +47,7 @@ pub fn register_pkg_bindings<'js>(
         },
     )
     .unwrap();
-    globals
-        .set(obfstr!("host_pkg_query"), query_func)
-        .unwrap();
+    globals.set(obfstr!("host_pkg_query"), query_func).unwrap();
 
     // -----------------------------------------------------------------------
     // host_extend_widget(widget_id: string, descriptor_json: string) -> string
@@ -60,17 +58,19 @@ pub fn register_pkg_bindings<'js>(
         move |widget_id: String, descriptor_json: String| -> String {
             if let Some(ref reg) = reg_extend {
                 match reg.read() {
-                    Ok(guard) => match guard.apply_widget_descriptor(&widget_id, &descriptor_json) {
-                        Ok(()) => serde_json::json!({
-                            "ok": true
-                        })
-                        .to_string(),
-                        Err(e) => serde_json::json!({
-                            "ok": false,
-                            "error": e.to_string()
-                        })
-                        .to_string(),
-                    },
+                    Ok(guard) => {
+                        match guard.apply_widget_descriptor(&widget_id, &descriptor_json) {
+                            Ok(()) => serde_json::json!({
+                                "ok": true
+                            })
+                            .to_string(),
+                            Err(e) => serde_json::json!({
+                                "ok": false,
+                                "error": e.to_string()
+                            })
+                            .to_string(),
+                        }
+                    }
                     Err(_) => serde_json::json!({
                         "ok": false,
                         "error": "Package registry lock poisoned"

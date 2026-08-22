@@ -128,7 +128,9 @@ impl AppState {
             .set_cache_dir(plugins_dir.join(obfstr::obfstr!(".cache")));
 
         let mut pkg_reg = PackageRegistry::new(plugin_registry.vault());
-        pkg_reg.register_service(Arc::new(sniffer_pkg::perf_monitor::PerfMonitorPackage::new()));
+        pkg_reg.register_service(Arc::new(
+            sniffer_pkg::perf_monitor::PerfMonitorPackage::new(),
+        ));
         pkg_reg.register_widget(Arc::new(sniffer_pkg::scroll_view::ScrollViewPackage::new()));
 
         let pkg_registry = Arc::new(RwLock::new(pkg_reg));

@@ -170,13 +170,7 @@ impl ScrollViewPackage {
     /// `dx` / `dy` are pixel distances for this gesture event.
     /// `velocity_x` / `velocity_y` are the fling velocity in px/s
     /// (set to zero for non-fling drag events).
-    pub fn apply_scroll_delta(
-        &self,
-        dx: f32,
-        dy: f32,
-        velocity_x: f32,
-        velocity_y: f32,
-    ) {
+    pub fn apply_scroll_delta(&self, dx: f32, dy: f32, velocity_x: f32, velocity_y: f32) {
         let Ok(mut state) = self.state.write() else {
             return;
         };
@@ -256,13 +250,15 @@ impl WidgetPackage for ScrollViewPackage {
             if st.scroll_x < 0.0 {
                 st.velocity_x += (-st.scroll_x) * rb * RUBBER_BAND_RESTORING * dt_secs;
             } else if st.max_scroll_x > 0.0 && st.scroll_x > st.max_scroll_x {
-                st.velocity_x -= (st.scroll_x - st.max_scroll_x) * rb * RUBBER_BAND_RESTORING * dt_secs;
+                st.velocity_x -=
+                    (st.scroll_x - st.max_scroll_x) * rb * RUBBER_BAND_RESTORING * dt_secs;
             }
 
             if st.scroll_y < 0.0 {
                 st.velocity_y += (-st.scroll_y) * rb * RUBBER_BAND_RESTORING * dt_secs;
             } else if st.max_scroll_y > 0.0 && st.scroll_y > st.max_scroll_y {
-                st.velocity_y -= (st.scroll_y - st.max_scroll_y) * rb * RUBBER_BAND_RESTORING * dt_secs;
+                st.velocity_y -=
+                    (st.scroll_y - st.max_scroll_y) * rb * RUBBER_BAND_RESTORING * dt_secs;
             }
         } else {
             // Rigid boundaries: hard clamp.
@@ -315,12 +311,7 @@ impl WidgetPackage for ScrollViewPackage {
     /// **Content children** are rendered by the main element-tree pass
     /// (which reads the scroll offsets from DataVault or a direct reference
     /// and runs after this pre-render hook).
-    fn on_render(
-        &self,
-        renderer: &mut dyn Renderer,
-        layout_rect: Rect,
-        clip_rect: Option<Rect>,
-    ) {
+    fn on_render(&self, renderer: &mut dyn Renderer, layout_rect: Rect, clip_rect: Option<Rect>) {
         let Ok(st) = self.state.read() else {
             return;
         };
@@ -487,9 +478,9 @@ mod tests {
     /// `draw_rect` were called (for overlay assertion tests).
     #[derive(Default)]
     struct MockRenderer {
-        pub rects_drawn:   u32,
+        pub rects_drawn: u32,
         pub circles_drawn: u32,
-        pub clip_depth:    i32,
+        pub clip_depth: i32,
         pub transform_depth: i32,
     }
 
@@ -577,14 +568,7 @@ mod tests {
             false
         }
 
-        fn draw_image(
-            &mut self,
-            _id: &str,
-            _rect: Rect,
-            _radius: f32,
-            _object_fit: ObjectFit,
-        ) {
-        }
+        fn draw_image(&mut self, _id: &str, _rect: Rect, _radius: f32, _object_fit: ObjectFit) {}
 
         fn measure_text(&self, _text: &str, _size: f32) -> f32 {
             0.0
@@ -604,10 +588,8 @@ mod tests {
     #[test]
     fn descriptor_sets_snap_x_and_page_count() {
         let pkg = ScrollViewPackage::new();
-        pkg.apply_descriptor(
-            r#"{"snap_x":400.0,"page_count":5,"rubber_band":0.25}"#,
-        )
-        .expect("valid descriptor must not error");
+        pkg.apply_descriptor(r#"{"snap_x":400.0,"page_count":5,"rubber_band":0.25}"#)
+            .expect("valid descriptor must not error");
 
         let st = pkg.state.read().unwrap();
         assert_eq!(st.snap_x, Some(400.0));
@@ -699,18 +681,15 @@ mod tests {
 
         {
             let mut st = pkg.state.write().unwrap();
-            st.velocity_x = 100.0;        // 100 px/s
-            st.max_scroll_x = 100_000.0;  // no boundary effect
-            st.momentum_damping = 0.0;    // no damping for predictable test
+            st.velocity_x = 100.0; // 100 px/s
+            st.max_scroll_x = 100_000.0; // no boundary effect
+            st.momentum_damping = 0.0; // no damping for predictable test
         }
 
         // 1 frame at dt = 0.1 s → expected Δx ≈ 10 px (damping = 0)
         pkg.on_update(&vault, 0.1);
         let (x, _) = pkg.scroll_position();
-        assert!(
-            (x - 10.0).abs() < 0.5,
-            "expected scroll_x ≈ 10.0, got {x}"
-        );
+        assert!((x - 10.0).abs() < 0.5, "expected scroll_x ≈ 10.0, got {x}");
     }
 
     // ── Physics: rubber-band ─────────────────────────────────────────────
@@ -788,11 +767,7 @@ mod tests {
             (x - 400.0).abs() < 5.0,
             "snap must spring to page 1 (400 px), got {x}"
         );
-        assert_eq!(
-            pkg.current_page(),
-            1,
-            "current_page must be 1 after snap"
-        );
+        assert_eq!(pkg.current_page(), 1, "current_page must be 1 after snap");
     }
 
     #[test]

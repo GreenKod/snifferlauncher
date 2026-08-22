@@ -2,9 +2,9 @@
 
 use rquickjs::{Context, Runtime};
 use sniffer_core::vault::DataVault;
+use sniffer_pkg::PackageRegistry;
 use sniffer_pkg::perf_monitor::PerfMonitorPackage;
 use sniffer_pkg::scroll_view::ScrollViewPackage;
-use sniffer_pkg::PackageRegistry;
 use sniffer_plugin::js::bindings_pkg::register_pkg_bindings;
 use std::sync::{Arc, RwLock};
 

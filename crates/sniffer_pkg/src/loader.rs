@@ -82,22 +82,18 @@ impl std::fmt::Debug for DynamicHandle {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "dynamic")]
-type ServiceCreateFn =
-    unsafe extern "C" fn() -> *mut Box<dyn crate::package::LauncherPackage>;
+type ServiceCreateFn = unsafe extern "C" fn() -> *mut Box<dyn crate::package::LauncherPackage>;
 
 #[cfg(feature = "dynamic")]
 #[allow(dead_code)]
-type ServiceDestroyFn =
-    unsafe extern "C" fn(*mut Box<dyn crate::package::LauncherPackage>);
+type ServiceDestroyFn = unsafe extern "C" fn(*mut Box<dyn crate::package::LauncherPackage>);
 
 #[cfg(feature = "dynamic")]
-type WidgetCreateFn =
-    unsafe extern "C" fn() -> *mut Box<dyn crate::package::WidgetPackage>;
+type WidgetCreateFn = unsafe extern "C" fn() -> *mut Box<dyn crate::package::WidgetPackage>;
 
 #[cfg(feature = "dynamic")]
 #[allow(dead_code)]
-type WidgetDestroyFn =
-    unsafe extern "C" fn(*mut Box<dyn crate::package::WidgetPackage>);
+type WidgetDestroyFn = unsafe extern "C" fn(*mut Box<dyn crate::package::WidgetPackage>);
 
 // ---------------------------------------------------------------------------
 // Dynamic loading helpers
@@ -121,27 +117,59 @@ type WidgetDestroyFn =
 pub unsafe fn load_service_dylib(
     path: &Path,
 ) -> Result<
-    (std::sync::Arc<dyn crate::package::LauncherPackage>, DynamicHandle),
+    (
+        std::sync::Arc<dyn crate::package::LauncherPackage>,
+        DynamicHandle,
+    ),
+    crate::error::PackageError,
+> {
+    unsafe { load_service_dylib_with_symbol(path, "pkg_create") }
+}
+
+/// Load a service from a shared library with a custom entry symbol name.
+///
+/// # Safety
+/// Caller guarantees ABI compatibility.
+#[cfg(feature = "dynamic")]
+pub unsafe fn load_service_dylib_with_symbol(
+    path: &Path,
+    symbol_name: &str,
+) -> Result<
+    (
+        std::sync::Arc<dyn crate::package::LauncherPackage>,
+        DynamicHandle,
+    ),
     crate::error::PackageError,
 > {
     // SAFETY: caller guarantees ABI contract.
     let lib = unsafe { libloading::Library::new(path) }?;
 
-    let create: libloading::Symbol<ServiceCreateFn> =
-        unsafe { lib.get(b"pkg_create\0") }?;
+    let sym_bytes = std::ffi::CString::new(symbol_name).map_err(|e| {
+        crate::error::PackageError::DynLoad(format!("invalid symbol name '{symbol_name}': {e}"))
+    })?;
 
-    // Call pkg_create to obtain a heap-allocated fat-pointer Box.
-    let raw: *mut Box<dyn crate::package::LauncherPackage> = unsafe { create() };
+    let raw: *mut Box<dyn crate::package::LauncherPackage> = {
+        let sym_res: Result<libloading::Symbol<ServiceCreateFn>, _> =
+            unsafe { lib.get(sym_bytes.as_bytes_with_nul()) };
+
+        match sym_res {
+            Ok(create) => unsafe { create() },
+            Err(_) => {
+                // Fallback to pkg_create if custom symbol wasn't found
+                let fallback: libloading::Symbol<ServiceCreateFn> =
+                    unsafe { lib.get(b"pkg_create\0") }?;
+                unsafe { fallback() }
+            }
+        }
+    };
+
     if raw.is_null() {
-        return Err(crate::error::PackageError::DynLoad(
-            "pkg_create returned null".into(),
-        ));
+        return Err(crate::error::PackageError::DynLoad(format!(
+            "symbol '{symbol_name}' returned null"
+        )));
     }
 
-    // Re-box the fat pointer, then wrap in Arc so the registry can share it.
-    // SAFETY: `raw` was just returned from `pkg_create`; we are the sole owner.
-    let pkg: Box<dyn crate::package::LauncherPackage> =
-        unsafe { *Box::from_raw(raw) };
+    let pkg: Box<dyn crate::package::LauncherPackage> = unsafe { *Box::from_raw(raw) };
     let arc = std::sync::Arc::from(pkg);
 
     Ok((arc, DynamicHandle { _lib: lib }))
@@ -162,25 +190,60 @@ pub unsafe fn load_service_dylib(
 pub unsafe fn load_widget_dylib(
     path: &Path,
 ) -> Result<
-    (std::sync::Arc<dyn crate::package::WidgetPackage>, DynamicHandle),
+    (
+        std::sync::Arc<dyn crate::package::WidgetPackage>,
+        DynamicHandle,
+    ),
+    crate::error::PackageError,
+> {
+    unsafe { load_widget_dylib_with_symbol(path, "pkg_create_widget") }
+}
+
+/// Load a widget from a shared library with a custom entry symbol name.
+///
+/// # Safety
+/// Caller guarantees ABI compatibility.
+#[cfg(feature = "dynamic")]
+pub unsafe fn load_widget_dylib_with_symbol(
+    path: &Path,
+    symbol_name: &str,
+) -> Result<
+    (
+        std::sync::Arc<dyn crate::package::WidgetPackage>,
+        DynamicHandle,
+    ),
     crate::error::PackageError,
 > {
     // SAFETY: caller guarantees ABI contract.
     let lib = unsafe { libloading::Library::new(path) }?;
 
-    let create: libloading::Symbol<WidgetCreateFn> =
-        unsafe { lib.get(b"pkg_create_widget\0") }?;
+    let sym_bytes = std::ffi::CString::new(symbol_name).map_err(|e| {
+        crate::error::PackageError::DynLoad(format!("invalid symbol name '{symbol_name}': {e}"))
+    })?;
 
-    let raw: *mut Box<dyn crate::package::WidgetPackage> = unsafe { create() };
+    let raw: *mut Box<dyn crate::package::WidgetPackage> = {
+        let sym_res: Result<libloading::Symbol<WidgetCreateFn>, _> =
+            unsafe { lib.get(sym_bytes.as_bytes_with_nul()) };
+
+        match sym_res {
+            Ok(create) => unsafe { create() },
+            Err(_) => {
+                // Fallback to pkg_create_widget if custom symbol wasn't found
+                let fallback: libloading::Symbol<WidgetCreateFn> =
+                    unsafe { lib.get(b"pkg_create_widget\0") }?;
+                unsafe { fallback() }
+            }
+        }
+    };
+
     if raw.is_null() {
-        return Err(crate::error::PackageError::DynLoad(
-            "pkg_create_widget returned null".into(),
-        ));
+        return Err(crate::error::PackageError::DynLoad(format!(
+            "symbol '{symbol_name}' returned null"
+        )));
     }
 
-    // SAFETY: `raw` was just returned from `pkg_create_widget`.
-    let pkg: Box<dyn crate::package::WidgetPackage> =
-        unsafe { *Box::from_raw(raw) };
+    // SAFETY: `raw` was just returned from widget create function.
+    let pkg: Box<dyn crate::package::WidgetPackage> = unsafe { *Box::from_raw(raw) };
     let arc = std::sync::Arc::from(pkg);
 
     Ok((arc, DynamicHandle { _lib: lib }))
@@ -210,14 +273,12 @@ pub fn prepare_android_dylib(
     source_path: &Path,
     internal_files_dir: &Path,
 ) -> Result<PathBuf, crate::error::PackageError> {
-    let file_name = source_path
-        .file_name()
-        .ok_or_else(|| {
-            crate::error::PackageError::Io(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "source path has no file name",
-            ))
-        })?;
+    let file_name = source_path.file_name().ok_or_else(|| {
+        crate::error::PackageError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "source path has no file name",
+        ))
+    })?;
 
     let packages_dir = internal_files_dir.join("packages");
     std::fs::create_dir_all(&packages_dir)?;
