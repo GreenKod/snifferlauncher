@@ -33,6 +33,14 @@ pub enum PackageError {
 
     /// A mutex or RwLock inside the package was poisoned.
     Poisoned(String),
+
+    /// A `PackageManifest.toml` could not be parsed, is missing required
+    /// fields, or contains invalid syntax.
+    InvalidManifest(String),
+
+    /// Dependency resolution or topological sorting failed (e.g. cycle
+    /// detected, unsatisfied dependency version).
+    DependencyResolutionFailed(String),
 }
 
 impl fmt::Display for PackageError {
@@ -46,6 +54,10 @@ impl fmt::Display for PackageError {
             Self::DynLoad(msg) => write!(f, "dynamic load error: {msg}"),
             Self::Io(e) => write!(f, "I/O error: {e}"),
             Self::Poisoned(ctx) => write!(f, "lock poisoned in: {ctx}"),
+            Self::InvalidManifest(msg) => write!(f, "invalid package manifest: {msg}"),
+            Self::DependencyResolutionFailed(msg) => {
+                write!(f, "dependency resolution failed: {msg}")
+            }
         }
     }
 }

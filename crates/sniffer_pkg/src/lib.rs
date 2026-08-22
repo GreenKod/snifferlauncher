@@ -31,8 +31,10 @@
 //! Dynamic packages must export `pkg_create` / `pkg_destroy` with C ABI.
 //! See [`loader`] for the full ABI contract and safety requirements.
 
+pub mod discovery;
 pub mod error;
 pub mod loader;
+pub mod manifest;
 pub mod package;
 pub mod registry;
 
@@ -50,6 +52,8 @@ pub mod scroll_view;
 // Top-level re-exports
 // ---------------------------------------------------------------------------
 
+pub use discovery::PackageDiscovery;
 pub use error::PackageError;
+pub use manifest::{ManifestPackageKind, PackageManifest};
 pub use package::{LauncherPackage, MemoryTrimLevel, PackageKind, PackageMeta, WidgetPackage};
 pub use registry::PackageRegistry;
