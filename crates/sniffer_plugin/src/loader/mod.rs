@@ -235,6 +235,7 @@ impl PluginLoader {
                     default_settings: manifest.default_settings.clone(),
                     cached_ui,
                     cache_path: Some(cache_file),
+                    pkg_registry: registry.pkg_registry(),
                 }) {
                     Ok(plugin) => {
                         registry.register(&(Arc::new(plugin) as Arc<dyn crate::UiPlugin>));
