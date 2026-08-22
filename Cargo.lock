@@ -1901,6 +1901,7 @@ dependencies = [
  "obfstr",
  "serde_json",
  "sniffer_core",
+ "sniffer_pkg",
  "sniffer_plugin",
  "sniffer_render",
 ]
@@ -1915,6 +1916,7 @@ dependencies = [
  "image",
  "obfstr",
  "sniffer_core",
+ "sniffer_pkg",
  "sniffer_plugin",
  "sniffer_render",
  "winit",

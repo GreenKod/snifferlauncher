@@ -4,9 +4,10 @@ use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::event::EventBus;
 use sniffer_core::ui::style_map::StyleMap;
 use sniffer_core::{Action, Point};
+use sniffer_pkg::{MemoryTrimLevel, PackageRegistry};
 use sniffer_plugin::registry::PluginRegistry;
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 pub struct KineticScroll {
     pub sv_id: u64,
@@ -30,6 +31,7 @@ pub struct AppState {
     pub data_map: DataMap,
     pub action_queue: Arc<Mutex<Vec<Action>>>,
     pub plugin_registry: PluginRegistry,
+    pub pkg_registry: Arc<RwLock<PackageRegistry>>,
     pub transition_manager: sniffer_core::anim::TransitionManager,
 
     pub cached_safe_area: (f32, f32),
@@ -61,6 +63,13 @@ impl AppState {
             }
         }
 
+        let mut pkg_reg = PackageRegistry::new(plugin_registry.vault());
+        pkg_reg.register_service(Arc::new(sniffer_pkg::perf_monitor::PerfMonitorPackage::new()));
+        pkg_reg.register_widget(Arc::new(sniffer_pkg::scroll_view::ScrollViewPackage::new()));
+
+        let pkg_registry = Arc::new(RwLock::new(pkg_reg));
+        plugin_registry.set_pkg_registry(Arc::clone(&pkg_registry));
+
         sniffer_plugin::PluginLoader::register_all_from_assets(
             &mut plugin_registry,
             &app.asset_manager(),
@@ -83,6 +92,7 @@ impl AppState {
             data_map: DataMap::default(),
             action_queue,
             plugin_registry,
+            pkg_registry,
             transition_manager: sniffer_core::anim::TransitionManager::default(),
 
             cached_safe_area: (0.0, 0.0),
@@ -102,6 +112,9 @@ impl AppState {
     /// Handles system `onTrimMemory` / `onLowMemory` pressure events by instantly evicting LRU textures from GPU.
     pub fn trim_memory(&mut self, renderer: &mut sniffer_render::glow::GlowRenderer) {
         renderer.trim_memory();
+        if let Ok(reg) = self.pkg_registry.read() {
+            reg.trim_memory(MemoryTrimLevel::Critical);
+        }
         self.cached_layout = None;
         self.layout_dirty = true;
         self.memory_pressure_pending = false;

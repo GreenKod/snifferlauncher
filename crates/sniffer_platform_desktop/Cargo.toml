@@ -12,6 +12,7 @@ devkit = ["sniffer_core/devkit"]
 sniffer_core = { path = "../sniffer_core" }
 sniffer_render = { path = "../sniffer_render" }
 sniffer_plugin = { path = "../sniffer_plugin" }
+sniffer_pkg = { path = "../sniffer_pkg", features = ["pkg_perfmon", "pkg_scroll"] }
 
 winit = "0.30.5"
 glutin = "0.32.2"

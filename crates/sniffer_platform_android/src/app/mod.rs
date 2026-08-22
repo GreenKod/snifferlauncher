@@ -106,6 +106,7 @@ pub fn android_main(app: AndroidApp) {
     let render_state_clone = shared_render_state.clone();
     let action_queue_clone = state.action_queue.clone();
     let profiler_clone = state.profiler.clone();
+    let pkg_registry_render = Arc::clone(&state.pkg_registry);
 
     std::thread::spawn(move || {
         let mut egl_state: Option<EglContextState> = None;
@@ -151,8 +152,14 @@ pub fn android_main(app: AndroidApp) {
                                 renderer.trim_memory();
                             }
                         }
+                        if let Ok(reg) = pkg_registry_render.read() {
+                            reg.trim_memory(sniffer_pkg::MemoryTrimLevel::Critical);
+                        }
                     }
                     RenderMessage::Destroy => {
+                        if let Ok(mut reg) = pkg_registry_render.write() {
+                            reg.unload_all();
+                        }
                         return;
                     }
                 }
@@ -257,6 +264,12 @@ pub fn android_main(app: AndroidApp) {
                             0.0,
                         );
 
+                        let mut layout_rects = std::collections::HashMap::new();
+                        collect_layout_rects(&current_state.layout_tree, &mut layout_rects);
+                        if let Ok(mut reg) = pkg_registry_render.write() {
+                            reg.render_widgets(renderer, &layout_rects, None);
+                        }
+
                         #[cfg(feature = "devkit")]
                         {
                             if let Ok(prof) = profiler_clone.lock() {
@@ -296,6 +309,9 @@ pub fn android_main(app: AndroidApp) {
         last_frame_time = frame_start;
 
         state.plugin_registry.tick();
+        if let Ok(mut reg) = state.pkg_registry.write() {
+            reg.tick_all(dt);
+        }
 
         if crate::jni::bridge::apps::take_app_list_updated() {
             if let Ok(apps) = crate::jni::get_application_list() {
@@ -709,5 +725,21 @@ pub fn android_main(app: AndroidApp) {
         if elapsed < min_frame_time {
             std::thread::sleep(min_frame_time - elapsed);
         }
+    }
+
+    if let Ok(mut reg) = state.pkg_registry.write() {
+        reg.unload_all();
+    }
+}
+
+fn collect_layout_rects<'a>(
+    node: &'a sniffer_core::layout::LayoutNode,
+    map: &mut std::collections::HashMap<&'a str, sniffer_core::math::Rect>,
+) {
+    if let Some(id) = node.element.id() {
+        map.insert(id, node.rect);
+    }
+    for child in &node.children {
+        collect_layout_rects(child, map);
     }
 }
