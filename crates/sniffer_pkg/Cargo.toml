@@ -1,0 +1,37 @@
+[package]
+name    = "sniffer_pkg"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+# ---------------------------------------------------------------------------
+# Feature flags
+# ---------------------------------------------------------------------------
+[features]
+default = []
+
+# Activates the runtime dynamic-library loader (libloading / dlopen).
+# Required for loading .so/.dll packages at runtime.
+# Should be disabled on platforms where dlopen is restricted or unavailable.
+dynamic = ["dep:libloading"]
+
+# ---------------------------------------------------------------------------
+# Core dependencies
+# ---------------------------------------------------------------------------
+[dependencies]
+sniffer_core = { path = "../sniffer_core" }
+serde        = { version = "1.0", features = ["derive"] }
+serde_json   = "1.0"
+toml         = "0.8"
+semver       = { version = "1.0", features = ["serde"] }
+
+# ---------------------------------------------------------------------------
+# Optional: dynamic loading
+# ---------------------------------------------------------------------------
+[dependencies.libloading]
+version  = "0.8"
+optional = true
+
+[lints]
+workspace = true

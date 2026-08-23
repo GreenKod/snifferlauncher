@@ -1,10 +1,12 @@
 pub mod bindings_app;
+pub mod bindings_pkg;
 pub mod bindings_ui;
 pub mod bindings_vault;
 pub mod engine;
 pub mod host_bridge;
 pub mod permission_manager;
 pub mod plugin;
+pub mod preamble;
 
 use crate::dev_log;
 use crate::registry::{ApiMap, BroadcastQueue};
@@ -13,7 +15,7 @@ use obfstr::obfstr;
 use rquickjs::Function;
 use sniffer_core::types::Element;
 use sniffer_core::vault::DataVault;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 pub use plugin::{JsPlugin, JsPluginConfig, PluginMsg};
 
@@ -30,6 +32,7 @@ pub struct HostApiConfig {
     pub granted_permissions: Arc<Mutex<Vec<String>>>,
     pub default_settings: serde_json::Value,
     pub cache_path: Option<std::path::PathBuf>,
+    pub pkg_registry: Option<Arc<RwLock<sniffer_pkg::PackageRegistry>>>,
 }
 
 /// Inject all host-provided global functions into a QuickJS context.
@@ -46,6 +49,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         granted_permissions,
         default_settings,
         cache_path,
+        pkg_registry,
     } = cfg;
 
     let globals = ctx.globals();
@@ -141,4 +145,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
 
     // Register Native Data Vault bindings
     bindings_vault::register_vault_bindings(ctx, &globals, plugin_id, vault);
+
+    // Register Native Hybrid Package & Component bindings (sniffer_pkg)
+    bindings_pkg::register_pkg_bindings(ctx, &globals, pkg_registry);
 }

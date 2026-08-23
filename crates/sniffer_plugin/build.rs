@@ -13,16 +13,29 @@ fn bytes_to_rust_array(bytes: &[u8]) -> String {
 }
 
 fn main() {
-    let preamble_path = "src/js/ipc_preamble.js";
-    println!("cargo:rerun-if-changed={preamble_path}");
+    let preamble_files = [
+        "src/js/preamble/ipc.js",
+        "src/js/preamble/vault.js",
+        "src/js/preamble/system.js",
+        "src/js/preamble/timers.js",
+        "src/js/preamble/shared_view.js",
+    ];
 
-    let preamble_raw = match fs::read(preamble_path) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!("cargo:warning=build.rs: cannot read {preamble_path}: {e}");
-            vec![]
+    let mut preamble_raw = Vec::new();
+    for path in &preamble_files {
+        println!("cargo:rerun-if-changed={path}");
+        match fs::read(path) {
+            Ok(b) => {
+                if !preamble_raw.is_empty() {
+                    preamble_raw.push(b'\n');
+                }
+                preamble_raw.extend_from_slice(&b);
+            }
+            Err(e) => {
+                eprintln!("cargo:warning=build.rs: cannot read {path}: {e}");
+            }
         }
-    };
+    }
 
     let preamble_enc = xor_encrypt(&preamble_raw);
     let mut output = String::from(

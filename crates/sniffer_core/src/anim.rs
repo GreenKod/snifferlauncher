@@ -235,6 +235,12 @@ impl TransitionManager {
         needs_redraw
     }
 
+    /// Checks if any transition animation is currently running.
+    #[must_use]
+    pub fn is_animating(&self) -> bool {
+        self.states.values().any(|s| s.is_active)
+    }
+
     /// Gets the currently interpolated style for drawing.
     #[must_use]
     pub fn get_current_style(&self, id: &str) -> Option<&Style> {
