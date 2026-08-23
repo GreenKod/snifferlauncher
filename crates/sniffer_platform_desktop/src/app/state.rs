@@ -113,8 +113,15 @@ impl AppState {
             .vault()
             .set_cache_dir(plugins_dir.join(obfstr::obfstr!(".cache")));
 
+        #[cfg(feature = "devkit")]
+        let profiler = Arc::new(Mutex::new(sniffer_core::profiler::FrameProfiler::new(120)));
+
+        let perf_pkg = Arc::new(pkg_perfmon::PerfMonitorPackage::new());
+        #[cfg(feature = "devkit")]
+        perf_pkg.set_profiler(Arc::clone(&profiler));
+
         let mut pkg_reg = PackageRegistry::new(plugin_registry.vault());
-        pkg_reg.register_service(Arc::new(pkg_perfmon::PerfMonitorPackage::new()));
+        pkg_reg.register_service(perf_pkg);
         pkg_reg.register_widget(Arc::new(pkg_scroll::ScrollViewPackage::new()));
 
         let pkg_registry = Arc::new(RwLock::new(pkg_reg));
@@ -122,9 +129,6 @@ impl AppState {
 
         sniffer_plugin::PluginLoader::new(&plugins_dir)
             .register_all(&mut plugin_registry, &action_queue);
-
-        #[cfg(feature = "devkit")]
-        let profiler = Arc::new(Mutex::new(sniffer_core::profiler::FrameProfiler::new(120)));
 
         Self {
             running: true,

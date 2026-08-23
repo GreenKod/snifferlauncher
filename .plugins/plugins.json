@@ -4,6 +4,7 @@
     "clock_widget",
     "default_ui",
     "logger_plugin",
-    "dock"
+    "dock",
+    "devkit_hud"
   ]
 }

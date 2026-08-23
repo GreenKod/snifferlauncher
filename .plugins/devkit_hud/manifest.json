@@ -1,0 +1,16 @@
+{
+  "id": "com.sniffer.devkithud",
+  "name": "DevKit HUD",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": [
+    "main.js"
+  ],
+  "preload": [
+    "../_framework/sniffer_ui.js"
+  ],
+  "permissions": [
+    "plugin.permission.UI",
+    "plugin.permission.IPC"
+  ]
+}

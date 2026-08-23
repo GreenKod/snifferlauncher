@@ -153,3 +153,19 @@ fn init_and_unload_without_panic() {
     pkg.on_unload();
     assert!(!pkg.running.load(Ordering::Relaxed));
 }
+
+#[test]
+fn query_get_devkit_telemetry_returns_valid_json() {
+    let pkg = PerfMonitorPackage::new();
+    let profiler = Arc::new(std::sync::Mutex::new(
+        sniffer_core::profiler::FrameProfiler::default(),
+    ));
+    pkg.set_profiler(profiler);
+
+    let resp = pkg.query_service("getDevKitTelemetry", "{}").unwrap();
+    let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
+    assert_eq!(v["ok"], true);
+    assert!(v["fps"].is_number());
+    assert!(v["frame_time_ms"].is_number());
+    assert!(v["touch"]["gesture"].is_string());
+}

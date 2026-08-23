@@ -158,7 +158,7 @@ pub fn spawn_render_thread(
 
                         renderer.clear(0x0000_0000);
 
-                        let rendered_nodes = draw_ui(
+                        let _rendered_nodes = draw_ui(
                             renderer,
                             &current_state.root_element,
                             &current_state.layout_tree,
@@ -180,11 +180,9 @@ pub fn spawn_render_thread(
                         #[cfg(feature = "devkit")]
                         {
                             if let Ok(prof) = profiler.lock() {
-                                sniffer_core::profiler::render_devkit_hud(
+                                sniffer_core::profiler::render_devkit_debug_overlays(
                                     renderer,
                                     &prof,
-                                    rendered_nodes,
-                                    width,
                                     &current_state.root_element,
                                     &current_state.layout_tree,
                                 );

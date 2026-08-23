@@ -63,8 +63,14 @@ impl AppState {
             }
         }
 
+        let profiler = Arc::new(Mutex::new(sniffer_core::profiler::FrameProfiler::default()));
+
+        let perf_pkg = Arc::new(pkg_perfmon::PerfMonitorPackage::new());
+        #[cfg(feature = "devkit")]
+        perf_pkg.set_profiler(Arc::clone(&profiler));
+
         let mut pkg_reg = PackageRegistry::new(plugin_registry.vault());
-        pkg_reg.register_service(Arc::new(pkg_perfmon::PerfMonitorPackage::new()));
+        pkg_reg.register_service(perf_pkg);
         pkg_reg.register_widget(Arc::new(pkg_scroll::ScrollViewPackage::new()));
 
         let pkg_registry = Arc::new(RwLock::new(pkg_reg));
@@ -105,7 +111,7 @@ impl AppState {
             memory_pressure_pending: false,
             virtual_page_manager: sniffer_core::virtualization::VirtualPageManager::new(),
             total_touch_drag_distance: 0.0,
-            profiler: Arc::new(Mutex::new(sniffer_core::profiler::FrameProfiler::default())),
+            profiler,
         }
     }
 

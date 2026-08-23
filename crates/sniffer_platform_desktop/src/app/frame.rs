@@ -1,5 +1,5 @@
 use super::helpers::collect_layout_rects;
-use super::input_handler::process_frame_inputs;
+use super::input::process_frame_inputs;
 use super::state::{AppState, FrameInputState};
 use crate::window::DesktopWindow;
 use obfstr::obfstr;
@@ -172,7 +172,7 @@ pub fn render_desktop_frame(
     renderer.begin_frame(width, height);
     renderer.clear(BACKGROUND);
 
-    let rendered_nodes = draw_ui(
+    let _rendered_nodes = draw_ui(
         renderer,
         &root_element,
         &layout_tree,
@@ -194,11 +194,9 @@ pub fn render_desktop_frame(
     #[cfg(feature = "devkit")]
     {
         if let Ok(prof) = app.profiler.lock() {
-            sniffer_core::profiler::render_devkit_hud(
+            sniffer_core::profiler::render_devkit_debug_overlays(
                 renderer,
                 &prof,
-                rendered_nodes,
-                width,
                 &root_element,
                 &layout_tree,
             );
