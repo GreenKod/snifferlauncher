@@ -72,8 +72,8 @@ pub fn draw_ui(
 
     let is_animating = transition_manager.states.values().any(|s| s.is_active);
 
-    let margin_x = 20.0_f32;
-    let margin_y = 20.0_f32;
+    let margin_x = (screen_w * 3.0).max(2000.0);
+    let margin_y = 200.0_f32;
     let node_rect = sniffer_core::Rect::new(screen_x, screen_y, eff_w, eff_h);
     let viewport_rect = sniffer_core::Rect::new(0.0, 0.0, screen_w, screen_h);
     let is_offscreen = if is_animating {

@@ -16,10 +16,6 @@ default = []
 # Should be disabled on platforms where dlopen is restricted or unavailable.
 dynamic = ["dep:libloading"]
 
-# Built-in (statically linked) package implementations.
-pkg_perfmon = ["dep:sysinfo"]   # CPU / memory metrics service
-pkg_scroll  = []                # Native ScrollView widget package
-
 # ---------------------------------------------------------------------------
 # Core dependencies
 # ---------------------------------------------------------------------------
@@ -35,13 +31,6 @@ semver       = { version = "1.0", features = ["serde"] }
 # ---------------------------------------------------------------------------
 [dependencies.libloading]
 version  = "0.8"
-optional = true
-
-# ---------------------------------------------------------------------------
-# Optional: system metrics (PerfMonitorPackage)
-# ---------------------------------------------------------------------------
-[dependencies.sysinfo]
-version  = "0.32"
 optional = true
 
 [lints]

@@ -1,6 +1,6 @@
-//! # `sniffer_pkg` — Hybrid Package & Component Layer
+//! # `sniffer_pkg` — Hybrid Package & Component Layer Framework
 //!
-//! This crate provides the **Rust-native package layer** that sits between the
+//! This crate provides the **Rust-native package framework** that sits between the
 //! immutable core engine (`sniffer_core` / `sniffer_render`) and the scripted
 //! plugin layer (`sniffer_plugin`).
 //!
@@ -16,6 +16,8 @@
 //! │   LauncherPackage  (services)        │
 //! │   WidgetPackage    (native GPU UI)   │
 //! │   PackageRegistry  (lifecycle)       │
+//! │   PackageDiscovery (manifest search) │
+//! │   PackageLoader    (dyn loader)      │
 //! ├──────────────────────────────────────┤
 //! │  Core Engine  (sniffer_core/render)  │
 //! └──────────────────────────────────────┘
@@ -25,10 +27,10 @@
 //!
 //! | Mode    | Mechanism                        | Feature flag        |
 //! |---------|----------------------------------|---------------------|
-//! | Static  | `registry.register_service(pkg)` | `pkg_perfmon`, …    |
+//! | Static  | `registry.register_service(pkg)` | (direct crate dep)  |
 //! | Dynamic | `registry.load_dynamic(path)`    | `dynamic`           |
 //!
-//! Dynamic packages must export `pkg_create` / `pkg_destroy` with C ABI.
+//! Dynamic packages must export `pkg_create` / `pkg_destroy` or `pkg_create_widget` with C ABI.
 //! See [`loader`] for the full ABI contract and safety requirements.
 
 pub mod discovery;
@@ -37,16 +39,6 @@ pub mod loader;
 pub mod manifest;
 pub mod package;
 pub mod registry;
-
-// ---------------------------------------------------------------------------
-// Optional built-in package implementations
-// ---------------------------------------------------------------------------
-
-#[cfg(feature = "pkg_perfmon")]
-pub mod perf_monitor;
-
-#[cfg(feature = "pkg_scroll")]
-pub mod scroll_view;
 
 // ---------------------------------------------------------------------------
 // Top-level re-exports
