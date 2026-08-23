@@ -1,6 +1,6 @@
 use swash::FontRef;
 
-pub const DEFAULT_FONT: &[u8] = include_bytes!("../fonts/audiowide.ttf");
+pub const DEFAULT_FONT: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
 
 pub struct TextMeasurer<'a> {
     font: FontRef<'a>,

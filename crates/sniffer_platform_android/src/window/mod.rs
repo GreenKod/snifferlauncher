@@ -88,7 +88,7 @@ impl EglContextState {
     /// The caller must ensure `native_window_ptr` is a valid pointer to an `ANativeWindow`.
     #[allow(clippy::missing_errors_doc, clippy::not_unsafe_ptr_arg_deref)]
     pub fn bind_window(&mut self, native_window_ptr: *mut std::ffi::c_void) -> Result<(), String> {
-        static FONT_BYTES: &[u8] = include_bytes!("../fonts/audiowide.ttf");
+        static FONT_BYTES: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
 
         self.unbind();
 
