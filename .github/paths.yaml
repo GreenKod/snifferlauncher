@@ -10,6 +10,3 @@ rust:
   - '!LICENSE*'
   - '!.gitignore'
   - '!_typos.toml'
-  - '!docs/**'
-  - '!art/**'
-  - '!screenshots/**'
