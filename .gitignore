@@ -36,7 +36,8 @@ assets/test.png
 *.p12
 *.pem
 *.key
-release.*
+release.keystore
+release.jks
 /keystores/
 keystores/
 

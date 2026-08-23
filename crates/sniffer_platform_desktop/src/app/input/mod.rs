@@ -1,6 +1,6 @@
 pub mod drag;
 pub mod mouse;
-pub mod release;
+pub mod pointer_up;
 pub mod scroll;
 
 use super::state::{AppState, FrameInputState};
@@ -40,7 +40,7 @@ pub fn process_frame_inputs(
     }
 
     if input.mouse_released {
-        release::handle_mouse_release(app, root_element, layout_tree, scaled_last_mouse_pos);
+        pointer_up::handle_mouse_release(app, root_element, layout_tree, scaled_last_mouse_pos);
     }
 
     if !input.scroll_events.is_empty() {
