@@ -14,7 +14,7 @@ use sniffer_core::ui::style_map::StyleMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-pub const IPC_PREAMBLE: &str = include_str!("ipc_preamble.js");
+pub use super::preamble::IPC_PREAMBLE;
 
 pub enum PluginMsg {
     Event(UiEvent),

@@ -6,6 +6,7 @@ pub mod engine;
 pub mod host_bridge;
 pub mod permission_manager;
 pub mod plugin;
+pub mod preamble;
 
 use crate::dev_log;
 use crate::registry::{ApiMap, BroadcastQueue};

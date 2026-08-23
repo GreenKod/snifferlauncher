@@ -35,6 +35,8 @@ pub struct PerfMonitorPackage {
     fps_ema_bits: Arc<AtomicU32>,
     /// Background thread handle. Taken and joined in `on_unload`.
     thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
+    /// Optional frame profiler reference for DevKit HUD metrics.
+    profiler: Mutex<Option<Arc<Mutex<sniffer_core::profiler::FrameProfiler>>>>,
 }
 
 impl PerfMonitorPackage {
@@ -53,6 +55,14 @@ impl PerfMonitorPackage {
             mem_mb_bits: Arc::new(AtomicU32::new(0_f32.to_bits())),
             fps_ema_bits: Arc::new(AtomicU32::new(0_f32.to_bits())),
             thread_handle: Mutex::new(None),
+            profiler: Mutex::new(None),
+        }
+    }
+
+    /// Attach a frame profiler instance to this package for DevKit metrics.
+    pub fn set_profiler(&self, profiler: Arc<Mutex<sniffer_core::profiler::FrameProfiler>>) {
+        if let Ok(mut p) = self.profiler.lock() {
+            *p = Some(profiler);
         }
     }
 
@@ -137,6 +147,7 @@ impl LauncherPackage for PerfMonitorPackage {
             self.read_mem_mb(),
             self.read_fps(),
             &self.poll_interval_ms,
+            Some(&self.profiler),
         )
     }
 }
