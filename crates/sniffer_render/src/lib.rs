@@ -1,9 +1,7 @@
 pub mod draw;
 pub mod glow;
-pub mod security;
+pub mod secure;
 pub mod text;
-
-pub use security as secure;
 
 pub use draw::{
     draw_ui, find_clicked_button, find_clicked_button_with_scroll, find_hovered_button,
