@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# SnifferLauncher Git Pre-Push Hook
+# ==============================================================================
+# Automatically verifies compilation and formatting before allowing `git push`.
+# To bypass in rare emergencies: git push --no-verify
+# ==============================================================================
+
+echo -e "\n\033[1;36m[Git Pre-Push Hook] Running pre-flight quality checks before pushing...\033[0m"
+
+# 1. Workspace check
+echo "Checking workspace compilation..."
+cargo check --locked --workspace --all-targets --all-features
+if [ $? -ne 0 ]; then
+    echo -e "\n\033[1;31m❌ Push aborted: 'cargo check' failed. Please fix compilation errors before pushing.\033[0m\n"
+    exit 1
+fi
+
+# 2. Formatting check
+echo "Checking code formatting..."
+cargo fmt --all --check
+if [ $? -ne 0 ]; then
+    echo -e "\n\033[1;31m❌ Push aborted: Code is not formatted properly. Run 'cargo fmt --all' and commit before pushing.\033[0m\n"
+    exit 1
+fi
+
+echo -e "\033[1;32m✔ Pre-push checks passed successfully. Pushing to remote...\033[0m\n"
+exit 0
