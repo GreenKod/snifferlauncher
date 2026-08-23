@@ -64,10 +64,8 @@ impl AppState {
         }
 
         let mut pkg_reg = PackageRegistry::new(plugin_registry.vault());
-        pkg_reg.register_service(Arc::new(
-            sniffer_pkg::perf_monitor::PerfMonitorPackage::new(),
-        ));
-        pkg_reg.register_widget(Arc::new(sniffer_pkg::scroll_view::ScrollViewPackage::new()));
+        pkg_reg.register_service(Arc::new(pkg_perfmon::PerfMonitorPackage::new()));
+        pkg_reg.register_widget(Arc::new(pkg_scroll::ScrollViewPackage::new()));
 
         let pkg_registry = Arc::new(RwLock::new(pkg_reg));
         plugin_registry.set_pkg_registry(Arc::clone(&pkg_registry));
@@ -120,6 +118,13 @@ impl AppState {
         self.cached_layout = None;
         self.layout_dirty = true;
         self.memory_pressure_pending = false;
+    }
+
+    #[must_use]
+    pub fn get_max_scroll(&self, target_id: Option<u64>) -> f32 {
+        target_id
+            .and_then(|id| self.cached_max_scroll.get(&id).copied())
+            .unwrap_or(0.0)
     }
 }
 

@@ -14,8 +14,9 @@ pub fn register_vault_bindings<'js>(
 ) {
     // host_vault_get
     let vault_get = Arc::clone(&vault);
+    let plugin_id_get = plugin_id.clone();
     let get_func = Function::new(ctx.clone(), move |key: String| -> Option<String> {
-        vault_get.get(&key)
+        vault_get.get(&key, &plugin_id_get)
     })
     .unwrap();
     globals.set(obfstr!("host_vault_get"), get_func).unwrap();
@@ -24,7 +25,7 @@ pub fn register_vault_bindings<'js>(
     let vault_set = Arc::clone(&vault);
     let plugin_id_set = plugin_id.clone();
     let set_func = Function::new(ctx.clone(), move |key: String, value: String| -> bool {
-        vault_set.set(&key, value, &plugin_id_set).is_ok()
+        vault_set.set(&key, &value, &plugin_id_set).is_ok()
     })
     .unwrap();
     globals.set(obfstr!("host_vault_set"), set_func).unwrap();
@@ -42,7 +43,7 @@ pub fn register_vault_bindings<'js>(
     let vault_query = Arc::clone(&vault);
     let query_apps_func = Function::new(ctx.clone(), move |params_json: String| -> String {
         let params: QueryAppsParams = serde_json::from_str(&params_json).unwrap_or_default();
-        let result = vault_query.query_apps(params);
+        let result = vault_query.query_apps(&params);
         serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string())
     })
     .unwrap();

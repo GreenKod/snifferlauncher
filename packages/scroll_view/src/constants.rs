@@ -1,0 +1,8 @@
+pub const SNAP_VELOCITY_THRESHOLD: f32 = 50.0;
+pub const SPRING_STIFFNESS: f32 = 12.0;
+pub const RUBBER_BAND_RESTORING: f32 = 8.0;
+pub const SCROLLBAR_MIN_THUMB_RATIO: f32 = 0.05;
+pub const SCROLLBAR_WIDTH: f32 = 3.0;
+pub const PAGE_DOT_SIZE: f32 = 6.0;
+pub const PAGE_DOT_SPACING: f32 = 10.0;
+pub const PAGE_DOT_MARGIN_BOTTOM: f32 = 14.0;
