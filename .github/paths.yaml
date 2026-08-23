@@ -1,14 +1,15 @@
+# ==============================================================================
+# SnifferLauncher Path Filters (Inverse / Ignore-List Strategy)
+# ==============================================================================
+# Triggers CI for ANY change across the entire codebase EXCEPT documentation,
+# licenses, and non-executable metadata.
+# ==============================================================================
+
 rust:
-  - "src/**"
-  - "crates/**"
-  - "packages/**"
-  - ".plugins/**"
-  - "plugins/**"
-  - "android/**"
-  - "Cargo.toml"
-  - "Cargo.lock"
-  - "deny.toml"
-  - ".github/workflows/check.yml"
-  - ".github/paths.yaml"
-  - "scripts/**"
-  - ".githooks/**"
+  - '!**/*.md'
+  - '!LICENSE*'
+  - '!.gitignore'
+  - '!_typos.toml'
+  - '!docs/**'
+  - '!art/**'
+  - '!screenshots/**'
