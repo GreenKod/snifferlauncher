@@ -127,26 +127,15 @@ fn draw_touch_hitboxes(
     element: &crate::types::Element,
     layout: &crate::layout::LayoutNode,
 ) {
-    let elem_id = match element {
-        crate::types::Element::Container { id, .. }
-        | crate::types::Element::ScrollView { id, .. }
-        | crate::types::Element::SharedView { id, .. }
-        | crate::types::Element::Label { id, .. }
-        | crate::types::Element::Image { id, .. }
-        | crate::types::Element::TextInput { id, .. }
-        | crate::types::Element::Slider { id, .. }
-        | crate::types::Element::ProgressBar { id, .. }
-        | crate::types::Element::Checkbox { id, .. } => id,
-    };
-
+    let elem_id = element.id();
     let is_button = match elem_id {
         Some(k) => {
-            k.starts_with("btn_")
+            k.starts_with("app_item_")
                 || k.starts_with("dock_app_btn_")
                 || k.starts_with("dock_app_circle_")
                 || k.starts_with("fab_")
                 || k.starts_with("app_card_")
-                || k.starts_with("card_")
+                || k.starts_with("btn_")
                 || k.starts_with("action_")
                 || k.starts_with("clock_")
                 || k.contains("btn")
@@ -160,7 +149,6 @@ fn draw_touch_hitboxes(
     };
 
     if is_button && layout.rect.width > 2.0 && layout.rect.height > 2.0 {
-        // Dock buttons have green/emerald accent, other buttons have cyan/sky accent
         let is_dock = elem_id.as_ref().is_some_and(|k| k.contains("dock"));
         let (fill_color, border_color) = if is_dock {
             (0x284A_DE80_u32, Some(0xEE4A_DE80_u32))
@@ -168,7 +156,6 @@ fn draw_touch_hitboxes(
             (0x2038_BDF8_u32, Some(0xDD38_BDF8_u32))
         };
 
-        // Draw bounding box
         renderer.draw_rect(layout.rect, fill_color, 4.0, 1.5, border_color);
     }
 
@@ -207,11 +194,10 @@ fn draw_touch_hitboxes(
     }
 }
 
-pub fn render_devkit_hud(
+/// Renders DevKit visualizer debug overlays: touch hitboxes and active pointer circles.
+pub fn render_devkit_debug_overlays(
     renderer: &mut dyn crate::render_api::Renderer,
     profiler: &FrameProfiler,
-    node_count: usize,
-    _screen_width: f32,
     root_element: &crate::types::Element,
     layout_tree: &crate::layout::LayoutNode,
 ) {
@@ -226,68 +212,4 @@ pub fn render_devkit_hud(
         renderer.draw_circle(tx, ty, 10.0, 0x88FB_BF24);
         renderer.draw_circle(tx, ty, 4.0, 0xFFF5_9E0B);
     }
-
-    // 3. Devkit HUD Info Card
-    let fps = profiler.current_fps();
-    let avg_ms = profiler.average_frame_time_ms();
-    let cpu_ms = profiler.avg_cpu_ms();
-    let gpu_ms = profiler.avg_gpu_ms();
-    let swap_ms = profiler.avg_swap_ms();
-
-    let w = 240.0_f32;
-    let h = 135.0_f32;
-    let x = 16.0_f32;
-    let y = 16.0_f32;
-
-    // Outer Card
-    renderer.draw_rect(
-        crate::Rect::new(x, y, w, h),
-        0xDD0F_172A,
-        10.0,
-        1.5,
-        Some(0xFF38_BDF8),
-    );
-
-    // Title
-    renderer.draw_text("⚡ DEVKIT MONITOR", x + 12.0, y + 10.0, 11.0, 0xFF38_BDF8);
-
-    // FPS badge
-    let fps_color = if fps >= 55.0 {
-        0xFF4A_DE80
-    } else if fps >= 30.0 {
-        0xFFFB_BF24
-    } else {
-        0xFFF8_7171
-    };
-
-    let fps_str = format!("FPS: {fps:.1} ({avg_ms:.1}ms)");
-    renderer.draw_text(&fps_str, x + 12.0, y + 26.0, 12.0, fps_color);
-
-    // Latency details
-    let cpu_gpu_str = format!("CPU: {cpu_ms:.1}ms | GPU: {gpu_ms:.1}ms");
-    renderer.draw_text(&cpu_gpu_str, x + 12.0, y + 44.0, 10.0, 0xFFE2_E8F0);
-
-    let os_str = format!("VSync: {swap_ms:.1}ms | Nodes: {node_count}");
-    renderer.draw_text(&os_str, x + 12.0, y + 58.0, 10.0, 0xFF94_A3B8);
-
-    // Touch Telemetry
-    let touch = &profiler.touch_telemetry;
-    let gesture_name = if touch.gesture.is_empty() {
-        "IDLE"
-    } else {
-        &touch.gesture
-    };
-    let touch_hdr = format!("👉 Pointers: {} | {}", touch.active_pointers, gesture_name);
-    renderer.draw_text(&touch_hdr, x + 12.0, y + 76.0, 10.0, 0xFFFACC15);
-
-    let target_name = if touch.target_element.is_empty() {
-        "None"
-    } else {
-        &touch.target_element
-    };
-    let target_str = format!("Target: {target_name}");
-    renderer.draw_text(&target_str, x + 12.0, y + 92.0, 10.0, 0xFFE2_E8F0);
-
-    let pos_str = format!("Pos: ({:.1}, {:.1})", touch.touch_x, touch.touch_y);
-    renderer.draw_text(&pos_str, x + 12.0, y + 108.0, 10.0, 0xFF94_A3B8);
 }

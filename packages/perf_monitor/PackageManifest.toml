@@ -1,0 +1,25 @@
+[package]
+id = "com.sniffer.perf"
+name = "System Performance Monitor"
+version = "0.1.0"
+kind = "service"
+description = "Real-time CPU, RAM, and FPS telemetry monitor backed by DataVault"
+authors = ["Sniffer Core Team <dev@sniffer.internal>"]
+license = "Apache-2.0"
+min_engine_version = "0.1.0"
+
+[entry]
+symbol = "sniffer_pkg_create"
+library_name = "pkg_perfmon"
+
+[permissions]
+system = [
+    "system.metrics",
+    "system.storage"
+]
+
+[dependencies]
+
+[metadata]
+default_poll_interval_ms = 1000
+auto_start = true

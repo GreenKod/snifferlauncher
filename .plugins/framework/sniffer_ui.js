@@ -1,20 +1,11 @@
 // =============================================================================
 // SnifferUI — React-like mini framework for SnifferLauncher plugins
 // =============================================================================
-// Usage in your plugin's main.js:
-//   1. Declare your state:    let state = { count: 0, text: "Hi" };
-//   2. Write a render fn:     function App() { return Container("root", {}, [...]) }
-//   3. Start the app:         SnifferUI.start(App, state);
-//   4. Handle events:         globalThis.onEvent = e => { SnifferUI.setState({ count: state.count + 1 }); }
-//
-// The framework automatically calls host_set_ui() whenever setState() is used.
-// =============================================================================
 
 const SnifferUI = (function () {
     let _renderFn = null;
     let _state = {};
 
-    /** Internal: renders and pushes the UI to Rust. */
     function _commit() {
         if (_renderFn) {
             host_set_ui(JSON.stringify(_renderFn()));
@@ -22,46 +13,28 @@ const SnifferUI = (function () {
     }
 
     return {
-        /**
-         * Start the app. Renders immediately.
-         * @param {function} renderFn - The root render function (e.g. `App`)
-         * @param {object}   initialState - Your initial state object
-         */
         start(renderFn, initialState) {
             _renderFn = renderFn;
             _state    = initialState !== undefined && initialState !== null ? initialState : {};
             _commit();
         },
 
-        /**
-         * Merge a partial state patch and re-render.
-         * Works just like React's setState (shallow merge).
-         * @param {object} patch
-         */
         setState(patch) {
             Object.assign(_state, patch);
             _commit();
         },
 
-        /** Force a re-render without changing state. */
         forceUpdate() {
             _commit();
         },
     };
 })();
-
 // =============================================================================
 // Channel Subscription Helper System
 // =============================================================================
 
 const _channelSubscribers = {};
 
-/**
- * Subscribe to a specific broadcast channel name.
- *
- * @param {string}   channelName - Name of the channel to subscribe to
- * @param {function} callback    - Callback function called with payload data
- */
 function subscribeChannel(channelName, callback) {
     if (!_channelSubscribers[channelName]) {
         _channelSubscribers[channelName] = [];
@@ -69,16 +42,10 @@ function subscribeChannel(channelName, callback) {
     _channelSubscribers[channelName].push(callback);
 }
 
-/**
- * Unsubscribe from a broadcast channel name.
- *
- * @param {string} channelName
- */
 function unsubscribeChannel(channelName) {
     delete _channelSubscribers[channelName];
 }
 
-// Automatic global broadcast router
 globalThis.onBroadcast = function(channel, data) {
     if (_channelSubscribers[channel]) {
         _channelSubscribers[channel].forEach(function(cb) {
@@ -86,17 +53,10 @@ globalThis.onBroadcast = function(channel, data) {
         });
     }
 };
-
 // =============================================================================
-// Color helpers
+// Color & Layout Style Dimension Helpers
 // =============================================================================
 
-/**
- * Convert a CSS hex color string to a Rust u32 ARGB value.
- * Supports "#RGB", "#RRGGBB", "#AARRGGBB".
- * @param {string} hexStr
- * @returns {number}
- */
 function hex(hexStr) {
     let h = hexStr.replace(/^#/, "");
     if (h.length === 3) h = h.split("").map(c => c + c).join("");
@@ -104,39 +64,82 @@ function hex(hexStr) {
     return parseInt(h, 16) >>> 0;
 }
 
-// Backwards-compat alias
 function hexToColor(h) { return hex(h); }
 
+function px(n)  { return { Pixels: n }; }
+function pct(n) { return { Percent: n }; }
+
+function pad(all) {
+    return { top: all, bottom: all, left: all, right: all };
+}
+
+function padXY(v, h) {
+    return { top: v, bottom: v, left: h, right: h };
+}
+
+function vw(percent) {
+    return (host_screen_width() * percent) / 100.0;
+}
+
+function vh(percent) {
+    return (host_screen_height() * percent) / 100.0;
+}
+
+function vmin(percent) {
+    return Math.min(vw(percent), vh(percent));
+}
+
+function vmax(percent) {
+    return Math.max(vw(percent), vh(percent));
+}
+
+const Theme = {
+    colors: {
+        bgCard:     hex("#1E293B"),
+        bgCardAlt:  hex("#0F172A"),
+        textMain:   hex("#F8FAFC"),
+        textSub:    hex("#94A3B8"),
+        accent:     hex("#38BDF8"),
+        success:    hex("#10B981"),
+        border:     hex("#334155")
+    },
+    spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
+    radius:  { sm: 8, md: 12, lg: 16 },
+
+    getSystemTheme: function() {
+        return (typeof Vault !== "undefined" ? Vault.get("system.theme", null) : null) || {
+            is_dark: true,
+            mode: "dark",
+            accent_color: "#38BDF8",
+            bg_color: "#0F172A",
+            text_color: "#F8FAFC",
+            card_bg: "#1E293B"
+        };
+    },
+
+    isDarkMode: function() {
+        const t = this.getSystemTheme();
+        return t ? t.is_dark !== false : true;
+    },
+
+    onSystemThemeChange: function(callback) {
+        if (typeof Vault !== "undefined" && typeof Vault.subscribe === "function") {
+            Vault.subscribe("system.theme", callback);
+        }
+    }
+};
 // =============================================================================
 // Functional UI builders — the "JSX" of SnifferUI
 // =============================================================================
 
-/**
- * Build a Container element.
- * @param {string}   id
- * @param {object}   style
- * @param {Array}    children
- */
 function Container(id, style, children) {
     return { Container: { id: id, style: style || {}, children: children || [] } };
 }
 
-/**
- * Build a Label element.
- * @param {string} id
- * @param {string} text
- * @param {object} style
- */
 function Label(id, text, style) {
     return { Label: { id: id, text: String(text), style: style || {} } };
 }
 
-/**
- * Build a TextInput element.
- * @param {string}  id
- * @param {string}  value
- * @param {object}  opts  - { focused, placeholder, style }
- */
 function TextInput(id, value, opts) {
     opts = opts || {};
     return {
@@ -150,35 +153,10 @@ function TextInput(id, value, opts) {
     };
 }
 
-/**
- * Build an Image element.
- * @param {string} id
- * @param {string} src   - Relative path, absolute path, or "app-icon://<pkg>"
- * @param {object} style
- */
 function Image(id, src, style) {
     return { Image: { id: id, src: String(src), style: style || {} } };
 }
 
-/**
- * Build a ScrollView element.
- *
- * Temel parametreler:
- * @param {string} id
- * @param {object} opts  - {
- *   scroll_x, scroll_y,
- *   scroll_sensitivity, dynamic_sensitivity,
- *   momentum_scrolling, capture_drag,
- *   style,
- *   --- Rust-managed scroll physics ---
- *   snap_x: number|null,      // Horizontal snap interval px (pager mode). null = free scroll
- *   snap_y: number|null,      // Vertical snap interval px. null = free scroll
- *   rubber_band: number|null, // Boundary elasticity 0.0–1.0. null = rigid boundary
- *   page_count: number|null,  // Total page count (used with snap_x)
- *   on_snap: string|null,     // JS callback name when snap completes
- * }
- * @param {Array}  children
- */
 function ScrollView(id, opts, children) {
     opts = opts || {};
     return {
@@ -201,47 +179,18 @@ function ScrollView(id, opts, children) {
     };
 }
 
-/**
- * Build a Checkbox element.
- * @param {string}  id
- * @param {boolean} checked
- * @param {object}  style
- */
 function Checkbox(id, checked, style) {
     return { Checkbox: { id: id, checked: !!checked, style: style || {} } };
 }
 
-/**
- * Build a Slider element.
- * @param {string} id
- * @param {number} value
- * @param {number} min
- * @param {number} max
- * @param {object} style
- */
 function Slider(id, value, min, max, style) {
     return { Slider: { id: id, value: value, min: min, max: max, style: style || {} } };
 }
 
-/**
- * Build a ProgressBar element.
- * @param {string} id
- * @param {number} value
- * @param {number} max
- * @param {object} style
- */
 function ProgressBar(id, value, max, style) {
     return { ProgressBar: { id: id, value: value, max: max, style: style || {} } };
 }
 
-/**
- * Build a SharedView element for cross-plugin shared layout drawing.
- * @param {string}      id
- * @param {string|null} targetPluginId - Target plugin ID
- * @param {string|null} slotName       - SharedView slot identifier
- * @param {object}      style
- * @param {Array}       children       - Fallback elements if pending/rejected
- */
 function SharedView(id, targetPluginId, slotName, style, children) {
     return {
         SharedView: {
@@ -254,192 +203,6 @@ function SharedView(id, targetPluginId, slotName, style, children) {
     };
 }
 
-// =============================================================================
-// Layout shorthand helpers
-// =============================================================================
-
-/** Pixel dimension */
-function px(n)  { return { Pixels: n }; }
-
-/** Percent dimension */
-function pct(n) { return { Percent: n }; }
-
-/** Padding/margin shorthand — all sides equal */
-function pad(all) {
-    return { top: all, bottom: all, left: all, right: all };
-}
-
-/** Padding/margin shorthand — vertical / horizontal */
-function padXY(v, h) {
-    return { top: v, bottom: v, left: h, right: h };
-}
-
-// =============================================================================
-// Responsive (Viewport) sizing helpers
-// =============================================================================
-
-/** % of screen width (e.g. vw(5) = 5% of width) */
-function vw(percent) {
-    return (host_screen_width() * percent) / 100.0;
-}
-
-/** % of screen height (e.g. vh(10) = 10% of height) */
-function vh(percent) {
-    return (host_screen_height() * percent) / 100.0;
-}
-
-/** The smaller of vw or vh */
-function vmin(percent) {
-    return Math.min(vw(percent), vh(percent));
-}
-
-/** The larger of vw or vh */
-function vmax(percent) {
-    return Math.max(vw(percent), vh(percent));
-}
-
-/** Launches an installed Android application by package name */
-function launchApp(packageName) {
-    if (typeof host_launch_app === "function" && packageName) {
-        host_launch_app(String(packageName));
-    }
-}
-
-/** Requests default home/launcher application role from Android system */
-function requestDefaultLauncher() {
-    if (typeof host_request_default_launcher === "function") {
-        host_request_default_launcher();
-    }
-}
-
-/** Requests soft keyboard focus for an input field */
-function focusInput(id) {
-    if (typeof host_focus_input === "function") {
-        host_focus_input(String(id || ""));
-    }
-}
-
-/** Blurs/hides the soft keyboard */
-function blurInput() {
-    if (typeof host_blur_input === "function") {
-        host_blur_input();
-    }
-}
-
-/** Retrieves the list of installed Android applications from the host system */
-function getApplicationList() {
-    if (typeof host_get_application_list === "function") {
-        try {
-            const jsonStr = host_get_application_list();
-            return JSON.parse(jsonStr);
-        } catch (e) {
-            return [];
-        }
-    }
-    return [];
-}
-
-/** Native Data Vault for high-performance memory storage & search */
-const Vault = globalThis.Vault || {
-    get: function(k, d) {
-        if (typeof host_vault_get !== "function") return d !== undefined ? d : null;
-        try {
-            const raw = host_vault_get(String(k));
-            return raw ? JSON.parse(raw) : (d !== undefined ? d : null);
-        } catch(e) { return d !== undefined ? d : null; }
-    },
-    set: function(k, v) {
-        if (typeof host_vault_set !== "function") return false;
-        try { return host_vault_set(String(k), JSON.stringify(v)); } catch(e) { return false; }
-    },
-    delete: function(k) {
-        return typeof host_vault_delete === "function" ? host_vault_delete(String(k)) : false;
-    },
-    queryApps: function(p) {
-        if (typeof host_vault_query_apps !== "function") return { apps: [], total_count: 0, page: 0, total_pages: 1 };
-        try { return JSON.parse(host_vault_query_apps(JSON.stringify(p || {}))); } catch(e) { return { apps: [], total_count: 0, page: 0, total_pages: 1 }; }
-    },
-    keys: function(p) {
-        if (typeof host_vault_keys !== "function") return [];
-        try { return JSON.parse(host_vault_keys(String(p || ""))); } catch(e) { return []; }
-    },
-    subscribe: function(k, cb) {
-        if (typeof subscribeChannel === "function") subscribeChannel("vault.changed:" + k, cb);
-    },
-    saveFile: function(fileName, base64Content) {
-        return typeof host_vault_save_file === "function" ? host_vault_save_file(String(fileName), String(base64Content)) : "";
-    },
-    readFile: function(fileName) {
-        return typeof host_vault_read_file === "function" ? host_vault_read_file(String(fileName)) : null;
-    },
-    deleteFile: function(fileName) {
-        return typeof host_vault_delete_file === "function" ? host_vault_delete_file(String(fileName)) : false;
-    },
-    listFiles: function() {
-        if (typeof host_vault_list_files !== "function") return [];
-        try { return JSON.parse(host_vault_list_files()); } catch(e) { return []; }
-    },
-    getFileUrl: function(fileName) {
-        return "vault://" + String(fileName).replace(/^vault:\/\//, "");
-    }
-};
-
-// =============================================================================
-// Master Design System & Theme Tokens
-// =============================================================================
-
-const Theme = {
-    colors: {
-        bgCard:     hex("#1E293B"),
-        bgCardAlt:  hex("#0F172A"),
-        textMain:   hex("#F8FAFC"),
-        textSub:    hex("#94A3B8"),
-        accent:     hex("#38BDF8"),
-        success:    hex("#10B981"),
-        border:     hex("#334155")
-    },
-    spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
-    radius:  { sm: 8, md: 12, lg: 16 },
-
-    /**
-     * Get the active operating system theme.
-     * @returns {{is_dark: boolean, mode: string, accent_color: string, bg_color: string, text_color: string, card_bg: string}}
-     */
-    getSystemTheme: function() {
-        return Vault.get("system.theme", {
-            is_dark: true,
-            mode: "dark",
-            accent_color: "#38BDF8",
-            bg_color: "#0F172A",
-            text_color: "#F8FAFC",
-            card_bg: "#1E293B"
-        });
-    },
-
-    /**
-     * Check if the device is currently in Dark Mode.
-     * @returns {boolean}
-     */
-    isDarkMode: function() {
-        const t = this.getSystemTheme();
-        return t ? t.is_dark !== false : true;
-    },
-
-    /**
-     * Listen for system dark/light theme changes reactively.
-     * @param {function} callback
-     */
-    onSystemThemeChange: function(callback) {
-        Vault.subscribe("system.theme", callback);
-    }
-};
-
-/**
- * Standardized Card Widget Component Template for all plugins.
- * Guarantees unified border radius, background color, padding, and layout grid.
- *
- * @param {object} opts - { id, title, subtitle, content, style }
- */
 function CardWidget(opts) {
     opts = opts || {};
     const id = opts.id || "card-widget";
@@ -484,3 +247,85 @@ function CardWidget(opts) {
 
     return Container(id, mergedStyle, children);
 }
+// =============================================================================
+// System & Application Launcher Helpers
+// =============================================================================
+
+function launchApp(packageName) {
+    if (typeof host_launch_app === "function" && packageName) {
+        host_launch_app(String(packageName));
+    }
+}
+
+function requestDefaultLauncher() {
+    if (typeof host_request_default_launcher === "function") {
+        host_request_default_launcher();
+    }
+}
+
+function focusInput(id) {
+    if (typeof host_focus_input === "function") {
+        host_focus_input(String(id || ""));
+    }
+}
+
+function blurInput() {
+    if (typeof host_blur_input === "function") {
+        host_blur_input();
+    }
+}
+
+function getApplicationList() {
+    if (typeof host_get_application_list === "function") {
+        try {
+            return JSON.parse(host_get_application_list());
+        } catch (e) {
+            return [];
+        }
+    }
+    return [];
+}
+
+const Vault = globalThis.Vault || {
+    get: function(k, d) {
+        if (typeof host_vault_get !== "function") return d !== undefined ? d : null;
+        try {
+            const raw = host_vault_get(String(k));
+            return raw ? JSON.parse(raw) : (d !== undefined ? d : null);
+        } catch(e) { return d !== undefined ? d : null; }
+    },
+    set: function(k, v) {
+        if (typeof host_vault_set !== "function") return false;
+        try { return host_vault_set(String(k), JSON.stringify(v)); } catch(e) { return false; }
+    },
+    delete: function(k) {
+        return typeof host_vault_delete === "function" ? host_vault_delete(String(k)) : false;
+    },
+    queryApps: function(p) {
+        if (typeof host_vault_query_apps !== "function") return { apps: [], total_count: 0, page: 0, total_pages: 1 };
+        try { return JSON.parse(host_vault_query_apps(JSON.stringify(p || {}))); } catch(e) { return { apps: [], total_count: 0, page: 0, total_pages: 1 }; }
+    },
+    keys: function(p) {
+        if (typeof host_vault_keys !== "function") return [];
+        try { return JSON.parse(host_vault_keys(String(p || ""))); } catch(e) { return []; }
+    },
+    subscribe: function(k, cb) {
+        if (typeof subscribeChannel === "function") subscribeChannel("vault.changed:" + k, cb);
+    },
+    saveFile: function(fileName, base64Content) {
+        return typeof host_vault_save_file === "function" ? host_vault_save_file(String(fileName), String(base64Content)) : "";
+    },
+    readFile: function(fileName) {
+        return typeof host_vault_read_file === "function" ? host_vault_read_file(String(fileName)) : null;
+    },
+    deleteFile: function(fileName) {
+        return typeof host_vault_delete_file === "function" ? host_vault_delete_file(String(fileName)) : false;
+    },
+    listFiles: function() {
+        if (typeof host_vault_list_files !== "function") return [];
+        try { return JSON.parse(host_vault_list_files()); } catch(e) { return []; }
+    },
+    getFileUrl: function(fileName) {
+        return "vault://" + String(fileName).replace(/^vault:\/\//, "");
+    }
+};

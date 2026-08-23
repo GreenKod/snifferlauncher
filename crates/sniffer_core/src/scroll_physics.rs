@@ -184,24 +184,27 @@ pub fn sync_scroll_physics_from_tree<S: BuildHasher>(
         ..
     } = element
     {
-        if snap_x.is_some() || snap_y.is_some() {
-            let wid = fnv1a(id_str.as_bytes());
-            let entry = physics.entry(wid).or_default();
-            if let (Some(new_snap_x), Some(old_snap_x)) = (*snap_x, entry.snap_x) {
-                if (new_snap_x - old_snap_x).abs() > 0.5 && !entry.is_dragging {
-                    let max_page = (entry.page_count.unwrap_or(1) as f32 - 1.0).max(0.0);
-                    let clamped_page = (entry.last_snap_page as f32).clamp(0.0, max_page);
-                    entry.pos_x = clamped_page * new_snap_x;
-                    entry.vel_x = 0.0;
-                    entry.vel_y = 0.0;
-                    entry.snap_target_x = None;
-                }
+        let wid = fnv1a(id_str.as_bytes());
+        let entry = physics.entry(wid).or_default();
+
+        // If snap_x changed (e.g. viewport resize), reposition to the correct page.
+        if let (Some(new_snap_x), Some(old_snap_x)) = (*snap_x, entry.snap_x) {
+            if (new_snap_x - old_snap_x).abs() > 0.5 && !entry.is_dragging {
+                let max_page = (entry.page_count.unwrap_or(1) as f32 - 1.0).max(0.0);
+                let clamped_page = (entry.last_snap_page as f32).clamp(0.0, max_page);
+                entry.pos_x = clamped_page * new_snap_x;
+                entry.vel_x = 0.0;
+                entry.vel_y = 0.0;
+                entry.snap_target_x = None;
             }
-            entry.snap_x = *snap_x;
-            entry.rubber_band = *rubber_band;
-            entry.page_count = *page_count;
-            entry.on_snap.clone_from(on_snap);
         }
+
+        // Always sync snap/rubber-band config (even when snap_x/snap_y are None).
+        entry.snap_x = *snap_x;
+        entry.rubber_band = *rubber_band;
+        entry.page_count = *page_count;
+        entry.on_snap.clone_from(on_snap);
+        let _ = snap_y; // snap_y is tracked via UiEvent::Scroll, not physics
     }
 
     match element {

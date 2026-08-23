@@ -144,8 +144,10 @@ members = [
     "crates/sniffer_core",
     "crates/sniffer_render",
     "crates/sniffer_plugin",
+    "crates/sniffer_pkg",
     "crates/sniffer_platform_android",
     "crates/sniffer_platform_desktop",
+    "packages/*",
 ]
 exclude = [".plugins"]
 

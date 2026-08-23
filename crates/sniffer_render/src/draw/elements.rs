@@ -141,8 +141,16 @@ pub(crate) fn draw_element_contents(
 
             renderer.draw_text(&display_text, draw_x, draw_y, base_style.text_size, color);
         }
-        Element::Image { src, .. } => {
-            let img_id = src.as_str();
+        Element::Image { src, id, .. } => {
+            let img_id = if renderer.has_image(src.as_str()) {
+                src.as_str()
+            } else if let Some(elem_id) = id
+                && renderer.has_image(elem_id.as_str())
+            {
+                elem_id.as_str()
+            } else {
+                src.as_str()
+            };
 
             if !renderer.has_image(img_id) {
                 if let Some(pkg_name) = src.strip_prefix("app-icon://") {

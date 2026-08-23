@@ -16,7 +16,7 @@ use sniffer_core::ui::event::EventBus;
 use sniffer_core::ui::style_map::StyleMap;
 use sniffer_core::ui::widget::WidgetId;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 // ---------------------------------------------------------------------------
 // Inter-Plugin API types
@@ -71,6 +71,8 @@ pub struct PluginRegistry {
     broadcast_queue: BroadcastQueue,
     /// Shared Native Data Vault.
     vault: Arc<sniffer_core::vault::DataVault>,
+    /// Optional Native PackageRegistry reference.
+    pkg_registry: Option<Arc<RwLock<sniffer_pkg::PackageRegistry>>>,
 }
 
 impl PluginRegistry {
@@ -83,6 +85,17 @@ impl PluginRegistry {
                 .or_default()
                 .push(Arc::clone(plugin));
         }
+    }
+
+    /// Attach a native PackageRegistry reference to the PluginRegistry.
+    pub fn set_pkg_registry(&mut self, reg: Arc<RwLock<sniffer_pkg::PackageRegistry>>) {
+        self.pkg_registry = Some(reg);
+    }
+
+    /// Returns a clone of the optional PackageRegistry reference.
+    #[must_use]
+    pub fn pkg_registry(&self) -> Option<Arc<RwLock<sniffer_pkg::PackageRegistry>>> {
+        self.pkg_registry.clone()
     }
 
     /// Returns a clone of the shared inter-plugin API map.

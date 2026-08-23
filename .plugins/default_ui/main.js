@@ -30,8 +30,30 @@ function getDockElement(isLandscape) {
     ]);
 }
 
+function getDevKitHUD() {
+    let devkitUI = null;
+    if (typeof callApi === "function") {
+        try {
+            devkitUI = callApi("devkit_hud.getUI");
+        } catch (e) {
+            devkitUI = null;
+        }
+    }
+    return devkitUI;
+}
+
 function Root() {
     const isLandscape = vw(100) > vh(100);
+    const hud = getDevKitHUD();
+
+    const rootChildren = [
+        AppGridComponent(),
+        getDockElement(isLandscape)
+    ];
+
+    if (hud) {
+        rootChildren.push(hud);
+    }
 
     if (isLandscape) {
         return Container("root", {
@@ -42,10 +64,7 @@ function Root() {
             flex_direction: "Row",
             justify_content: "Start",
             align_items: "Stretch",
-        }, [
-            AppGridComponent(),
-            getDockElement(true)
-        ]);
+        }, rootChildren);
     }
 
     return Container("root", {
@@ -56,10 +75,7 @@ function Root() {
         flex_direction: "Column",
         justify_content: "Start",
         align_items: "Stretch",
-    }, [
-        AppGridComponent(),
-        getDockElement(false)
-    ]);
+    }, rootChildren);
 }
 
 // Inter-Plugin Communication (IPC): Listen for broadcasts from dock plugin
@@ -68,6 +84,10 @@ subscribeChannel("dock.ready", function() {
     if (typeof broadcastEvent === "function") {
         broadcastEvent("default_ui.stats", { appCount: state.allApps.length });
     }
+});
+
+subscribeChannel("devkit_hud.ready", function() {
+    SnifferUI.forceUpdate();
 });
 
 subscribeChannel("dock.stateChanged", function() {
@@ -168,3 +188,11 @@ if (typeof subscribeChannel === "function") {
 }
 
 SnifferUI.start(Root, state);
+
+if (typeof setInterval === "function") {
+    setInterval(function() {
+        if (getDevKitHUD() !== null) {
+            SnifferUI.forceUpdate();
+        }
+    }, 500);
+}

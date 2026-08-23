@@ -19,7 +19,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let (event_loop, window, gl) = window::DesktopWindow::new()?;
     let font_bytes: &[u8] = include_bytes!("../fonts/audiowide.ttf");
-    let renderer = unsafe { GlowRenderer::with_font(gl, Some(font_bytes))? };
+    let mut renderer = unsafe { GlowRenderer::with_font(gl, Some(font_bytes))? };
+    app::icons::preload_desktop_icons(&mut renderer);
 
     // Initialize screen dimensions BEFORE AppState evaluates JS plugins
     // so that the initial UI layout has the correct vw/vh values.
