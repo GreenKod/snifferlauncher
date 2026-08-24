@@ -1,5 +1,5 @@
 use sniffer_core::dev_log;
-use sniffer_core::scroll_physics::ScrollPhysics;
+use sniffer_core::physics::ScrollPhysics;
 use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::event::EventBus;
 use sniffer_core::ui::style_map::StyleMap;

@@ -54,10 +54,7 @@ pub fn render_desktop_frame(
                 children: vec![],
             });
 
-    sniffer_core::scroll_physics::sync_scroll_physics_from_tree(
-        &root_element,
-        &mut app.scroll_physics,
-    );
+    sniffer_core::physics::sync_scroll_physics_from_tree(&root_element, &mut app.scroll_physics);
 
     let vmin_px = width.min(height) / 100.0;
     let phys_ids: Vec<u64> = app.scroll_physics.keys().copied().collect();
@@ -80,7 +77,7 @@ pub fn render_desktop_frame(
                         });
                     }
 
-                    let _ = sniffer_core::scroll_physics::update_indicator_dots_in_element(
+                    let _ = sniffer_core::physics::update_indicator_dots_in_element(
                         &mut root_element,
                         phys.last_snap_page,
                         vmin_px,
@@ -88,7 +85,7 @@ pub fn render_desktop_frame(
                 }
             }
 
-            sniffer_core::scroll_physics::inject_physics_to_tree(
+            sniffer_core::physics::inject_physics_to_tree(
                 &mut root_element,
                 sv_id,
                 phys.pos_x,

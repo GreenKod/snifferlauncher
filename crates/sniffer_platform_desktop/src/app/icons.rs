@@ -1,4 +1,4 @@
-use sniffer_core::render_api::Renderer;
+use sniffer_core::render::Renderer;
 use sniffer_render::GlowRenderer;
 
 fn generate_icon_pixels(base_r: u8, base_g: u8, base_b: u8) -> Vec<u8> {

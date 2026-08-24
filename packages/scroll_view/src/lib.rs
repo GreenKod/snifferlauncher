@@ -12,7 +12,7 @@ pub mod state;
 #[cfg(test)]
 mod tests;
 
-use sniffer_core::{math::Rect, render_api::Renderer, vault::DataVault};
+use sniffer_core::{math::Rect, render::Renderer, vault::DataVault};
 use sniffer_pkg::error::PackageError;
 use sniffer_pkg::package::{MemoryTrimLevel, PackageKind, PackageMeta, WidgetPackage};
 use state::ScrollState;
@@ -89,7 +89,12 @@ impl WidgetPackage for ScrollViewPackage {
         let Ok(mut st) = self.state.write() else {
             return;
         };
-        physics::advance_simulation(&mut st, vault, dt_secs);
+        let result = physics::advance_simulation(&mut st, dt_secs);
+        // Write the snap event into the vault here so that physics.rs remains
+        // a pure, DataVault-free simulation module.
+        if let Some((key, value, authority)) = result.snap_event {
+            let _ = vault.set(&key, &value, authority);
+        }
     }
 
     fn on_render(&self, renderer: &mut dyn Renderer, layout_rect: Rect, clip_rect: Option<Rect>) {

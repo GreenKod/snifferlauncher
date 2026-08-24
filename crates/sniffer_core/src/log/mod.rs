@@ -1,3 +1,11 @@
+/// Cross-platform logging backend for `sniffer_core`.
+///
+/// On Android the macros delegate to `__android_log_write` via a minimal inline
+/// FFI binding.  The binding lives here rather than in `sniffer_platform_android`
+/// because `sniffer_core` is a dependency *of* the platform crate — inverting that
+/// relationship would create a dependency cycle.  Using `#[cfg(target_os)]` keeps
+/// the Android-specific code fully inert on every other target.
+
 #[cfg(target_os = "android")]
 #[allow(unused_extern_crates)]
 unsafe extern "C" {
@@ -8,6 +16,7 @@ unsafe extern "C" {
     ) -> i32;
 }
 
+/// Write `msg` to Android logcat at the given priority (4 = INFO, 6 = ERROR).
 #[cfg(target_os = "android")]
 pub fn android_log(prio: i32, msg: &str) {
     let clean_msg = msg.replace('\0', "\\0");

@@ -1,6 +1,6 @@
 use super::draw_ui;
 use sniffer_core::layout::LayoutNode;
-use sniffer_core::render_api::Renderer;
+use sniffer_core::render::Renderer;
 use sniffer_core::style::BUTTON_TEXT;
 use sniffer_core::types::Element;
 use sniffer_core::ui::data_map::DataMap;
