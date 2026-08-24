@@ -13,7 +13,7 @@
 use crate::error::PackageError;
 use sniffer_core::{
     math::{Rect, Size},
-    render_api::Renderer,
+    render::Renderer,
     vault::DataVault,
 };
 use std::sync::Arc;

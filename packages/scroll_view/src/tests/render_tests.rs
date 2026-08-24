@@ -1,6 +1,6 @@
 use super::*;
 use sniffer_core::math::Rect;
-use sniffer_core::render_api::Renderer;
+use sniffer_core::render::Renderer;
 use sniffer_core::style::ObjectFit;
 
 #[derive(Default)]

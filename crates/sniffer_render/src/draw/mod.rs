@@ -10,7 +10,7 @@ pub use culling::{
 
 use sniffer_core::ScreenMetrics;
 use sniffer_core::layout::LayoutNode;
-use sniffer_core::render_api::Renderer;
+use sniffer_core::render::Renderer;
 use sniffer_core::types::Element;
 use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::style_map::StyleMap;
