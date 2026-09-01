@@ -1,16 +1,10 @@
-use crate::types::AppInfo;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AppQueryResult {
-    pub apps: Vec<AppInfo>,
-    pub total_count: usize,
-    pub page: usize,
-    pub total_pages: usize,
-}
+// Re-export application query types from `crate::types` for backwards compatibility
+pub use crate::types::{AppQueryResult, QueryAppsParams};
 
 /// Represents the active operating system theme colors and mode.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SystemTheme {
     pub is_dark: bool,
     pub mode: String, // "dark" | "light"
@@ -50,11 +44,4 @@ impl SystemTheme {
             card_bg: "#FFFFFF".to_string(),
         }
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct QueryAppsParams {
-    pub search: Option<String>,
-    pub page: Option<usize>,
-    pub limit: Option<usize>,
 }

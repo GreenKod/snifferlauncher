@@ -1,8 +1,3 @@
-use super::color::{
-    BACKGROUND, BUTTON_MUTED, BUTTON_TEXT, CARD_CAMERA, CARD_CAMERA_HOVER, CARD_CONTACTS,
-    CARD_CONTACTS_HOVER, CARD_RADIUS, CARD_SETTINGS, CARD_SETTINGS_HOVER, HEADER_SURFACE,
-    ICON_SURFACE, SHADOW, SHADOW_OFFSET_Y, SHADOW_SPREAD,
-};
 use super::layout::{AlignItems, Dimension, Display, FlexDirection, JustifyContent, RectOffset};
 use super::props::Style;
 
@@ -34,37 +29,13 @@ impl Style {
                 "w-auto" => computed_style.width = Dimension::Auto,
                 "h-auto" => computed_style.height = Dimension::Auto,
 
-                // Color mapping
-                "bg-background" => computed_style.background_color = Some(BACKGROUND),
-                "bg-header" => computed_style.background_color = Some(HEADER_SURFACE),
-                "bg-settings" => computed_style.background_color = Some(CARD_SETTINGS),
-                "bg-contacts" => computed_style.background_color = Some(CARD_CONTACTS),
-                "bg-camera" => computed_style.background_color = Some(CARD_CAMERA),
-                "bg-settings-hover" => {
-                    computed_style.background_color = Some(CARD_SETTINGS_HOVER);
-                }
-                "bg-contacts-hover" => {
-                    computed_style.background_color = Some(CARD_CONTACTS_HOVER);
-                }
-                "bg-camera-hover" => computed_style.background_color = Some(CARD_CAMERA_HOVER),
-                "bg-icon-surface" => computed_style.background_color = Some(ICON_SURFACE),
-                "bg-text" => computed_style.background_color = Some(BUTTON_TEXT),
-                "bg-muted" => computed_style.background_color = Some(BUTTON_MUTED),
-
-                "text-main" => computed_style.text_color = Some(BUTTON_TEXT),
-                "text-muted" => computed_style.text_color = Some(BUTTON_MUTED),
-
-                // Shadows
-                "shadow-card" => {
-                    computed_style.shadow_color = Some(SHADOW);
-                    computed_style.shadow_offset_y = SHADOW_OFFSET_Y;
-                    computed_style.shadow_spread = SHADOW_SPREAD;
-                }
-
                 // Border radius
+                "rounded-none" => computed_style.border_radius = 0.0,
+                "rounded-sm" => computed_style.border_radius = 2.0,
                 "rounded" => computed_style.border_radius = 4.0,
                 "rounded-md" => computed_style.border_radius = 8.0,
-                "rounded-lg" => computed_style.border_radius = CARD_RADIUS,
+                "rounded-lg" => computed_style.border_radius = 16.0,
+                "rounded-xl" => computed_style.border_radius = 20.0,
                 "rounded-2xl" => computed_style.border_radius = 24.0,
                 "rounded-full" => computed_style.border_radius = 9999.0,
 

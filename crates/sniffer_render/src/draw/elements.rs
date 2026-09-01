@@ -1,11 +1,12 @@
 use super::draw_ui;
 use sniffer_core::layout::LayoutNode;
 use sniffer_core::render::Renderer;
-use sniffer_core::style::BUTTON_TEXT;
 use sniffer_core::types::Element;
 use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::style_map::StyleMap;
 use sniffer_core::{Rect, ScreenMetrics};
+
+const DEFAULT_TEXT_COLOR: u32 = 0xFF00_0000;
 
 static ICON_LOADER: std::sync::atomic::AtomicPtr<()> =
     std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
@@ -133,7 +134,7 @@ pub(crate) fn draw_element_contents(
                 text.clone()
             };
 
-            let color = base_style.text_color.unwrap_or(BUTTON_TEXT);
+            let color = base_style.text_color.unwrap_or(DEFAULT_TEXT_COLOR);
             let text_w = renderer.measure_text(&display_text, base_style.text_size);
 
             let draw_x = rect.x + (rect.width - text_w) / 2.0;
@@ -178,7 +179,7 @@ pub(crate) fn draw_element_contents(
             } else {
                 value.clone()
             };
-            let color = base_style.text_color.unwrap_or(BUTTON_TEXT);
+            let color = base_style.text_color.unwrap_or(DEFAULT_TEXT_COLOR);
             let ts = base_style.text_size;
 
             let draw_y = rect.y + (rect.height - ts) / 2.0;

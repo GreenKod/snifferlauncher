@@ -7,9 +7,6 @@ use sniffer_core::types::Action;
 #[allow(clippy::needless_pass_by_value)]
 pub fn launch_action(action: Action) -> Result<(), String> {
     match action {
-        Action::OpenSettings => start_action("android.settings.SETTINGS"),
-        Action::OpenContacts => start_view_uri("content://contacts/people"),
-        Action::OpenCamera => start_action("android.media.action.STILL_IMAGE_CAMERA"),
         Action::LaunchApp { package_name } => launch_app(&package_name),
         Action::RequestDefaultLauncher => request_default_launcher(),
         Action::LoadImage { .. } | Action::FocusTextInput(_) | Action::BlurTextInput => Ok(()),
