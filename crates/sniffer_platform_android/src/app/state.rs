@@ -53,13 +53,17 @@ impl AppState {
         let mut plugin_registry = PluginRegistry::default();
         let action_queue = Arc::new(Mutex::new(Vec::new()));
 
-        plugin_registry
-            .vault()
-            .update_system_theme(sniffer_core::vault::SystemTheme::default());
+        let _ = plugin_registry.vault().set_json(
+            "system.theme",
+            &sniffer_core::vault::SystemTheme::default(),
+            "system",
+        );
 
         if let Ok(apps) = crate::jni::get_application_list() {
             if !apps.is_empty() {
-                plugin_registry.vault().update_system_apps(apps);
+                let _ = plugin_registry
+                    .vault()
+                    .set_json("system.apps", &apps, "system");
             }
         }
 
