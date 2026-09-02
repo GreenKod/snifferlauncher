@@ -134,6 +134,7 @@ pub fn request_default_launcher() -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
+#[allow(dead_code)]
 pub fn start_action(action: &str) -> Result<(), String> {
     let jvm = vm();
 
@@ -155,6 +156,7 @@ pub fn start_action(action: &str) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
+#[allow(dead_code)]
 pub fn start_view_uri(uri: &str) -> Result<(), String> {
     let jvm = vm();
 
