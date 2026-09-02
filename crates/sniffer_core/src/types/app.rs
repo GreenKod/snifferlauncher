@@ -111,24 +111,10 @@ pub enum Action {
     RequestDefaultLauncher,
 }
 
-/// A sample state structure to demonstrate `Bincode` / `ArrayBuffer` passing.
+/// A sample state structure used for binary `postcard` / `ArrayBuffer` state passing.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppState {
     pub click_count: u32,
     pub screen_width: f32,
     pub screen_height: f32,
-}
-
-/// Core application trait — implemented by platform-agnostic app logic.
-pub trait Application {
-    type Message: Clone + std::fmt::Debug;
-    type State: Default;
-
-    fn update(state: &mut Self::State, msg: Self::Message) -> Option<Action>;
-
-    /// Build the UI element tree for the current state and screen metrics.
-    ///
-    /// `metrics` carries the DPI scale factor and logical screen dimensions so
-    /// the view can adapt padding, font sizes, and element heights to the device.
-    fn view(state: &Self::State, metrics: &crate::ScreenMetrics) -> super::element::Element;
 }

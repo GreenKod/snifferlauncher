@@ -1,4 +1,4 @@
-use super::system::{request_default_launcher, start_action, start_view_uri};
+use super::system::request_default_launcher;
 use crate::jni::bridge::{add_new_task_flag, context, start_activity, vm};
 use jni::objects::JValue;
 use jni::{Env, jni_sig, jni_str};

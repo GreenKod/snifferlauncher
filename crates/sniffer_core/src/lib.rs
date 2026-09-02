@@ -13,21 +13,12 @@ pub mod ui;
 pub mod vault;
 pub mod virtualization;
 
-// Backward-compatible module aliases
-pub use physics as scroll_physics;
-pub use render as render_api;
-pub use text as text_measure;
-
 // Convenience re-exports
 pub use layout::{LayoutNode, calculate_layout};
 pub use math::{Point, Rect, ScreenMetrics, Size};
 pub use render::Renderer;
-pub use types::{Action, Application, Element};
+pub use types::{Action, Element};
 pub use vault::{DataVault, SystemTheme};
 
 // Event-driven system re-exports
-pub use ui::widget::ids;
-pub use ui::{
-    ButtonBuilder, ContainerBuilder, DataMap, DataValue, EventBus, LabelBuilder, StyleMap, UiEvent,
-    Widget, WidgetId,
-};
+pub use ui::{DataMap, DataValue, EventBus, StyleMap, UiEvent, WidgetId};
