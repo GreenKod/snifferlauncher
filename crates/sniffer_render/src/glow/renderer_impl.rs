@@ -2,7 +2,7 @@ use super::{GlowRenderer, batching, f32_to_i32, text};
 use crate::text::font_atlas;
 use glow::HasContext;
 use sniffer_core::math::Rect;
-use sniffer_core::render_api::Renderer;
+use sniffer_core::render::Renderer;
 
 impl Renderer for GlowRenderer {
     fn clear(&mut self, color: u32) {

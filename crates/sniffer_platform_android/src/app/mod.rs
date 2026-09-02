@@ -88,7 +88,10 @@ pub fn android_main(app: AndroidApp) {
 
         if crate::jni::bridge::apps::take_app_list_updated() {
             if let Ok(apps) = crate::jni::get_application_list() {
-                state.plugin_registry.vault().update_system_apps(apps);
+                let _ = state
+                    .plugin_registry
+                    .vault()
+                    .set_json("system.apps", &apps, "system");
                 state
                     .plugin_registry
                     .broadcast("vault.changed:system.apps", "{}");

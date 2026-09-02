@@ -3,7 +3,7 @@ use super::constants::{
     SCROLLBAR_WIDTH,
 };
 use super::state::ScrollState;
-use sniffer_core::{math::Rect, render_api::Renderer};
+use sniffer_core::{math::Rect, render::Renderer};
 
 pub fn render_scroll_view(
     st: &ScrollState,

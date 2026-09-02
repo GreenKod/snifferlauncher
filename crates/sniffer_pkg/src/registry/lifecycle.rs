@@ -2,7 +2,7 @@ use super::PackageRegistry;
 use super::entries::log_panic;
 use crate::error::PackageError;
 use crate::package::MemoryTrimLevel;
-use sniffer_core::{math::Rect, render_api::Renderer};
+use sniffer_core::{math::Rect, render::Renderer};
 use std::collections::HashMap;
 use std::sync::Arc;
 

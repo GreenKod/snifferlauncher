@@ -1,4 +1,4 @@
-use crate::text_measure::{DEFAULT_FONT, TextMeasurer};
+use crate::text::{DEFAULT_FONT, TextMeasurer};
 use crate::types::Element;
 use crate::{Point, Rect, Size};
 use taffy::prelude::*;

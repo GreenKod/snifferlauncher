@@ -1,4 +1,4 @@
-use super::system::{request_default_launcher, start_action, start_view_uri};
+use super::system::request_default_launcher;
 use crate::jni::bridge::{add_new_task_flag, context, start_activity, vm};
 use jni::objects::JValue;
 use jni::{Env, jni_sig, jni_str};
@@ -7,9 +7,6 @@ use sniffer_core::types::Action;
 #[allow(clippy::needless_pass_by_value)]
 pub fn launch_action(action: Action) -> Result<(), String> {
     match action {
-        Action::OpenSettings => start_action("android.settings.SETTINGS"),
-        Action::OpenContacts => start_view_uri("content://contacts/people"),
-        Action::OpenCamera => start_action("android.media.action.STILL_IMAGE_CAMERA"),
         Action::LaunchApp { package_name } => launch_app(&package_name),
         Action::RequestDefaultLauncher => request_default_launcher(),
         Action::LoadImage { .. } | Action::FocusTextInput(_) | Action::BlurTextInput => Ok(()),
