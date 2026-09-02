@@ -1,27 +1,26 @@
 //! Native Data Vault Engine
 //!
-//! Provides a high-performance, thread-safe, and reactive in-memory data store with
-//! persistence and native fuzzy indexing for launcher applications.
+//! Provides a high-performance, thread-safe, and reactive in-memory generic data store with
+//! persistence and sandboxed namespace isolation for plugins and system services.
 
 pub mod files;
 pub mod models;
 
-pub use models::{AppQueryResult, QueryAppsParams, SystemTheme};
+pub use models::SystemTheme;
 
-use crate::types::AppInfo;
 use obfstr::obfstr;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
-/// The Native Data Vault engine managing system, plugin, and shared data.
+/// The Native Data Vault engine managing generic system, plugin, and shared data.
 #[derive(Clone)]
 pub struct DataVault {
-    /// Authoritative cache of installed applications in Rust memory.
-    system_apps: Arc<RwLock<Vec<AppInfo>>>,
     /// In-memory Key-Value store.
     kv_store: Arc<RwLock<HashMap<String, String>>>,
-    /// Cache directory for persisting vault data.
+    /// Cache directory for persisting vault data and files.
     cache_dir: Arc<RwLock<Option<PathBuf>>>,
 }
 
@@ -32,17 +31,16 @@ impl Default for DataVault {
 }
 
 impl DataVault {
-    /// Create a new DataVault instance.
+    /// Create a new generic DataVault instance.
     #[must_use]
     pub fn new(cache_dir: Option<PathBuf>) -> Self {
         let vault = Self {
-            system_apps: Arc::new(RwLock::new(Vec::new())),
             kv_store: Arc::new(RwLock::new(HashMap::new())),
             cache_dir: Arc::new(RwLock::new(cache_dir)),
         };
 
-        // Initialize default system theme
-        vault.update_system_theme(SystemTheme::default());
+        // Initialize default system theme into generic KV store
+        let _ = vault.set_json("system.theme", &SystemTheme::default(), "system");
 
         // Load existing disk-persisted plugin data if cache directory exists
         vault.load_persisted_data();
@@ -58,84 +56,7 @@ impl DataVault {
         self.load_persisted_data();
     }
 
-    /// Updates the system application cache.
-    pub fn update_system_apps(&self, apps: Vec<AppInfo>) {
-        if let Ok(json) = serde_json::to_string(&apps) {
-            let _ = self.set("system.apps", &json, "system");
-        }
-        if let Ok(mut lock) = self.system_apps.write() {
-            *lock = apps;
-        }
-    }
-
-    /// Updates the operating system theme in the Data Vault.
-    pub fn update_system_theme(&self, theme: SystemTheme) {
-        if let Ok(json) = serde_json::to_string(&theme) {
-            let _ = self.set("system.theme", &json, "system");
-        }
-    }
-
-    /// Fast native querying & fuzzy filtering of installed applications.
-    #[must_use]
-    pub fn query_apps(&self, params: &QueryAppsParams) -> AppQueryResult {
-        let apps_guard = match self.system_apps.read() {
-            Ok(g) => g,
-            Err(_) => {
-                return AppQueryResult {
-                    apps: Vec::new(),
-                    total_count: 0,
-                    page: 1,
-                    total_pages: 0,
-                };
-            }
-        };
-
-        let mut filtered: Vec<AppInfo> = if let Some(ref query) = params.search {
-            let q = query.trim().to_lowercase();
-            if q.is_empty() {
-                apps_guard.clone()
-            } else {
-                apps_guard
-                    .iter()
-                    .filter(|app| {
-                        app.name.to_lowercase().contains(&q)
-                            || app.package_name.to_lowercase().contains(&q)
-                    })
-                    .cloned()
-                    .collect()
-            }
-        } else {
-            apps_guard.clone()
-        };
-
-        filtered.sort_by_key(|a| a.name.to_lowercase());
-
-        let total_count = filtered.len();
-        let limit = params.limit.unwrap_or(28).max(1);
-        let total_pages = if total_count == 0 {
-            1
-        } else {
-            total_count.div_ceil(limit)
-        };
-        let page = params.page.unwrap_or(0).min(total_pages.saturating_sub(1));
-
-        let start = page * limit;
-        let paged_apps = if start < total_count {
-            let end = (start + limit).min(total_count);
-            filtered[start..end].to_vec()
-        } else {
-            Vec::new()
-        };
-
-        AppQueryResult {
-            apps: paged_apps,
-            total_count,
-            page,
-            total_pages,
-        }
-    }
-
-    /// Write a Key-Value pair into the vault.
+    /// Write a Key-Value pair into the vault with sandboxed namespace validation.
     pub fn set(&self, key: &str, value: &str, plugin_id: &str) -> Result<(), String> {
         let actual_key = if key.starts_with("system.") {
             if plugin_id != "system" {
@@ -167,7 +88,18 @@ impl DataVault {
         Ok(())
     }
 
-    /// Read a Key-Value pair from the vault.
+    /// Helper to serialize and write any JSON-serializable value into the vault.
+    pub fn set_json<T: Serialize>(
+        &self,
+        key: &str,
+        value: &T,
+        plugin_id: &str,
+    ) -> Result<(), String> {
+        let json = serde_json::to_string(value).map_err(|e| e.to_string())?;
+        self.set(key, &json, plugin_id)
+    }
+
+    /// Read a Key-Value pair from the vault with sandboxed namespace validation.
     #[must_use]
     pub fn get(&self, key: &str, plugin_id: &str) -> Option<String> {
         let store = self.kv_store.read().ok()?;
@@ -187,6 +119,13 @@ impl DataVault {
         };
 
         store.get(&full_key).cloned()
+    }
+
+    /// Helper to read and deserialize any JSON-serializable value from the vault.
+    #[must_use]
+    pub fn get_json<T: DeserializeOwned>(&self, key: &str, plugin_id: &str) -> Option<T> {
+        let json_str = self.get(key, plugin_id)?;
+        serde_json::from_str(&json_str).ok()
     }
 
     /// Delete a Key-Value pair from the vault.

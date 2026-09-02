@@ -4,12 +4,13 @@ use super::state::{AppState, FrameInputState};
 use crate::window::DesktopWindow;
 use obfstr::obfstr;
 use sniffer_core::dev_log;
-use sniffer_core::style::BACKGROUND;
 use sniffer_core::ui::event::UiEvent;
 use sniffer_core::{Action, Renderer, ScreenMetrics, Size, calculate_layout};
 use sniffer_render::GlowRenderer;
 use sniffer_render::draw::draw_ui;
 use std::collections::HashMap;
+
+const DESKTOP_BG_COLOR: u32 = 0x000B_0B0E;
 
 #[allow(
     clippy::too_many_lines,
@@ -54,10 +55,7 @@ pub fn render_desktop_frame(
                 children: vec![],
             });
 
-    sniffer_core::scroll_physics::sync_scroll_physics_from_tree(
-        &root_element,
-        &mut app.scroll_physics,
-    );
+    sniffer_core::physics::sync_scroll_physics_from_tree(&root_element, &mut app.scroll_physics);
 
     let vmin_px = width.min(height) / 100.0;
     let phys_ids: Vec<u64> = app.scroll_physics.keys().copied().collect();
@@ -80,7 +78,7 @@ pub fn render_desktop_frame(
                         });
                     }
 
-                    let _ = sniffer_core::scroll_physics::update_indicator_dots_in_element(
+                    let _ = sniffer_core::physics::update_indicator_dots_in_element(
                         &mut root_element,
                         phys.last_snap_page,
                         vmin_px,
@@ -88,7 +86,7 @@ pub fn render_desktop_frame(
                 }
             }
 
-            sniffer_core::scroll_physics::inject_physics_to_tree(
+            sniffer_core::physics::inject_physics_to_tree(
                 &mut root_element,
                 sv_id,
                 phys.pos_x,
@@ -139,15 +137,6 @@ pub fn render_desktop_frame(
     if let Ok(mut q) = app.action_queue.lock() {
         for action in q.drain(..) {
             match action {
-                Action::OpenSettings => {
-                    dev_log!("{}", obfstr!("Desktop Preview: Open Settings triggered"));
-                }
-                Action::OpenContacts => {
-                    dev_log!("{}", obfstr!("Desktop Preview: Open Contacts triggered"));
-                }
-                Action::OpenCamera => {
-                    dev_log!("{}", obfstr!("Desktop Preview: Open Camera triggered"));
-                }
                 Action::LoadImage { id, src } => {
                     if src.starts_with(obfstr!("app-icon://")) {
                         let w = 64;
@@ -170,7 +159,7 @@ pub fn render_desktop_frame(
     }
 
     renderer.begin_frame(width, height);
-    renderer.clear(BACKGROUND);
+    renderer.clear(DESKTOP_BG_COLOR);
 
     let _rendered_nodes = draw_ui(
         renderer,

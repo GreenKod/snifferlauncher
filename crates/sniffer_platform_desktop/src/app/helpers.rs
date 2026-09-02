@@ -1,6 +1,6 @@
 use sniffer_core::layout::LayoutNode;
 use sniffer_core::math::Rect;
-use sniffer_core::scroll_physics::ScrollPhysics;
+use sniffer_core::physics::ScrollPhysics;
 use sniffer_core::types::Element;
 use std::collections::HashMap;
 use std::hash::BuildHasher;

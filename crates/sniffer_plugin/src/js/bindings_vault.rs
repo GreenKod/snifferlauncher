@@ -2,7 +2,8 @@
 
 use obfstr::obfstr;
 use rquickjs::{Ctx, Function, Object};
-use sniffer_core::vault::{DataVault, QueryAppsParams};
+use sniffer_core::types::QueryAppsParams;
+use sniffer_core::vault::DataVault;
 use std::sync::Arc;
 
 /// Register all DataVault host functions into the QuickJS environment.
@@ -43,7 +44,10 @@ pub fn register_vault_bindings<'js>(
     let vault_query = Arc::clone(&vault);
     let query_apps_func = Function::new(ctx.clone(), move |params_json: String| -> String {
         let params: QueryAppsParams = serde_json::from_str(&params_json).unwrap_or_default();
-        let result = vault_query.query_apps(&params);
+        let apps: Vec<sniffer_core::types::AppInfo> = vault_query
+            .get_json("system.apps", "system")
+            .unwrap_or_default();
+        let result = sniffer_core::types::query_apps(&apps, &params);
         serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string())
     })
     .unwrap();

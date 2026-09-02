@@ -1,5 +1,5 @@
 use sniffer_core::dev_log;
-use sniffer_core::scroll_physics::ScrollPhysics;
+use sniffer_core::physics::ScrollPhysics;
 use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::event::EventBus;
 use sniffer_core::ui::style_map::StyleMap;
@@ -82,10 +82,14 @@ impl AppState {
         let action_queue = Arc::new(Mutex::new(Vec::new()));
 
         let theme = detect_desktop_theme();
-        plugin_registry.vault().update_system_theme(theme);
+        let _ = plugin_registry
+            .vault()
+            .set_json("system.theme", &theme, "system");
 
         if let Ok(apps) = crate::get_application_list() {
-            plugin_registry.vault().update_system_apps(apps);
+            let _ = plugin_registry
+                .vault()
+                .set_json("system.apps", &apps, "system");
         }
 
         let candidates = [

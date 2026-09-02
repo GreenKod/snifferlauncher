@@ -1,10 +1,26 @@
 use super::constants::{RUBBER_BAND_RESTORING, SNAP_VELOCITY_THRESHOLD, SPRING_STIFFNESS};
 use super::state::ScrollState;
-use sniffer_core::vault::DataVault;
 
-pub fn advance_simulation(st: &mut ScrollState, vault: &DataVault, dt_secs: f32) {
+/// Result of a single physics tick.
+///
+/// When a snap-to-page transition completes the caller receives the vault key,
+/// value and authority that should be written — keeping this module free of any
+/// `DataVault` dependency.
+pub struct PhysicsResult {
+    /// `Some((key, value, authority))` when a new page was snapped to.
+    pub snap_event: Option<(String, String, &'static str)>,
+}
+
+/// Advance the scroll physics simulation by `dt_secs` seconds.
+///
+/// Returns a [`PhysicsResult`] that the caller should act on (e.g. write the
+/// snap event into the vault).  The function itself is pure — it only reads and
+/// mutates `ScrollState` without touching any external subsystem.
+pub fn advance_simulation(st: &mut ScrollState, dt_secs: f32) -> PhysicsResult {
+    let mut result = PhysicsResult { snap_event: None };
+
     if dt_secs <= f32::EPSILON {
-        return;
+        return result;
     }
 
     // 1. Momentum damping
@@ -55,12 +71,14 @@ pub fn advance_simulation(st: &mut ScrollState, vault: &DataVault, dt_secs: f32)
             let new_page = target_page as i32;
             if new_page != st.current_page && (st.scroll_x - target_x).abs() < 1.0 {
                 st.current_page = new_page;
+                // Notify caller so it can write the snap event to the vault
+                // without this module depending on DataVault.
                 if let Some(ref cb) = st.on_snap_callback {
-                    let _ = vault.set(
-                        "pkg.scroll_view.on_snap",
-                        &format!(r#"{{"callback":"{cb}","page":{new_page}}}"#),
+                    result.snap_event = Some((
+                        "pkg.scroll_view.on_snap".to_string(),
+                        format!(r#"{{"callback":"{cb}","page":{new_page}}}"#),
                         "com.sniffer.scroll_view",
-                    );
+                    ));
                 }
             }
         }
@@ -75,4 +93,6 @@ pub fn advance_simulation(st: &mut ScrollState, vault: &DataVault, dt_secs: f32)
             st.scroll_y += (target_y - st.scroll_y) * SPRING_STIFFNESS * dt_secs;
         }
     }
+
+    result
 }

@@ -123,7 +123,7 @@ pub fn count_elements(element: &crate::types::Element) -> usize {
 }
 
 fn draw_touch_hitboxes(
-    renderer: &mut dyn crate::render_api::Renderer,
+    renderer: &mut dyn crate::render::Renderer,
     element: &crate::types::Element,
     layout: &crate::layout::LayoutNode,
 ) {
@@ -196,7 +196,7 @@ fn draw_touch_hitboxes(
 
 /// Renders DevKit visualizer debug overlays: touch hitboxes and active pointer circles.
 pub fn render_devkit_debug_overlays(
-    renderer: &mut dyn crate::render_api::Renderer,
+    renderer: &mut dyn crate::render::Renderer,
     profiler: &FrameProfiler,
     root_element: &crate::types::Element,
     layout_tree: &crate::layout::LayoutNode,
