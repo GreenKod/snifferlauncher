@@ -1,10 +1,10 @@
-/// Cross-platform logging backend for `sniffer_core`.
-///
-/// On Android the macros delegate to `__android_log_write` via a minimal inline
-/// FFI binding.  The binding lives here rather than in `sniffer_platform_android`
-/// because `sniffer_core` is a dependency *of* the platform crate — inverting that
-/// relationship would create a dependency cycle.  Using `#[cfg(target_os)]` keeps
-/// the Android-specific code fully inert on every other target.
+//! Cross-platform logging backend for `sniffer_core`.
+//!
+//! On Android the macros delegate to `__android_log_write` via a minimal inline
+//! FFI binding. The binding lives here rather than in `sniffer_platform_android`
+//! because `sniffer_core` is a dependency *of* the platform crate — inverting that
+//! relationship would create a dependency cycle. Using `#[cfg(target_os)]` keeps
+//! the Android-specific code fully inert on every other target.
 
 #[cfg(target_os = "android")]
 #[allow(unused_extern_crates)]
