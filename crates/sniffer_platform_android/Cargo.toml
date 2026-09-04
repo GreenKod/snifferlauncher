@@ -5,8 +5,8 @@ edition = "2024"
 license = "Apache-2.0"
 
 [features]
-default = ["devkit"]
-devkit = ["sniffer_core/devkit"]
+default = []
+devkit = ["sniffer_core/devkit", "sniffer_plugin/devkit"]
 
 [dependencies]
 sniffer_core = { path = "../sniffer_core" }
