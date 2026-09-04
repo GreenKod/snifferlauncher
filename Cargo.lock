@@ -49,8 +49,6 @@ dependencies = [
 [[package]]
 name = "android-activity"
 version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f2a1bb052857d5dd49572219344a7332b31b76405648eabac5bc68978251bcd"
 dependencies = [
  "android-properties",
  "bitflags 2.13.1",
@@ -1928,6 +1926,7 @@ dependencies = [
  "image",
  "jni",
  "khronos-egl",
+ "log",
  "ndk",
  "ndk-context",
  "ndk-sys",

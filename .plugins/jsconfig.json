@@ -11,6 +11,6 @@
   },
   "include": [
     "**/*.js",
-    "_framework/types.d.ts"
+    "framework/types.d.ts"
   ]
 }

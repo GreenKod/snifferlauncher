@@ -7,7 +7,7 @@
     "main.js"
   ],
   "preload": [
-    "../_framework/sniffer_ui.js"
+    "../framework/sniffer_ui.js"
   ],
   "permissions": [
     "plugin.permission.UI",
