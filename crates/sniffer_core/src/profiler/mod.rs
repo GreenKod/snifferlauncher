@@ -122,6 +122,7 @@ pub fn count_elements(element: &crate::types::Element) -> usize {
     }
 }
 
+#[cfg(feature = "devkit")]
 fn draw_touch_hitboxes(
     renderer: &mut dyn crate::render::Renderer,
     element: &crate::types::Element,
@@ -195,6 +196,7 @@ fn draw_touch_hitboxes(
 }
 
 /// Renders DevKit visualizer debug overlays: touch hitboxes and active pointer circles.
+#[cfg(feature = "devkit")]
 pub fn render_devkit_debug_overlays(
     renderer: &mut dyn crate::render::Renderer,
     profiler: &FrameProfiler,
@@ -212,4 +214,15 @@ pub fn render_devkit_debug_overlays(
         renderer.draw_circle(tx, ty, 10.0, 0x88FB_BF24);
         renderer.draw_circle(tx, ty, 4.0, 0xFFF5_9E0B);
     }
+}
+
+/// Renders DevKit visualizer debug overlays (no-op when devkit feature is disabled).
+#[cfg(not(feature = "devkit"))]
+#[inline]
+pub fn render_devkit_debug_overlays(
+    _renderer: &mut dyn crate::render::Renderer,
+    _profiler: &FrameProfiler,
+    _root_element: &crate::types::Element,
+    _layout_tree: &crate::layout::LayoutNode,
+) {
 }

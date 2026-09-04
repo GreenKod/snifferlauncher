@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 
+[features]
+default = []
+devkit = ["sniffer_core/devkit"]
+
 [dependencies]
 sniffer_core = { path = "../sniffer_core" }
 sniffer_pkg  = { path = "../sniffer_pkg" }

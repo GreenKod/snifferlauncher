@@ -51,6 +51,11 @@ impl PluginLoader {
         let broadcast_queue = registry.broadcast_queue();
 
         for plugin_folder in config.active_plugins {
+            #[cfg(not(feature = "devkit"))]
+            if plugin_folder == "devkit_hud" {
+                continue;
+            }
+
             let manifest_path = format!("{plugin_folder}/manifest.json");
             if let Ok(manifest_cstr) = std::ffi::CString::new(manifest_path.clone()) {
                 if let Some(mut asset) = asset_manager.open(manifest_cstr.as_c_str()) {

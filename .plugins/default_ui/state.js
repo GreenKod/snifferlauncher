@@ -61,7 +61,10 @@ let state = {
     get filteredApps() {
         const query = (this.searchQuery || "").trim();
         if (typeof Vault !== "undefined" && typeof Vault.queryApps === "function") {
-            return Vault.queryApps({ search: query, page: 0, limit: 999 }).apps;
+            const res = Vault.queryApps({ search: query, page: 0, limit: 999 });
+            if (res && Array.isArray(res.apps) && res.apps.length > 0) {
+                return res.apps;
+            }
         }
 
         const q = query.toLowerCase();
@@ -75,11 +78,14 @@ let state = {
     // Returns apps for a specific page index (0, 1, 2...)
     appsForPage(pageIndex) {
         if (typeof Vault !== "undefined" && typeof Vault.queryApps === "function") {
-            return Vault.queryApps({
+            const res = Vault.queryApps({
                 search: (this.searchQuery || "").trim(),
                 page: pageIndex,
                 limit: this.appsPerPage
-            }).apps;
+            });
+            if (res && Array.isArray(res.apps) && res.apps.length > 0) {
+                return res.apps;
+            }
         }
         const list = this.filteredApps;
         const startIndex = pageIndex * this.appsPerPage;
@@ -93,11 +99,14 @@ let state = {
 
     get totalPages() {
         if (typeof Vault !== "undefined" && typeof Vault.queryApps === "function") {
-            return Vault.queryApps({
+            const res = Vault.queryApps({
                 search: (this.searchQuery || "").trim(),
                 page: 0,
                 limit: this.appsPerPage
-            }).total_pages;
+            });
+            if (res && res.total_pages > 0) {
+                return res.total_pages;
+            }
         }
         return Math.max(1, Math.ceil(this.filteredApps.length / this.appsPerPage));
     },
