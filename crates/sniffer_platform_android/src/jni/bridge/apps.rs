@@ -181,10 +181,7 @@ fn fetch_application_list_internal() -> Result<Vec<AppInfo>, String> {
                     .call_method(&resolve_infos, jni_str!("size"), jni_sig!("()I"), &[])?
                     .i()?;
 
-                log::info!(
-                    "[Apps] Found {} installed activities via queryIntentActivities",
-                    size
-                );
+                log::info!("[Apps] Found {size} installed activities via queryIntentActivities");
 
                 for i in 0..size {
                     let item_res: Result<(String, String), JniError> = (|| {
@@ -255,16 +252,11 @@ fn fetch_application_list_internal() -> Result<Vec<AppInfo>, String> {
 
                     match item_res {
                         Ok((app_name, package_name_str)) => {
-                            log::info!(
-                                "[Apps] Loaded app #{}: {} ({})",
-                                i,
-                                app_name,
-                                package_name_str
-                            );
+                            log::info!("[Apps] Loaded app #{i}: {app_name} ({package_name_str})");
                             local_list.push(AppInfo::new(app_name, package_name_str));
                         }
                         Err(e) => {
-                            log::warn!("[Apps] Error loading app #{}: {:?}", i, e);
+                            log::warn!("[Apps] Error loading app #{i}: {e:?}");
                             env.exception_clear();
                         }
                     }
