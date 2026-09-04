@@ -27,6 +27,7 @@
         <activity
             android:name="android.app.NativeActivity"
             android:label="Sniffer Launcher"
+            android:theme="@style/Theme.SnifferLauncher"
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
             android:clearTaskOnLaunch="true"
