@@ -7,6 +7,7 @@ pub struct EglContextState {
     pub context: khronos_egl::Context,
     pub surface: Option<khronos_egl::Surface>,
     pub renderer: Option<GlowRenderer>,
+    pub window: Option<*mut std::ffi::c_void>,
 }
 
 impl EglContextState {
@@ -53,6 +54,8 @@ impl EglContextState {
                     8,
                     khronos_egl::RED_SIZE,
                     8,
+                    khronos_egl::ALPHA_SIZE,
+                    8,
                     khronos_egl::NONE,
                 ];
                 let cfg = egl
@@ -80,6 +83,7 @@ impl EglContextState {
             context,
             surface: None,
             renderer: None,
+            window: None,
         })
     }
 
@@ -90,9 +94,14 @@ impl EglContextState {
     pub fn bind_window(&mut self, native_window_ptr: *mut std::ffi::c_void) -> Result<(), String> {
         static FONT_BYTES: &[u8] = include_bytes!("../../fonts/audiowide.ttf");
 
+        if native_window_ptr.is_null() {
+            return Err("null native window pointer".to_string());
+        }
+
         self.unbind();
 
         let surface = unsafe {
+            ndk_sys::ANativeWindow_acquire(native_window_ptr.cast());
             // 1 = WINDOW_FORMAT_RGBA_8888 (enables hardware alpha channel blending with system wallpaper)
             ndk_sys::ANativeWindow_setBuffersGeometry(native_window_ptr.cast(), 0, 0, 1_i32);
 
@@ -100,6 +109,8 @@ impl EglContextState {
                 .create_window_surface(self.display, self.config, native_window_ptr, None)
                 .map_err(|e| format!("Failed to create EGL window surface: {e:?}"))?
         };
+
+        self.window = Some(native_window_ptr);
 
         self.egl
             .make_current(
@@ -134,6 +145,11 @@ impl EglContextState {
         if let Some(surface) = self.surface.take() {
             let _ = self.egl.make_current(self.display, None, None, None);
             let _ = self.egl.destroy_surface(self.display, surface);
+        }
+        if let Some(win) = self.window.take() {
+            unsafe {
+                ndk_sys::ANativeWindow_release(win.cast());
+            }
         }
     }
 

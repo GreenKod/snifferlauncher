@@ -2,8 +2,6 @@ use super::{context, vm};
 use jni::errors::Error as JniError;
 use jni::objects::{JString, JValue};
 use jni::{Env, jni_sig, jni_str};
-use obfstr::obfstr;
-use sniffer_core::dev_log;
 use sniffer_core::types::AppInfo;
 
 use std::sync::RwLock;
@@ -19,26 +17,40 @@ pub fn take_app_list_updated() -> bool {
 fn get_apps_cache_path() -> Option<String> {
     let jvm = vm();
     jvm.attach_current_thread_for_scope::<_, _, JniError>(|env| {
-        let ctx = context(env);
-        let files_dir = env
-            .call_method(
-                &ctx,
-                jni_str!("getCacheDir"),
-                jni_sig!("()Ljava/io/File;"),
-                &[],
-            )?
-            .l()?;
-        let path_obj = env
-            .call_method(
-                &files_dir,
-                jni_str!("getAbsolutePath"),
-                jni_sig!("()Ljava/lang/String;"),
-                &[],
-            )?
-            .l()?;
-        let path_jstring = env.as_cast::<JString>(&path_obj)?;
-        let path_str = path_jstring.try_to_string(env)?;
-        Ok(format!("{path_str}/apps_cache.json"))
+        let res = (|| -> Result<String, JniError> {
+            let ctx = context(env);
+            if ctx.is_null() {
+                return Err(JniError::NullPtr("context"));
+            }
+            let files_dir = env
+                .call_method(
+                    &ctx,
+                    jni_str!("getCacheDir"),
+                    jni_sig!("()Ljava/io/File;"),
+                    &[],
+                )?
+                .l()?;
+            if files_dir.is_null() {
+                return Err(JniError::NullPtr("files_dir"));
+            }
+            let path_obj = env
+                .call_method(
+                    &files_dir,
+                    jni_str!("getAbsolutePath"),
+                    jni_sig!("()Ljava/lang/String;"),
+                    &[],
+                )?
+                .l()?;
+            let path_jstring = env.as_cast::<JString>(&path_obj)?;
+            let path_str = path_jstring.try_to_string(env)?;
+            Ok(format!("{path_str}/apps_cache.json"))
+        })();
+
+        if res.is_err() {
+            env.exception_clear();
+        }
+
+        res
     })
     .ok()
 }
@@ -103,143 +115,165 @@ fn fetch_application_list_internal() -> Result<Vec<AppInfo>, String> {
 
     let app_list = jvm
         .attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
-            let ctx = context(env);
-            let mut local_list = Vec::new();
-
-            let package_manager = env
-                .call_method(
-                    &ctx,
-                    jni_str!("getPackageManager"),
-                    jni_sig!("()Landroid/content/pm/PackageManager;"),
-                    &[],
-                )?
-                .l()?;
-
-            let intent_cls = env.find_class(jni_str!("android/content/Intent"))?;
-            let action_main = env
-                .get_static_field(
-                    &intent_cls,
-                    jni_str!("ACTION_MAIN"),
-                    jni_sig!("Ljava/lang/String;"),
-                )?
-                .l()?;
-            let category_launcher = env
-                .get_static_field(
-                    &intent_cls,
-                    jni_str!("CATEGORY_LAUNCHER"),
-                    jni_sig!("Ljava/lang/String;"),
-                )?
-                .l()?;
-
-            let intent = env.new_object(
-                &intent_cls,
-                jni_sig!("(Ljava/lang/String;)V"),
-                &[JValue::Object(&action_main)],
-            )?;
-            env.call_method(
-                &intent,
-                jni_str!("addCategory"),
-                jni_sig!("(Ljava/lang/String;)Landroid/content/Intent;"),
-                &[JValue::Object(&category_launcher)],
-            )?;
-
-            let resolve_infos = env
-                .call_method(
-                    &package_manager,
-                    jni_str!("queryIntentActivities"),
-                    jni_sig!("(Landroid/content/Intent;I)Ljava/util/List;"),
-                    &[JValue::Object(&intent), JValue::Int(0)],
-                )?
-                .l()?;
-
-            let size = env
-                .call_method(&resolve_infos, jni_str!("size"), jni_sig!("()I"), &[])?
-                .i()?;
-
-            for i in 0..size {
-                let resolve_info = env
-                    .call_method(
-                        &resolve_infos,
-                        jni_str!("get"),
-                        jni_sig!("(I)Ljava/lang/Object;"),
-                        &[JValue::Int(i)],
-                    )?
-                    .l()?;
-
-                let activity_info = env
-                    .get_field(
-                        &resolve_info,
-                        jni_str!("activityInfo"),
-                        jni_sig!("Landroid/content/pm/ActivityInfo;"),
-                    )?
-                    .l()?;
-
-                if activity_info.is_null() {
-                    continue;
+            let res = (|| -> Result<Vec<AppInfo>, JniError> {
+                let ctx = context(env);
+                if ctx.is_null() {
+                    return Ok(Vec::new());
                 }
+                let mut local_list = Vec::new();
 
-                let package_name_obj = env
-                    .get_field(
-                        &activity_info,
-                        jni_str!("packageName"),
-                        jni_sig!("Ljava/lang/String;"),
-                    )?
-                    .l()?;
-
-                let label_char_seq = env
+                let package_manager = env
                     .call_method(
-                        &resolve_info,
-                        jni_str!("loadLabel"),
-                        jni_sig!("(Landroid/content/pm/PackageManager;)Ljava/lang/CharSequence;"),
-                        &[JValue::Object(&package_manager)],
-                    )?
-                    .l()?;
-
-                let label_jstring = env
-                    .call_method(
-                        &label_char_seq,
-                        jni_str!("toString"),
-                        jni_sig!("()Ljava/lang/String;"),
+                        &ctx,
+                        jni_str!("getPackageManager"),
+                        jni_sig!("()Landroid/content/pm/PackageManager;"),
                         &[],
                     )?
                     .l()?;
 
-                let label_jstring = env.as_cast::<JString>(&label_jstring)?;
-                let app_name = label_jstring.try_to_string(env)?;
+                if package_manager.is_null() {
+                    return Ok(local_list);
+                }
 
-                let package_name_jstring = env.as_cast::<JString>(&package_name_obj)?;
-                let package_name_str = package_name_jstring.try_to_string(env)?;
+                let intent_cls = env.find_class(jni_str!("android/content/Intent"))?;
+                let action_main = env
+                    .get_static_field(
+                        &intent_cls,
+                        jni_str!("ACTION_MAIN"),
+                        jni_sig!("Ljava/lang/String;"),
+                    )?
+                    .l()?;
+                let category_launcher = env
+                    .get_static_field(
+                        &intent_cls,
+                        jni_str!("CATEGORY_LAUNCHER"),
+                        jni_sig!("Ljava/lang/String;"),
+                    )?
+                    .l()?;
 
-                local_list.push(AppInfo::new(app_name, package_name_str));
+                let intent = env.new_object(
+                    &intent_cls,
+                    jni_sig!("(Ljava/lang/String;)V"),
+                    &[JValue::Object(&action_main)],
+                )?;
+                let _ = env.call_method(
+                    &intent,
+                    jni_str!("addCategory"),
+                    jni_sig!("(Ljava/lang/String;)Landroid/content/Intent;"),
+                    &[JValue::Object(&category_launcher)],
+                );
+                env.exception_clear();
+
+                let resolve_infos = env
+                    .call_method(
+                        &package_manager,
+                        jni_str!("queryIntentActivities"),
+                        jni_sig!("(Landroid/content/Intent;I)Ljava/util/List;"),
+                        &[JValue::Object(&intent), JValue::Int(0)],
+                    )?
+                    .l()?;
+
+                if resolve_infos.is_null() {
+                    return Ok(local_list);
+                }
+
+                let size = env
+                    .call_method(&resolve_infos, jni_str!("size"), jni_sig!("()I"), &[])?
+                    .i()?;
+
+                log::info!("[Apps] Found {size} installed activities via queryIntentActivities");
+
+                for i in 0..size {
+                    let item_res: Result<(String, String), JniError> = (|| {
+                        let resolve_info = env
+                            .call_method(
+                                &resolve_infos,
+                                jni_str!("get"),
+                                jni_sig!("(I)Ljava/lang/Object;"),
+                                &[JValue::Int(i)],
+                            )?
+                            .l()?;
+
+                        if resolve_info.is_null() {
+                            return Err(JniError::NullPtr("resolve_info"));
+                        }
+
+                        let activity_info = env
+                            .get_field(
+                                &resolve_info,
+                                jni_str!("activityInfo"),
+                                jni_sig!("Landroid/content/pm/ActivityInfo;"),
+                            )?
+                            .l()?;
+
+                        if activity_info.is_null() {
+                            return Err(JniError::NullPtr("activityInfo"));
+                        }
+
+                        let package_name_obj = env
+                            .get_field(
+                                &activity_info,
+                                jni_str!("packageName"),
+                                jni_sig!("Ljava/lang/String;"),
+                            )?
+                            .l()?;
+
+                        let label_char_seq = env
+                            .call_method(
+                                &resolve_info,
+                                jni_str!("loadLabel"),
+                                jni_sig!(
+                                    "(Landroid/content/pm/PackageManager;)Ljava/lang/CharSequence;"
+                                ),
+                                &[JValue::Object(&package_manager)],
+                            )?
+                            .l()?;
+
+                        let package_name_jstring = env.as_cast::<JString>(&package_name_obj)?;
+                        let package_name_str = package_name_jstring.try_to_string(env)?;
+
+                        let app_name = if !label_char_seq.is_null() {
+                            let label_jstring = env
+                                .call_method(
+                                    &label_char_seq,
+                                    jni_str!("toString"),
+                                    jni_sig!("()Ljava/lang/String;"),
+                                    &[],
+                                )?
+                                .l()?;
+                            let label_jstring = env.as_cast::<JString>(&label_jstring)?;
+                            label_jstring.try_to_string(env)?
+                        } else {
+                            package_name_str.clone()
+                        };
+
+                        Ok((app_name, package_name_str))
+                    })();
+
+                    match item_res {
+                        Ok((app_name, package_name_str)) => {
+                            log::info!("[Apps] Loaded app #{i}: {app_name} ({package_name_str})");
+                            local_list.push(AppInfo::new(app_name, package_name_str));
+                        }
+                        Err(e) => {
+                            log::warn!("[Apps] Error loading app #{i}: {e:?}");
+                            env.exception_clear();
+                        }
+                    }
+                }
+
+                Ok(local_list)
+            })();
+
+            if res.is_err() {
+                env.exception_clear();
             }
 
-            Ok(local_list)
+            res
         })
         .map_err(|e: JniError| e.to_string())?;
 
-    if cfg!(debug_assertions) {
-        dev_log!(
-            "{} {}",
-            obfstr!("[DEBUG] Number of apps to display in the launcher:"),
-            app_list.len()
-        );
-        for app in &app_list {
-            dev_log!(
-                "{} - {} ({})",
-                obfstr!("[DEBUG]"),
-                app.name,
-                app.package_name
-            );
-        }
-        for app in AppInfo::search_by_name(&app_list, obfstr!("sett")) {
-            dev_log!(
-                "{} \n - {} ({})",
-                obfstr!("[DEBUG] Search result:"),
-                app.name,
-                app.package_name
-            );
-        }
-    }
+    log::info!("[Apps] Total apps found: {}", app_list.len());
 
     Ok(app_list)
 }

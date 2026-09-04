@@ -60,6 +60,11 @@ impl PluginLoader {
         let broadcast_queue = registry.broadcast_queue();
 
         for plugin_folder in config.active_plugins {
+            #[cfg(not(feature = "devkit"))]
+            if plugin_folder == "devkit_hud" {
+                continue;
+            }
+
             let plugin_dir = self.assets_dir.join(&plugin_folder);
             let manifest_path = plugin_dir.join(obfstr!("manifest.json"));
 

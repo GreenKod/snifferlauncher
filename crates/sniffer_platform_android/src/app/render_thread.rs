@@ -43,11 +43,8 @@ pub fn spawn_render_thread(
                             }
                         }
                     }
-                    RenderMessage::WindowResized(ptr, _w, _h) => {
-                        if let Some(ref mut egl) = egl_state {
-                            let _ = egl.bind_window(ptr as *mut std::ffi::c_void);
-                            is_window_bound = true;
-                        }
+                    RenderMessage::WindowResized(_ptr, _w, _h) => {
+                        is_window_bound = true;
                     }
                     RenderMessage::TerminateWindow => {
                         if let Some(ref mut egl) = egl_state {

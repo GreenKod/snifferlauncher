@@ -41,7 +41,11 @@ pub(super) fn vm() -> Arc<JavaVM> {
 /// Returns the Android context as a `JObject` tied to the given `Env` lifetime.
 pub(super) fn context<'local>(env: &Env<'local>) -> JObject<'local> {
     let android_context = ndk_context::android_context();
-    unsafe { JObject::from_raw(env, android_context.context() as jni::sys::jobject) }
+    let raw = android_context.context().cast::<jni::sys::_jobject>();
+    if raw.is_null() {
+        return JObject::null();
+    }
+    unsafe { JObject::from_raw(env, raw) }
 }
 
 /// Adds `FLAG_ACTIVITY_NEW_TASK` to the provided intent.
@@ -93,35 +97,43 @@ pub fn get_density() -> (f32, f32) {
     let jvm = vm();
 
     jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
-        let ctx = context(env);
+        let res = (|| -> Result<(f32, f32), JniError> {
+            let ctx = context(env);
 
-        let resources = env
-            .call_method(
-                &ctx,
-                jni_str!("getResources"),
-                jni_sig!("()Landroid/content/res/Resources;"),
-                &[],
-            )?
-            .l()?;
+            let resources = env
+                .call_method(
+                    &ctx,
+                    jni_str!("getResources"),
+                    jni_sig!("()Landroid/content/res/Resources;"),
+                    &[],
+                )?
+                .l()?;
 
-        let display_metrics = env
-            .call_method(
-                &resources,
-                jni_str!("getDisplayMetrics"),
-                jni_sig!("()Landroid/util/DisplayMetrics;"),
-                &[],
-            )?
-            .l()?;
+            let display_metrics = env
+                .call_method(
+                    &resources,
+                    jni_str!("getDisplayMetrics"),
+                    jni_sig!("()Landroid/util/DisplayMetrics;"),
+                    &[],
+                )?
+                .l()?;
 
-        let density = env
-            .get_field(&display_metrics, jni_str!("density"), jni_sig!("F"))?
-            .f()?;
+            let density = env
+                .get_field(&display_metrics, jni_str!("density"), jni_sig!("F"))?
+                .f()?;
 
-        let scaled_density = env
-            .get_field(&display_metrics, jni_str!("scaledDensity"), jni_sig!("F"))?
-            .f()?;
+            let scaled_density = env
+                .get_field(&display_metrics, jni_str!("scaledDensity"), jni_sig!("F"))?
+                .f()?;
 
-        Ok((density, scaled_density))
+            Ok((density, scaled_density))
+        })();
+
+        if res.is_err() {
+            env.exception_clear();
+        }
+
+        res
     })
     .unwrap_or((1.0_f32, 1.0_f32))
 }
@@ -131,9 +143,14 @@ pub fn get_density() -> (f32, f32) {
 /// This allows the system wallpaper to be composited behind the transparent OpenGL surface.
 /// This is the official Android API for launchers and works on all API levels.
 pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
+    app.set_window_flags(
+        android_activity::WindowManagerFlags::SHOW_WALLPAPER,
+        android_activity::WindowManagerFlags::empty(),
+    );
+
     let jvm = vm();
     let _ = jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
-        let activity_ptr = app.activity_as_ptr() as jni::sys::jobject;
+        let activity_ptr = app.activity_as_ptr().cast::<jni::sys::_jobject>();
         if activity_ptr.is_null() {
             return Err(JniError::NullPtr("activity"));
         }

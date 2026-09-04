@@ -3,71 +3,81 @@ use android_activity::AndroidApp;
 use jni::objects::JValue;
 use jni::{Env, jni_sig, jni_str};
 
-#[must_use]
-pub fn get_safe_area(app: &AndroidApp) -> Option<(i32, i32)> {
+pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
     let jvm = vm();
 
     jvm.attach_current_thread_for_scope::<_, _, jni::errors::Error>(|env: &mut Env| {
-        let activity_ptr = app.activity_as_ptr() as jni::sys::jobject;
-        if activity_ptr.is_null() {
-            return Ok(None);
+        let res = (|| -> Result<Option<(i32, i32)>, jni::errors::Error> {
+            let activity = context(env);
+            if activity.is_null() {
+                return Ok(None);
+            }
+
+            let window = env
+                .call_method(
+                    &activity,
+                    jni_str!("getWindow"),
+                    jni_sig!("()Landroid/view/Window;"),
+                    &[],
+                )?
+                .l()?;
+
+            if window.is_null() {
+                return Ok(None);
+            }
+
+            let decor_view = env
+                .call_method(
+                    &window,
+                    jni_str!("getDecorView"),
+                    jni_sig!("()Landroid/view/View;"),
+                    &[],
+                )?
+                .l()?;
+
+            if decor_view.is_null() {
+                return Ok(None);
+            }
+
+            let insets = env
+                .call_method(
+                    &decor_view,
+                    jni_str!("getRootWindowInsets"),
+                    jni_sig!("()Landroid/view/WindowInsets;"),
+                    &[],
+                )?
+                .l()?;
+
+            if insets.is_null() {
+                return Ok(None);
+            }
+
+            let top = env
+                .call_method(
+                    &insets,
+                    jni_str!("getSystemWindowInsetTop"),
+                    jni_sig!("()I"),
+                    &[],
+                )?
+                .i()?;
+
+            let bottom = env
+                .call_method(
+                    &insets,
+                    jni_str!("getSystemWindowInsetBottom"),
+                    jni_sig!("()I"),
+                    &[],
+                )?
+                .i()?;
+
+            Ok(Some((top, bottom)))
+        })();
+
+        if res.is_err() {
+            env.exception_clear();
         }
 
-        let activity = unsafe { jni::objects::JObject::from_raw(env, activity_ptr) };
-        if activity.is_null() {
-            return Ok(None);
-        }
-
-        let window = env
-            .call_method(
-                &activity,
-                jni_str!("getWindow"),
-                jni_sig!("()Landroid/view/Window;"),
-                &[],
-            )?
-            .l()?;
-
-        let decor_view = env
-            .call_method(
-                &window,
-                jni_str!("getDecorView"),
-                jni_sig!("()Landroid/view/View;"),
-                &[],
-            )?
-            .l()?;
-
-        let insets = env
-            .call_method(
-                &decor_view,
-                jni_str!("getRootWindowInsets"),
-                jni_sig!("()Landroid/view/WindowInsets;"),
-                &[],
-            )?
-            .l()?;
-
-        if insets.is_null() {
-            return Ok(None);
-        }
-
-        let top = env
-            .call_method(
-                &insets,
-                jni_str!("getSystemWindowInsetTop"),
-                jni_sig!("()I"),
-                &[],
-            )?
-            .i()?;
-
-        let bottom = env
-            .call_method(
-                &insets,
-                jni_str!("getSystemWindowInsetBottom"),
-                jni_sig!("()I"),
-                &[],
-            )?
-            .i()?;
-
-        Ok(Some((top, bottom)))
+        res
     })
     .ok()
     .flatten()
