@@ -16,10 +16,13 @@ name = "snifferlauncher-desktop"
 path = "src/main.rs"
 
 [features]
-default = ["devkit"]
+default = []
 devkit = [
     "sniffer_core/devkit",
+    "sniffer_render/devkit",
+    "sniffer_plugin/devkit",
     "sniffer_platform_desktop/devkit",
+    "sniffer_platform_android/devkit",
 ]
 
 [dependencies]
@@ -29,7 +32,7 @@ sniffer_plugin = { path = "crates/sniffer_plugin" }
 sniffer_platform_desktop = { path = "crates/sniffer_platform_desktop" }
 
 [target.'cfg(target_os = "android")'.dependencies]
-sniffer_platform_android = { path = "crates/sniffer_platform_android", features = ["devkit"] }
+sniffer_platform_android = { path = "crates/sniffer_platform_android" }
 android-activity = { version = "0.6.1", features = ["native-activity"] }
 
 [package.metadata.android]

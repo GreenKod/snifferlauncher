@@ -3,7 +3,6 @@ pub mod layout;
 pub mod log;
 pub mod math;
 pub mod physics;
-#[cfg(feature = "devkit")]
 pub mod profiler;
 pub mod render;
 pub mod style;
