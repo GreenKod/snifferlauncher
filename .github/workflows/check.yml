@@ -291,6 +291,11 @@ jobs:
       - name: Android (x86 32-bit) Check
         run: BINDGEN_EXTRA_CLANG_ARGS_i686_linux_android="--target=i686-linux-android" cargo ndk --target i686-linux-android check
 
+      - name: Generate CI Keystore
+        run: |
+          mkdir -p keystores
+          keytool -genkey -v -keystore keystores/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Build Android ARM64 Release APK
         run: |
           SYSROOT="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
