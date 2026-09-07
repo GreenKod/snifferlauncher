@@ -26,6 +26,12 @@ pub fn run_loop(
     sniffer_core::types::SCREEN_HEIGHT
         .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
+    let smoke_test_target_frames = std::env::var("SNIFFER_SMOKE_TEST_FRAMES")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok());
+    let screenshot_path = std::env::var("SNIFFER_SCREENSHOT_PATH").ok();
+    let mut rendered_frames: u32 = 0;
+
     desktop.window.request_redraw();
 
     #[allow(deprecated)]
@@ -65,6 +71,26 @@ pub fn run_loop(
                             &mut renderer,
                             &mut last_frame_time,
                         );
+
+                        if let Some(target) = smoke_test_target_frames {
+                            rendered_frames = rendered_frames.saturating_add(1);
+                            if rendered_frames >= target {
+                                if let Some(ref path) = screenshot_path {
+                                    let (w, h) = desktop.drawable_size();
+                                    if let Err(e) = renderer.capture_framebuffer_png(w, h, path) {
+                                        eprintln!("Failed to save smoke test screenshot: {e}");
+                                    } else {
+                                        println!("Smoke test screenshot saved to: {path}");
+                                    }
+                                }
+                                if let Ok(mut reg) = app.pkg_registry.write() {
+                                    reg.unload_all();
+                                }
+                                app.running = false;
+                                active_event_loop.exit();
+                                std::process::exit(0);
+                            }
+                        }
                     }
                     _ => {}
                 }
