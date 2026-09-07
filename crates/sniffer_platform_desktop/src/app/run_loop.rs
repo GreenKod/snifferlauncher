@@ -88,7 +88,7 @@ pub fn run_loop(
                                 }
                                 app.running = false;
                                 active_event_loop.exit();
-                                return;
+                                std::process::exit(0);
                             }
                         }
                     }
