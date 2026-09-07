@@ -347,19 +347,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: |
-            adb wait-for-device
-            sleep 5
-            APK_FILE=$(find apks -name "*x86_64*.apk" -o -name "*.apk" | head -n 1)
-            echo "Found APK to test: $APK_FILE"
-            if [ -n "$APK_FILE" ]; then
-              adb install "$APK_FILE"
-              adb shell am start -n com.sniffer.launcher/android.app.NativeActivity
-              sleep 8
-              adb exec-out screencap -p > android_screen.png
-            else
-              echo "No APK found to install"
-            fi
+          script: bash .github/scripts/android_smoke_test.sh
 
       - name: Upload Android Smoke Screenshot
         uses: actions/upload-artifact@v4
