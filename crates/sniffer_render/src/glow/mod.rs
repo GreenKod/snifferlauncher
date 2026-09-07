@@ -242,4 +242,51 @@ impl GlowRenderer {
             self.gl.disable(glow::SCISSOR_TEST);
         }
     }
+
+    /// Captures the current OpenGL framebuffer into a PNG file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if reading pixels or saving the PNG fails.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    pub fn capture_framebuffer_png<P: AsRef<std::path::Path>>(
+        &self,
+        width: u32,
+        height: u32,
+        output_path: P,
+    ) -> Result<(), String> {
+        let (w_usize, h_usize) = (width as usize, height as usize);
+        let mut pixels = vec![0u8; w_usize * h_usize * 4];
+        unsafe {
+            self.gl.read_pixels(
+                0,
+                0,
+                width as i32,
+                height as i32,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(Some(&mut pixels)),
+            );
+        }
+
+        // Flip vertically: OpenGL framebuffer starts at bottom-left
+        let row_bytes = w_usize * 4;
+        let mut flipped = vec![0u8; pixels.len()];
+        for y in 0..h_usize {
+            let src_start = y * row_bytes;
+            let src_end = src_start + row_bytes;
+            let dst_start = (h_usize - 1 - y) * row_bytes;
+            let dst_end = dst_start + row_bytes;
+            flipped[dst_start..dst_end].copy_from_slice(&pixels[src_start..src_end]);
+        }
+
+        image::save_buffer(
+            output_path,
+            &flipped,
+            width,
+            height,
+            image::ExtendedColorType::Rgba8,
+        )
+        .map_err(|e| format!("Failed to save screenshot PNG: {e}"))
+    }
 }
