@@ -1,3 +1,5 @@
+#![cfg(not(target_os = "android"))]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
