@@ -204,12 +204,12 @@ jobs:
           path: target/release/snifferlauncher-desktop.exe
           if-no-files-found: warn
 
-  # macOS verification on Apple Silicon (Optimized: Master / PR to master / Dispatch only)
+  # macOS verification on Apple Silicon
   validate-macos-aarch64:
     name: macOS Verification (Apple Silicon)
     runs-on: macos-14
     needs: changes
-    if: (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'master') || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci/workflow-quality-and-visual-tests') && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true')
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -233,6 +233,26 @@ jobs:
 
       - name: macOS Release Build Check
         run: cargo build --locked --release --target aarch64-apple-darwin
+
+      - name: macOS Desktop Visual Smoke Test
+        timeout-minutes: 3
+        run: |
+          env SNIFFER_SMOKE_TEST_FRAMES=15 SNIFFER_SCREENSHOT_PATH=macos_screenshot.png target/aarch64-apple-darwin/release/snifferlauncher-desktop
+
+      - name: Upload macOS Smoke Screenshot
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-visual-smoke
+          path: macos_screenshot.png
+          if-no-files-found: warn
+
+      - name: Upload macOS Desktop Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-desktop-binary
+          path: target/aarch64-apple-darwin/release/snifferlauncher-desktop
+          if-no-files-found: warn
 
   # Android Compilation & Real APK Packaging Verification
   validate-android:
@@ -320,7 +340,8 @@ jobs:
     name: Android Emulator Visual Smoke Test
     runs-on: ubuntu-latest
     needs: [changes, validate-android]
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'master') || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/ci/workflow-quality-and-visual-tests'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true'
+    timeout-minutes: 15
     continue-on-error: true
     steps:
       - name: Checkout Code
@@ -338,6 +359,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Enable KVM permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo chmod 777 /dev/kvm || true
+          ls -l /dev/kvm || true
+
       - name: Run Android Emulator and Capture Screenshot
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -349,10 +378,12 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: bash .github/scripts/android_smoke_test.sh
 
-      - name: Upload Android Smoke Screenshot
+      - name: Upload Android Smoke Screenshot & Logs
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: android-visual-smoke
-          path: android_screen.png
+          path: |
+            android_screen.png
+            logcat_snippet.txt
           if-no-files-found: warn
