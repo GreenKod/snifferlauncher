@@ -3,9 +3,31 @@ set -e
 
 echo "=== Android Visual Smoke Test ==="
 
-echo "1. Waiting for Android emulator..."
+echo "1. Waiting for Android emulator boot completion..."
 adb wait-for-device
-sleep 3
+
+echo "Waiting for sys.boot_completed property..."
+BOOT_TIMEOUT=120
+COUNTER=0
+while [ $COUNTER -lt $BOOT_TIMEOUT ]; do
+    BOOT_STATUS=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+    if [ "$BOOT_STATUS" = "1" ]; then
+        echo "sys.boot_completed is 1 (${COUNTER}s elapsed)."
+        break
+    fi
+    sleep 2
+    COUNTER=$((COUNTER + 2))
+done
+
+echo "Waiting for ActivityManager and PackageManager services..."
+for i in $(seq 1 30); do
+    if adb shell service check activity 2>/dev/null | grep -q "found" && \
+       adb shell pm path android >/dev/null 2>&1; then
+        echo "Android system services are ready."
+        break
+    fi
+    sleep 2
+done
 
 echo "Unlocking emulator screen..."
 adb shell wm dismiss-keyguard || true
@@ -30,7 +52,23 @@ if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
     adb logcat -c || true
 
     echo "4. Starting SnifferLauncher..."
-    timeout 20s adb shell am start -n com.greenkod.snifferlauncher/android.app.NativeActivity
+    LAUNCHED=false
+    for attempt in 1 2 3 4 5; do
+        echo "Starting SnifferLauncher (attempt $attempt/5)..."
+        if timeout 20s adb shell am start -W -n com.greenkod.snifferlauncher/android.app.NativeActivity; then
+            echo "SnifferLauncher started successfully."
+            LAUNCHED=true
+            break
+        fi
+        echo "Warning: am start failed on attempt $attempt. Waiting 5s before retry..."
+        sleep 5
+    done
+
+    if [ "$LAUNCHED" != "true" ]; then
+        echo "ERROR: Failed to start SnifferLauncher after 5 attempts."
+        adb logcat -d -t 100 || true
+        exit 1
+    fi
     
     echo "5. Waiting for UI to render..."
     sleep 10
