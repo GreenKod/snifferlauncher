@@ -114,10 +114,9 @@ pub(crate) fn draw_text_impl(
                     continue;
                 }
 
-                let glyph = atlas
-                    .glyphs
-                    .get(&c)
-                    .unwrap_or_else(|| atlas.glyphs.get(&'?').unwrap());
+                let Some(glyph) = atlas.glyphs.get(&c).or_else(|| atlas.glyphs.get(&'?')) else {
+                    continue;
+                };
                 if glyph.width == 0 || glyph.height == 0 {
                     curr_x = glyph.advance_width.mul_add(scale, curr_x);
                     continue;
@@ -158,7 +157,12 @@ pub(crate) fn draw_text_impl(
                     .gl
                     .uniform_2_f32(u.u_uv_end.as_ref(), u_max_x, u_max_y);
 
-                let t = renderer.transform_stack.last().unwrap();
+                let Some(t) = renderer.transform_stack.last() else {
+                    crate::dev_err!(
+                        "transform_stack empty in draw_text (TTF) — missing push_transform"
+                    );
+                    return;
+                };
                 renderer
                     .gl
                     .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
@@ -191,7 +195,12 @@ pub(crate) fn draw_text_impl(
                     .gl
                     .uniform_2_f32(u.u_uv_end.as_ref(), (idx + 1.0) / 96.0, 1.0);
 
-                let t = renderer.transform_stack.last().unwrap();
+                let Some(t) = renderer.transform_stack.last() else {
+                    crate::dev_err!(
+                        "transform_stack empty in draw_text (bitmap) — missing push_transform"
+                    );
+                    return;
+                };
                 renderer
                     .gl
                     .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);

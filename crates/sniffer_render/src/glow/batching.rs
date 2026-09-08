@@ -122,7 +122,10 @@ impl GlowRenderer {
                 col_bot[3],
             );
 
-            let t = self.transform_stack.last().unwrap();
+            let Some(t) = self.transform_stack.last() else {
+                crate::dev_err!("transform_stack empty in draw_rect — missing push_transform");
+                return;
+            };
             self.gl
                 .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
@@ -179,7 +182,10 @@ impl GlowRenderer {
             self.gl.uniform_1_f32(u.u_is_shadow.as_ref(), 1.0);
             self.gl.uniform_1_f32(u.u_shadow_blur.as_ref(), blur);
 
-            let t = self.transform_stack.last().unwrap();
+            let Some(t) = self.transform_stack.last() else {
+                crate::dev_err!("transform_stack empty in draw_shadow — missing push_transform");
+                return;
+            };
             self.gl
                 .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
@@ -218,7 +224,10 @@ impl GlowRenderer {
             self.gl.uniform_1_f32(u.u_is_circle.as_ref(), 1.0);
             self.gl.uniform_1_f32(u.u_is_shadow.as_ref(), 0.0);
 
-            let t = self.transform_stack.last().unwrap();
+            let Some(t) = self.transform_stack.last() else {
+                crate::dev_err!("transform_stack empty in draw_circle — missing push_transform");
+                return;
+            };
             self.gl
                 .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);

@@ -1,8 +1,6 @@
-/// Compile-time encrypted assets runtime decryption.
-const XOR_KEY: u8 = 0x5A;
-
+/// Shader source passthrough — previously XOR-obfuscated, now plain text.
+/// Kept as a no-op shim so existing call sites in `glow/mod.rs` compile unchanged.
 #[must_use]
-pub fn decrypt(data: &[u8]) -> String {
-    let decrypted: Vec<u8> = data.iter().map(|b| b ^ XOR_KEY).collect();
-    String::from_utf8(decrypted).unwrap_or_default()
+pub fn decrypt(src: &str) -> &str {
+    src
 }
