@@ -52,6 +52,17 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Dependency 24h Quarantine & Supply-Chain Age Gate
+        run: python3 .github/scripts/check_dependency_age.py
+
+      - name: Secret Leak Detection (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Dependency Review
         if: github.event_name == 'pull_request'
@@ -388,3 +399,76 @@ jobs:
             android_screen.png
             logcat_snippet.txt
           if-no-files-found: warn
+
+  # ==========================================
+  # STAGE 4: Security & VirusTotal Artifact Scanning
+  # ==========================================
+  security-scan-artifacts:
+    name: VirusTotal & Artifact Security Scan
+    runs-on: ubuntu-latest
+    needs: [changes, validate-linux, validate-windows, validate-macos-aarch64, validate-android]
+    if: (github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true') && always()
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: read
+    env:
+      VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Windows Desktop Binary
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: windows-desktop-binary
+          path: scan_artifacts/windows
+
+      - name: Download Linux Desktop Binary
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: linux-desktop-binary
+          path: scan_artifacts/linux
+
+      - name: Download macOS Desktop Binary
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: macos-desktop-binary
+          path: scan_artifacts/macos
+
+      - name: Download Android Release APKs
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: android-release-apks
+          path: scan_artifacts/android
+
+      - name: List Artifacts for Scanning
+        run: |
+          echo "### 📦 Artifacts Prepared for Security Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact File | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          find scan_artifacts -type f -exec ls -lh {} + 2>/dev/null | awk '{print "| `" $9 "` | " $5 " |"}' >> $GITHUB_STEP_SUMMARY || echo "No artifacts found."
+
+      - name: Scan Artifacts with VirusTotal
+        uses: crazy-max/ghaction-virustotal@v4
+        if: env.VIRUSTOTAL_API_KEY != ''
+        with:
+          vt_api_key: ${{ env.VIRUSTOTAL_API_KEY }}
+          files: |
+            scan_artifacts/**/*.exe
+            scan_artifacts/**/snifferlauncher-desktop
+            scan_artifacts/**/*.apk
+          request_rate: 4
+
+      - name: VirusTotal Scan Notice (Skipped)
+        if: env.VIRUSTOTAL_API_KEY == ''
+        run: |
+          echo "::warning title=VirusTotal Scan Skipped::VIRUSTOTAL_API_KEY secret is not configured in repository settings. Artifact malware scanning was skipped. To activate automated binary scanning, add VIRUSTOTAL_API_KEY to Repository Secrets."
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ VirusTotal Taraması Atlandı" >> $GITHUB_STEP_SUMMARY
+          echo "> **Uyarı:** \`VIRUSTOTAL_API_KEY\` gizli anahtarı tanımlanmadığı için ikili dosya ve APK taraması atlandı." >> $GITHUB_STEP_SUMMARY
+          echo "> Otomatik antivirüs taramasını aktif etmek için GitHub reponuzda **Settings > Secrets and variables > Actions** sekmesine giderek anahtarınızı ekleyebilirsiniz." >> $GITHUB_STEP_SUMMARY
