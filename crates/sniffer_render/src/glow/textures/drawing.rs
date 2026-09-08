@@ -310,7 +310,10 @@ impl GlowRenderer {
                 self.gl
                     .uniform_1_f32(u.u_global_alpha.as_ref(), self.global_alpha);
 
-                let t = self.transform_stack.last().unwrap();
+                let Some(t) = self.transform_stack.last() else {
+                    crate::dev_err!("transform_stack empty in draw_image — missing push_transform");
+                    return;
+                };
                 self.gl
                     .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
                 self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
