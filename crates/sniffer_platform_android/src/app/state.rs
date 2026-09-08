@@ -21,6 +21,7 @@ pub struct AppState {
     pub last_touch_pos: Point,
     pub hovered_btn: Option<u64>,
     pub active_scrollview_drag: Option<u64>,
+    pub active_scrollview_start_y: f32,
     pub last_drag_delta: (f32, f32),
     pub drag_history: VecDeque<(f32, f32, std::time::Instant)>,
     pub kinetic_scrolls: Vec<KineticScroll>,
@@ -92,6 +93,7 @@ impl AppState {
             last_touch_pos: Point::zero(),
             hovered_btn: None,
             active_scrollview_drag: None,
+            active_scrollview_start_y: 0.0,
             last_drag_delta: (0.0, 0.0),
             drag_history: VecDeque::new(),
             kinetic_scrolls: Vec::new(),
@@ -168,6 +170,9 @@ pub(crate) fn update_max_scroll_cache(
                 0.0
             };
             state.cached_max_scroll.insert(sv_id, max_scroll);
+            if let Some(phys) = state.scroll_physics.get_mut(&sv_id) {
+                phys.max_y = Some(max_scroll);
+            }
         }
         if let sniffer_core::types::Element::Container { children, .. }
         | sniffer_core::types::Element::ScrollView { children, .. } = el

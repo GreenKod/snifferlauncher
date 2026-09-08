@@ -23,6 +23,7 @@ pub struct ScrollPhysics {
     pub snap_just_completed: bool,
 
     pub snap_x: Option<f32>,
+    pub max_y: Option<f32>,
     pub rubber_band: Option<f32>,
     pub page_count: Option<u32>,
     pub on_snap: Option<String>,
@@ -43,6 +44,7 @@ impl Default for ScrollPhysics {
             last_snap_page: 0,
             snap_just_completed: false,
             snap_x: None,
+            max_y: None,
             rubber_band: None,
             page_count: None,
             on_snap: None,
@@ -108,6 +110,45 @@ impl ScrollPhysics {
             }
         }
 
+        let max_limit_y = self.max_y.unwrap_or(0.0);
+
+        if self.vel_y.abs() > 0.5 {
+            let lambda = 7.62_f32;
+            let decay = (-lambda * dt).exp();
+            self.pos_y += self.vel_y * dt;
+            self.vel_y *= decay;
+            if self.pos_y < 0.0 {
+                self.pos_y = 0.0;
+                self.vel_y = 0.0;
+            } else if self.pos_y > max_limit_y {
+                self.pos_y = max_limit_y;
+                self.vel_y = 0.0;
+            }
+            active = true;
+        }
+
+        if !self.is_dragging {
+            if self.pos_y < -0.1 {
+                let spring_k = 18.0_f32;
+                let step = -self.pos_y * (1.0 - (-spring_k * dt).exp());
+                self.pos_y += step;
+                self.vel_y = 0.0;
+                if self.pos_y >= -0.5 {
+                    self.pos_y = 0.0;
+                }
+                active = true;
+            } else if self.pos_y > max_limit_y + 0.1 {
+                let spring_k = 18.0_f32;
+                let step = (self.pos_y - max_limit_y) * (1.0 - (-spring_k * dt).exp());
+                self.pos_y -= step;
+                self.vel_y = 0.0;
+                if self.pos_y <= max_limit_y + 0.5 {
+                    self.pos_y = max_limit_y;
+                }
+                active = true;
+            }
+        }
+
         active || self.snap_just_completed
     }
 
@@ -130,6 +171,29 @@ impl ScrollPhysics {
             } else {
                 self.pos_x = new_pos;
             }
+        }
+    }
+
+    pub fn apply_drag_y(&mut self, delta_y: f32) {
+        let max_limit_y = self.max_y.unwrap_or(0.0);
+        let coeff = self.rubber_band.unwrap_or(RUBBER_BAND_COEFF);
+        let new_pos = self.pos_y + delta_y;
+        if new_pos < 0.0 {
+            self.pos_y = new_pos * coeff;
+        } else if new_pos > max_limit_y {
+            self.pos_y = max_limit_y + (new_pos - max_limit_y) * coeff;
+        } else {
+            self.pos_y = new_pos;
+        }
+    }
+
+    pub fn release_drag_y(&mut self, vel_y: f32) {
+        self.is_dragging = false;
+        let max_limit_y = self.max_y.unwrap_or(0.0);
+        if (self.pos_y <= 0.0 && vel_y < 0.0) || (self.pos_y >= max_limit_y && vel_y > 0.0) {
+            self.vel_y = 0.0;
+        } else {
+            self.vel_y = vel_y;
         }
     }
 
@@ -315,4 +379,46 @@ pub fn update_indicator_dots_in_element(
         }
     }
     false
+}
+
+pub fn sync_max_scroll_from_layout<S: BuildHasher>(
+    element: &Element,
+    layout: &crate::layout::LayoutNode,
+    physics: &mut HashMap<u64, ScrollPhysics, S>,
+) {
+    let mut stack = vec![(element, layout)];
+    while let Some((el, lay)) = stack.pop() {
+        if let Element::ScrollView {
+            id: Some(id_str), ..
+        } = el
+        {
+            let sv_id = fnv1a(id_str.as_bytes());
+            if let Some(phys) = physics.get_mut(&sv_id) {
+                let mut min_y = f32::MAX;
+                let mut max_y = f32::MIN;
+                for child in &lay.children {
+                    if child.rect.y < min_y {
+                        min_y = child.rect.y;
+                    }
+                    let bottom = child.rect.y + child.rect.height;
+                    if bottom > max_y {
+                        max_y = bottom;
+                    }
+                }
+                let content_height = if min_y <= max_y { max_y - min_y } else { 0.0 };
+                let max_scroll_y = (content_height - lay.rect.height).max(0.0);
+                phys.max_y = Some(max_scroll_y);
+            }
+        }
+        match el {
+            Element::Container { children, .. }
+            | Element::ScrollView { children, .. }
+            | Element::SharedView { children, .. } => {
+                for (c_el, c_lay) in children.iter().zip(lay.children.iter()) {
+                    stack.push((c_el, c_lay));
+                }
+            }
+            _ => {}
+        }
+    }
 }

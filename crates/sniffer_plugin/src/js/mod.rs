@@ -8,7 +8,6 @@ pub mod permission_manager;
 pub mod plugin;
 pub mod preamble;
 
-use crate::dev_log;
 use crate::registry::{ApiMap, BroadcastQueue};
 use crossbeam_channel::Sender;
 use obfstr::obfstr;
@@ -68,12 +67,27 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         )
         .unwrap();
 
-    // host_log
-    let log_func = Function::new(ctx.clone(), |msg: String| {
-        dev_log!("{}: {msg}", obfstr!("JS Log"));
+    // host_log, host_warn, host_error
+    let p_id_log = plugin_id.clone();
+    let log_func = Function::new(ctx.clone(), move |msg: String| {
+        crate::logger::info(&p_id_log, &msg);
     })
     .unwrap();
     globals.set(obfstr!("host_log"), log_func).unwrap();
+
+    let p_id_warn = plugin_id.clone();
+    let warn_func = Function::new(ctx.clone(), move |msg: String| {
+        crate::logger::warn(&p_id_warn, &msg);
+    })
+    .unwrap();
+    globals.set(obfstr!("host_warn"), warn_func).unwrap();
+
+    let p_id_err = plugin_id.clone();
+    let err_func = Function::new(ctx.clone(), move |msg: String| {
+        crate::logger::error(&p_id_err, &msg);
+    })
+    .unwrap();
+    globals.set(obfstr!("host_error"), err_func).unwrap();
 
     // host_hash
     let hash_func = Function::new(ctx.clone(), |s: String| -> String {

@@ -34,15 +34,17 @@ function getGridConfig(isLandscape) {
             taskManagerH: 100.0,
         };
     } else {
-        // Portrait Mode: 4 Columns x 7 Rows (Top 86vh Grid, Bottom 14vh Dock)
+        // Portrait Mode: 4 Columns x 7 Rows (Top 82vh Grid, Bottom 18vh Dock)
+        // Measured from pixel-perfect reference:
+        // 4 cards × 19.35vw + 3 gaps × 4.4vw = 77.4 + 13.2 = 90.6vw → 4.7vw symmetrical side margins
         const cols = 4;
         const rows = 7;
         const totalSlots = cols * rows; // 28
 
-        const cardW = 19.7;
-        const cardH = 8.6;
-        const gapX = 4.0;
-        const gapY = 2.4;
+        const cardW = 19.35;
+        const cardH = 8.35;
+        const gapX = 4.4;
+        const gapY = 3.0;
 
         return {
             isLandscape: false,
@@ -65,14 +67,14 @@ const GRID_COLS = 4;
 const GRID_ROWS = 7;
 const TOTAL_APPS = GRID_COLS * GRID_ROWS; // 28
 
-const GAP_X_VW = 4.0;
-const CARD_W_VW = 19.7;
+const GAP_X_VW = 4.4;
+const CARD_W_VW = 19.35;
 
-const GRID_HEIGHT_VH = 84.0;
-const BOTTOM_TASKBAR_VH = 16.0;
+const GRID_HEIGHT_VH = 82.0;
+const BOTTOM_TASKBAR_VH = 18.0;
 
-const GAP_Y_VH = 1.8;
-const CARD_H_VH = 9.8;
+const GAP_Y_VH = 3.0;
+const CARD_H_VH = 8.35;
 
 const GRID_COLORS = [
     [hex("#FF416C"), hex("#FF4B2B")],

@@ -24,23 +24,74 @@ pub fn find_clicked_button_with_scroll(
     point: Point,
     get_active_scroll: &dyn Fn(Option<&str>, f32, f32) -> (f32, f32),
 ) -> Option<(u64, Rect)> {
-    if !layout.rect.contains(point) {
+    find_clicked_button_with_scroll_recursive(element, layout, point, 1.0, get_active_scroll)
+}
+
+fn find_clicked_button_with_scroll_recursive(
+    element: &Element,
+    layout: &LayoutNode,
+    point: Point,
+    parent_opacity: f32,
+    get_active_scroll: &dyn Fn(Option<&str>, f32, f32) -> (f32, f32),
+) -> Option<(u64, Rect)> {
+    let effective_opacity = parent_opacity * element.style().opacity;
+    if effective_opacity < 0.05 {
         return None;
     }
+
+    let tx = element.style().transform.translate_x;
+    let ty = element.style().transform.translate_y;
+    let safe_tx = if tx.is_nan() || tx.is_infinite() {
+        0.0
+    } else {
+        tx
+    };
+    let safe_ty = if ty.is_nan() || ty.is_infinite() {
+        0.0
+    } else {
+        ty
+    };
+    let local_point = Point::new(point.x - safe_tx, point.y - safe_ty);
+
+    if !layout.rect.contains(local_point) {
+        return None;
+    }
+
+    let transformed_rect = Rect::new(
+        layout.rect.x + safe_tx,
+        layout.rect.y + safe_ty,
+        layout.rect.width,
+        layout.rect.height,
+    );
+
     match element {
         Element::Container { children, id, .. } | Element::SharedView { children, id, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
-                if let Some(clicked_data) =
-                    find_clicked_button_with_scroll(child_el, child_lay, point, get_active_scroll)
-                {
-                    return Some(clicked_data);
+                if let Some(clicked_data) = find_clicked_button_with_scroll_recursive(
+                    child_el,
+                    child_lay,
+                    local_point,
+                    effective_opacity,
+                    get_active_scroll,
+                ) {
+                    return Some((
+                        clicked_data.0,
+                        Rect::new(
+                            clicked_data.1.x + safe_tx,
+                            clicked_data.1.y + safe_ty,
+                            clicked_data.1.width,
+                            clicked_data.1.height,
+                        ),
+                    ));
                 }
             }
             if let Some(id_str) = id {
-                return Some((
-                    sniffer_core::ui::widget::fnv1a(id_str.as_bytes()),
-                    layout.rect,
-                ));
+                if !sniffer_core::ui::widget::is_structural_layout_id(id_str) {
+                    return Some((
+                        sniffer_core::ui::widget::fnv1a(id_str.as_bytes()),
+                        transformed_rect,
+                    ));
+                }
             }
             None
         }
@@ -52,23 +103,27 @@ pub fn find_clicked_button_with_scroll(
             ..
         } => {
             let (active_x, active_y) = get_active_scroll(id.as_deref(), *scroll_x, *scroll_y);
-            let offset_point = Point::new(point.x + active_x, point.y + active_y);
+            let offset_point = Point::new(local_point.x + active_x, local_point.y + active_y);
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
-                if let Some(clicked_data) = find_clicked_button_with_scroll(
+                if let Some(clicked_data) = find_clicked_button_with_scroll_recursive(
                     child_el,
                     child_lay,
                     offset_point,
+                    effective_opacity,
                     get_active_scroll,
                 ) {
-                    return Some(clicked_data);
+                    return Some((
+                        clicked_data.0,
+                        Rect::new(
+                            clicked_data.1.x + safe_tx,
+                            clicked_data.1.y + safe_ty,
+                            clicked_data.1.width,
+                            clicked_data.1.height,
+                        ),
+                    ));
                 }
             }
-            if let Some(id_str) = id {
-                return Some((
-                    sniffer_core::ui::widget::fnv1a(id_str.as_bytes()),
-                    layout.rect,
-                ));
-            }
+            // Note: ScrollView is a scroll viewport container, not a clickable button target.
             None
         }
         Element::Label { id, .. }
@@ -80,7 +135,7 @@ pub fn find_clicked_button_with_scroll(
             if let Some(id_str) = id {
                 return Some((
                     sniffer_core::ui::widget::fnv1a(id_str.as_bytes()),
-                    layout.rect,
+                    transformed_rect,
                 ));
             }
             None
@@ -126,13 +181,47 @@ pub fn find_hovered_scrollview<'a>(
     layout: &'a LayoutNode,
     point: Point,
 ) -> Option<(&'a Element, &'a LayoutNode)> {
-    if !layout.rect.contains(point) {
+    find_hovered_scrollview_recursive(element, layout, point, 1.0)
+}
+
+fn find_hovered_scrollview_recursive<'a>(
+    element: &'a Element,
+    layout: &'a LayoutNode,
+    point: Point,
+    parent_opacity: f32,
+) -> Option<(&'a Element, &'a LayoutNode)> {
+    let effective_opacity = parent_opacity * element.style().opacity;
+    if effective_opacity < 0.05 {
         return None;
     }
+
+    let tx = element.style().transform.translate_x;
+    let ty = element.style().transform.translate_y;
+    let safe_tx = if tx.is_nan() || tx.is_infinite() {
+        0.0
+    } else {
+        tx
+    };
+    let safe_ty = if ty.is_nan() || ty.is_infinite() {
+        0.0
+    } else {
+        ty
+    };
+    let local_point = Point::new(point.x - safe_tx, point.y - safe_ty);
+
+    if !layout.rect.contains(local_point) {
+        return None;
+    }
+
     match element {
         Element::Container { children, .. } | Element::SharedView { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
-                if let Some(scrollview_data) = find_hovered_scrollview(child_el, child_lay, point) {
+                if let Some(scrollview_data) = find_hovered_scrollview_recursive(
+                    child_el,
+                    child_lay,
+                    local_point,
+                    effective_opacity,
+                ) {
                     return Some(scrollview_data);
                 }
             }
@@ -144,11 +233,14 @@ pub fn find_hovered_scrollview<'a>(
             scroll_y,
             ..
         } => {
-            let offset_point = Point::new(point.x + scroll_x, point.y + scroll_y);
+            let offset_point = Point::new(local_point.x + scroll_x, local_point.y + scroll_y);
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()).rev() {
-                if let Some(scrollview_data) =
-                    find_hovered_scrollview(child_el, child_lay, offset_point)
-                {
+                if let Some(scrollview_data) = find_hovered_scrollview_recursive(
+                    child_el,
+                    child_lay,
+                    offset_point,
+                    effective_opacity,
+                ) {
                     return Some(scrollview_data);
                 }
             }

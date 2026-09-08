@@ -21,6 +21,8 @@ pub struct FrameProfiler {
     swap_times: VecDeque<f32>,
     max_history: usize,
     pub touch_telemetry: TouchTelemetry,
+    pub rendered_entities: usize,
+    pub total_entities: usize,
 }
 
 impl FrameProfiler {
@@ -33,7 +35,14 @@ impl FrameProfiler {
             swap_times: VecDeque::with_capacity(max_history),
             max_history,
             touch_telemetry: TouchTelemetry::default(),
+            rendered_entities: 0,
+            total_entities: 0,
         }
+    }
+
+    pub fn record_entities(&mut self, rendered: usize, total: usize) {
+        self.rendered_entities = rendered;
+        self.total_entities = total;
     }
 
     pub fn record_frame(
@@ -127,21 +136,28 @@ fn draw_touch_hitboxes(
     renderer: &mut dyn crate::render::Renderer,
     element: &crate::types::Element,
     layout: &crate::layout::LayoutNode,
+    parent_opacity: f32,
 ) {
+    let effective_opacity = parent_opacity * element.style().opacity;
+    if effective_opacity < 0.05 {
+        return;
+    }
+
     let elem_id = element.id();
     let is_button = match elem_id {
         Some(k) => {
-            k.starts_with("app_item_")
-                || k.starts_with("dock_app_btn_")
-                || k.starts_with("dock_app_circle_")
-                || k.starts_with("fab_")
-                || k.starts_with("app_card_")
-                || k.starts_with("btn_")
-                || k.starts_with("action_")
-                || k.starts_with("clock_")
-                || k.contains("btn")
-                || k.contains("card")
-                || k.contains("item")
+            !crate::ui::widget::is_structural_layout_id(k)
+                && (k.starts_with("app_item_")
+                    || k.starts_with("dock_app_btn_")
+                    || k.starts_with("dock_app_circle_")
+                    || k.starts_with("fab_")
+                    || k.starts_with("app_card_")
+                    || k.starts_with("btn_")
+                    || k.starts_with("action_")
+                    || k.starts_with("clock_")
+                    || k.contains("btn")
+                    || k.contains("card")
+                    || k.contains("item"))
         }
         None => matches!(
             element,
@@ -159,6 +175,20 @@ fn draw_touch_hitboxes(
 
         renderer.draw_rect(layout.rect, fill_color, 4.0, 1.5, border_color);
     }
+
+    let tx = element.style().transform.translate_x;
+    let ty = element.style().transform.translate_y;
+    let safe_tx = if tx.is_nan() || tx.is_infinite() {
+        0.0
+    } else {
+        tx
+    };
+    let safe_ty = if ty.is_nan() || ty.is_infinite() {
+        0.0
+    } else {
+        ty
+    };
+    let has_tx = safe_tx.abs() > 0.001 || safe_ty.abs() > 0.001;
 
     match element {
         crate::types::Element::ScrollView {
@@ -178,17 +208,30 @@ fn draw_touch_hitboxes(
                 *scroll_x
             };
             renderer.push_clip_rect(layout.rect, 8.0);
-            renderer.push_transform(0.0, 0.0, 1.0, 0.0, -safe_scroll_x, -safe_scroll_y);
+            renderer.push_transform(
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                safe_tx - safe_scroll_x,
+                safe_ty - safe_scroll_y,
+            );
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                draw_touch_hitboxes(renderer, child_el, child_lay);
+                draw_touch_hitboxes(renderer, child_el, child_lay, effective_opacity);
             }
             renderer.pop_transform();
             renderer.pop_clip_rect();
         }
         crate::types::Element::Container { children, .. }
         | crate::types::Element::SharedView { children, .. } => {
+            if has_tx {
+                renderer.push_transform(0.0, 0.0, 1.0, 0.0, safe_tx, safe_ty);
+            }
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                draw_touch_hitboxes(renderer, child_el, child_lay);
+                draw_touch_hitboxes(renderer, child_el, child_lay, effective_opacity);
+            }
+            if has_tx {
+                renderer.pop_transform();
             }
         }
         _ => {}
@@ -203,8 +246,23 @@ pub fn render_devkit_debug_overlays(
     root_element: &crate::types::Element,
     layout_tree: &crate::layout::LayoutNode,
 ) {
+    static SHOW_DEBUG_OVERLAYS: std::sync::atomic::AtomicBool =
+        std::sync::atomic::AtomicBool::new(false);
+    static CHECKED_ENV: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    if !CHECKED_ENV.load(std::sync::atomic::Ordering::Relaxed) {
+        let enabled = std::env::var("SNIFFER_DEBUG_HITBOXES").is_ok()
+            || std::env::var("SNIFFER_DEBUG_OVERLAYS").is_ok();
+        SHOW_DEBUG_OVERLAYS.store(enabled, std::sync::atomic::Ordering::Relaxed);
+        CHECKED_ENV.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    if !SHOW_DEBUG_OVERLAYS.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+
     // 1. Draw touch & hitbox bounding areas
-    draw_touch_hitboxes(renderer, root_element, layout_tree);
+    draw_touch_hitboxes(renderer, root_element, layout_tree, 1.0);
 
     // 2. Active Pointer / Touch Telemetry Visualizer
     if profiler.touch_telemetry.touch_x > 0.0 || profiler.touch_telemetry.touch_y > 0.0 {

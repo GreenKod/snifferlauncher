@@ -54,6 +54,9 @@ function getDevKitHUDUI() {
     const cpuMs = telemetry.cpu_ms || 0.0;
     const gpuMs = telemetry.gpu_ms || 0.0;
     const swapMs = telemetry.swap_ms || 0.0;
+    const entities = telemetry.entities || { rendered: 0, total: 0 };
+    const renderedEntities = entities.rendered !== undefined ? entities.rendered : 0;
+    const totalEntities = entities.total !== undefined ? entities.total : 0;
     const touch = telemetry.touch || {};
     const pointers = touch.active_pointers || 0;
     const gesture = touch.gesture || "IDLE";
@@ -65,7 +68,7 @@ function getDevKitHUDUI() {
 
     return Container("devkit_hud_card", {
         position: "Absolute",
-        top: px(28.0),
+        top: px(vh(4.2)),
         left: px(16.0),
         width: px(300.0),
         background_color: hex("#EE0F172A"),
@@ -84,6 +87,11 @@ function getDevKitHUDUI() {
         Label("devkit_fps", `FPS: ${fps.toFixed(1)} (${avgMs.toFixed(1)}ms)`, {
             text_color: hex(fpsColor),
             text_size: 16.0,
+            width: "Auto"
+        }),
+        Label("devkit_entities", `📦 Entities: ${renderedEntities} / ${totalEntities} rendered`, {
+            text_color: hex("#38BDF8"),
+            text_size: 13.0,
             width: "Auto"
         }),
         Label("devkit_cpu_gpu", `CPU: ${cpuMs.toFixed(1)}ms | GPU: ${gpuMs.toFixed(1)}ms`, {

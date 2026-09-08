@@ -33,6 +33,7 @@ pub struct GlowRenderer {
     pub(crate) shape_uniforms: ShapeUniforms,
     pub(crate) image_uniforms: ImageUniforms,
     pub(crate) text_uniforms: TextUniforms,
+    pub(crate) current_vao: Option<glow::VertexArray>,
 }
 
 #[allow(clippy::cast_possible_truncation)]
@@ -214,7 +215,18 @@ impl GlowRenderer {
                 shape_uniforms,
                 image_uniforms,
                 text_uniforms,
+                current_vao: Some(quad_vertex_array),
             })
+        }
+    }
+
+    #[inline]
+    pub(crate) unsafe fn ensure_quad_vao(&mut self) {
+        if self.current_vao != Some(self.quad_vertex_array) {
+            unsafe {
+                self.gl.bind_vertex_array(Some(self.quad_vertex_array));
+            }
+            self.current_vao = Some(self.quad_vertex_array);
         }
     }
 

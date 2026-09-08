@@ -80,7 +80,7 @@ impl GlowRenderer {
 
         unsafe {
             self.gl.use_program(Some(self.shape_program));
-            self.gl.bind_vertex_array(Some(self.quad_vertex_array));
+            self.ensure_quad_vao();
 
             let u = self.shape_uniforms.clone();
 
@@ -141,7 +141,7 @@ impl GlowRenderer {
         col[3] *= self.global_alpha;
         unsafe {
             self.gl.use_program(Some(self.shape_program));
-            self.gl.bind_vertex_array(Some(self.quad_vertex_array));
+            self.ensure_quad_vao();
 
             let u = self.shape_uniforms.clone();
 
@@ -191,7 +191,7 @@ impl GlowRenderer {
         col[3] *= self.global_alpha;
         unsafe {
             self.gl.use_program(Some(self.shape_program));
-            self.gl.bind_vertex_array(Some(self.quad_vertex_array));
+            self.ensure_quad_vao();
 
             let u = self.shape_uniforms.clone();
 
