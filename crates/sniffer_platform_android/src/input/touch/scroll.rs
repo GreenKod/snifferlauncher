@@ -49,6 +49,10 @@ pub fn handle_touch_move_or_down(
         }
         state.kinetic_scrolls.clear();
         state.drag_history.clear();
+        state.active_scrollview_start_y = state
+            .active_scrollview_drag
+            .and_then(|id| state.scroll_physics.get(&id))
+            .map_or(0.0, |p| p.pos_y);
 
         if let Some((clicked_btn, _)) =
             find_clicked_button_with_scroll(root_element, layout_tree, point, &|id_opt, sx, sy| {
@@ -130,9 +134,13 @@ pub fn handle_touch_move_or_down(
 
         if let Some(sv_id) = state.active_scrollview_drag {
             let phys = state.scroll_physics.entry(sv_id).or_default();
-            phys.apply_drag(delta_x);
+            if phys.snap_x.is_some() {
+                phys.apply_drag(delta_x);
+                phys.snap_target_x = None;
+            } else {
+                phys.apply_drag_y(delta_y);
+            }
             phys.is_dragging = true;
-            phys.snap_target_x = None;
         }
     }
 

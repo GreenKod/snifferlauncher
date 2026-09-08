@@ -1,6 +1,6 @@
 use super::layout::{
-    AlignItems, Dimension, Display, FlexDirection, FlexWrap, JustifyContent, ObjectFit, Position,
-    RectOffset,
+    AlignContent, AlignItems, Dimension, Display, FlexDirection, FlexWrap, JustifyContent,
+    ObjectFit, Position, RectOffset,
 };
 use serde::{Deserialize, Serialize};
 
@@ -10,8 +10,11 @@ use serde::{Deserialize, Serialize};
 pub enum Easing {
     #[default]
     Linear,
+    #[serde(alias = "ease-in")]
     EaseIn,
+    #[serde(alias = "ease-out")]
     EaseOut,
+    #[serde(alias = "ease-in-out")]
     EaseInOut,
     Spring {
         stiffness: f32,
@@ -90,6 +93,7 @@ pub struct Style {
     pub flex_wrap: FlexWrap,
     pub justify_content: JustifyContent,
     pub align_items: AlignItems,
+    pub align_content: AlignContent,
     pub flex_grow: f32,
     pub flex_shrink: f32,
     pub flex_basis: Dimension,
@@ -147,6 +151,7 @@ impl Default for Style {
             flex_wrap: FlexWrap::NoWrap,
             justify_content: JustifyContent::Start,
             align_items: AlignItems::Stretch,
+            align_content: AlignContent::Stretch,
             flex_grow: 0.0,
             flex_shrink: 0.0,
             flex_basis: Dimension::Auto,

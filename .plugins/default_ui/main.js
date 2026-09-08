@@ -31,6 +31,9 @@ function getDockElement(isLandscape) {
 }
 
 function getDevKitHUD() {
+    if (!state.showDevKitHud) {
+        return null;
+    }
     let devkitUI = null;
     if (typeof callApi === "function") {
         try {
@@ -42,39 +45,60 @@ function getDevKitHUD() {
     return devkitUI;
 }
 
+function getDrawerHint(_isLandscape) {
+    return null;
+}
+
 function Root() {
     const isLandscape = vw(100) > vh(100);
     const hud = getDevKitHUD();
+    const isBottomFloor = state.currentFloor === "bottom";
 
-    const rootChildren = [
+    // Floor 1: Home Screen Layer with smooth transition
+    const hint = getDrawerHint(isLandscape);
+    const homeChildren = [
         AppGridComponent(),
         getDockElement(isLandscape)
     ];
 
-    if (hud) {
-        rootChildren.push(hud);
+    if (hint) {
+        homeChildren.push(hint);
     }
 
-    if (isLandscape) {
-        return Container("root", {
-            width: pct(100),
-            height: pct(100),
-            position: "Relative",
-            background_color: state.bgColor ? hex(state.bgColor) : undefined,
-            flex_direction: "Row",
-            justify_content: "Start",
-            align_items: "Stretch",
-        }, rootChildren);
+    const homeScreen = Container("home_screen_layer", {
+        width: pct(100),
+        height: pct(100),
+        position: "Relative",
+        background_color: state.bgColor ? hex(state.bgColor) : undefined,
+        flex_direction: isLandscape ? "Row" : "Column",
+        justify_content: "Start",
+        align_items: "Stretch",
+        opacity: isBottomFloor ? 0.0 : 1.0,
+        transform: {
+            scale: isBottomFloor ? 0.92 : 1.0,
+            translate_y: isBottomFloor ? -vh(12.0) : 0.0,
+        },
+        transition: {
+            duration: 0.28,
+            easing: "ease_out"
+        }
+    }, homeChildren);
+
+    const rootChildren = [homeScreen];
+
+    // Floor 2: App Drawer Layer as animated overlay
+    if (typeof AppDrawerComponent === "function") {
+        rootChildren.push(AppDrawerComponent());
+    }
+
+    if (hud) {
+        rootChildren.push(hud);
     }
 
     return Container("root", {
         width: pct(100),
         height: pct(100),
         position: "Relative",
-        background_color: state.bgColor ? hex(state.bgColor) : undefined,
-        flex_direction: "Column",
-        justify_content: "Start",
-        align_items: "Stretch",
     }, rootChildren);
 }
 
@@ -160,10 +184,85 @@ globalThis.onEvent = function (eventJsonString) {
         return "[]";
     }
 
+    // SwipeUp: Go down to bottom floor (App Drawer)
+    if (e.type === "SwipeUp") {
+        if (state.currentFloor !== "bottom") {
+            state.goToBottomFloor();
+        }
+        return "[]";
+    }
+
+    // SwipeDown: Go up to top floor (Home Screen)
+    if (e.type === "SwipeDown") {
+        if (state.currentFloor === "bottom") {
+            state.goToTopFloor();
+        }
+        return "[]";
+    }
+
+    if (e.type === "TextInput") {
+        if (state.currentFloor === "bottom" && typeof e.text === "string") {
+            state.drawerSearchQuery = (state.drawerSearchQuery || "") + e.text;
+            state.rebuildCardHashCache();
+            SnifferUI.forceUpdate();
+        }
+        return "[]";
+    }
+
+    if (e.type === "Backspace") {
+        if (state.currentFloor === "bottom") {
+            state.drawerSearchQuery = (state.drawerSearchQuery || "").slice(0, -1);
+            state.rebuildCardHashCache();
+            SnifferUI.forceUpdate();
+        }
+        return "[]";
+    }
+
     if (e.type === "Click") {
         const idStr = String(e.id || "");
 
-        // Main app grid click (dock clicks are handled by the dock plugin)
+        // Close App Drawer -> Go to Top Floor
+        if (
+            idStr === "drawer_close_btn" ||
+            idStr === "drawer_close_icon" ||
+            idStr === "drawer_handle" ||
+            idStr === "drawer_handle_pill_wrapper"
+        ) {
+            state.goToTopFloor();
+            return "[]";
+        }
+
+        // Open App Drawer -> Go to Bottom Floor
+        if (
+            idStr === "open_drawer_hint" ||
+            idStr === "drawer_hint_icon" ||
+            idStr === "drawer_hint_text"
+        ) {
+            state.goToBottomFloor();
+            return "[]";
+        }
+
+        // Clear Search Query in App Drawer
+        if (idStr === "drawer_search_clear" || idStr === "drawer_clear_label") {
+            state.drawerSearchQuery = "";
+            state.rebuildCardHashCache();
+            SnifferUI.forceUpdate();
+            return "[]";
+        }
+
+        if (
+            idStr === "drawer_search_input" ||
+            idStr === "drawer_search_container" ||
+            idStr === "drawer_search_left_group"
+        ) {
+            state.isSearchFocused = true;
+            if (typeof focusInput === "function") {
+                focusInput("drawer_search_input");
+            }
+            return "[]";
+        }
+
+        // App card click (both main app grid and app drawer)
         const pkg = state.getAppPackageByHash(idStr);
         if (typeof host_log === "function") {
             host_log("[SnifferLauncher JS] Click received for ID: " + idStr + " => Resolved Package: " + (pkg || "null"));

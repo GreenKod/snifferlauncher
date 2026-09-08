@@ -55,7 +55,68 @@ let state = {
     currentPage: 0,
     appsPerPage: APPS_PER_PAGE,
 
+    // 2-Floor Architecture State: "top" = Home Screen, "bottom" = App Drawer
+    currentFloor: "top",
+    drawerSearchQuery: "",
+    showDevKitHud: true,
+
     allApps: loadInitialApps(),
+
+    // Alphabetical apps list (A-Z) for the Bottom Floor (App Drawer)
+    get alphabeticalApps() {
+        const list = this.allApps.slice();
+        list.sort(function(a, b) {
+            const nameA = (a.name || "").toLowerCase();
+            const nameB = (b.name || "").toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+        return list;
+    },
+
+    // Filtered apps in App Drawer based on drawerSearchQuery
+    get filteredDrawerApps() {
+        const q = (this.drawerSearchQuery || "").trim().toLowerCase();
+        if (!q) {
+            return this.alphabeticalApps;
+        }
+        return this.alphabeticalApps.filter(function(app) {
+            const name = (app.name || "").toLowerCase();
+            const pkg = (app.package_name || "").toLowerCase();
+            return name.includes(q) || pkg.includes(q);
+        });
+    },
+
+    goToTopFloor() {
+        if (this.currentFloor !== "top") {
+            this.currentFloor = "top";
+            this.drawerSearchQuery = "";
+            this.isSearchFocused = false;
+            if (typeof blurInput === "function") {
+                blurInput();
+            }
+            if (typeof SnifferUI !== "undefined" && typeof SnifferUI.forceUpdate === "function") {
+                SnifferUI.forceUpdate();
+            }
+        }
+    },
+
+    goToBottomFloor() {
+        if (this.currentFloor !== "bottom") {
+            this.currentFloor = "bottom";
+            this.rebuildCardHashCache();
+            if (typeof SnifferUI !== "undefined" && typeof SnifferUI.forceUpdate === "function") {
+                SnifferUI.forceUpdate();
+            }
+        }
+    },
+
+    toggleFloor() {
+        if (this.currentFloor === "bottom") {
+            this.goToTopFloor();
+        } else {
+            this.goToBottomFloor();
+        }
+    },
 
     // Search-filtered apps query (microsecond latency via Rust DataVault)
     get filteredApps() {
@@ -166,6 +227,33 @@ let state = {
                 }
             }
         }
+
+        // Index Bottom Floor (App Drawer) cards
+        const drawerApps = this.filteredDrawerApps;
+        for (let d = 0; d < drawerApps.length; d++) {
+            const dPkg = drawerApps[d].package_name;
+            if (dPkg) {
+                const cId = "drawer_card_" + d;
+                const icId = "drawer_icon_" + d;
+                const imId = "drawer_img_" + d;
+                const nId = "drawer_name_" + d;
+                const lId = "drawer_letter_" + d;
+                if (typeof host_hash === "function") {
+                    map[host_hash(cId)] = dPkg;
+                    map[host_hash(icId)] = dPkg;
+                    map[host_hash(imId)] = dPkg;
+                    map[host_hash(nId)] = dPkg;
+                    map[host_hash(lId)] = dPkg;
+                } else {
+                    map[cId] = dPkg;
+                    map[icId] = dPkg;
+                    map[imId] = dPkg;
+                    map[nId] = dPkg;
+                    map[lId] = dPkg;
+                }
+            }
+        }
+
         this._cardHashToAppPackage = map;
     }
 };

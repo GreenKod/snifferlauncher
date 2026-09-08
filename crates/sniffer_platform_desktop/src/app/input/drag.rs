@@ -49,9 +49,13 @@ pub fn handle_drag_events(
 
         if let Some(sv_id) = app.active_scrollview_drag {
             if let Some(phys) = app.scroll_physics.get_mut(&sv_id) {
-                phys.apply_drag(s_dx);
+                if phys.snap_x.is_some() {
+                    phys.apply_drag(s_dx);
+                    phys.snap_target_x = None;
+                } else {
+                    phys.apply_drag_y(s_dy);
+                }
                 phys.is_dragging = true;
-                phys.snap_target_x = None;
             } else {
                 let target = sniffer_render::draw::find_hovered_scrollview(
                     root_element,

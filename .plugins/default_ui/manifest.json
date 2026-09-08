@@ -8,6 +8,7 @@
     "state.js",
     "components/layout.js",
     "components/app_grid.js",
+    "components/app_drawer.js",
     "main.js"
   ],
   "preload": [

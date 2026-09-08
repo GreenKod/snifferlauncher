@@ -155,7 +155,8 @@ pub fn spawn_render_thread(
 
                         renderer.clear(0x0000_0000);
 
-                        let _rendered_nodes = draw_ui(
+                        #[allow(unused_variables)]
+                        let rendered_nodes = draw_ui(
                             renderer,
                             &current_state.root_element,
                             &current_state.layout_tree,
@@ -193,6 +194,9 @@ pub fn spawn_render_thread(
                         let swap_end = std::time::Instant::now();
 
                         if let Ok(mut prof) = profiler.lock() {
+                            let total_nodes =
+                                sniffer_core::profiler::count_elements(&current_state.root_element);
+                            prof.record_entities(rendered_nodes, total_nodes);
                             prof.record_frame(render_start, render_start, draw_end, swap_end);
                         }
                     }

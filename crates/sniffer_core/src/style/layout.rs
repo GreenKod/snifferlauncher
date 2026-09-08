@@ -55,13 +55,58 @@ pub enum AlignItems {
     End,
 }
 
+/// How lines are distributed along the cross axis when flex-wrap is active.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub enum AlignContent {
+    #[default]
+    Stretch,
+    Start,
+    Center,
+    End,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
 /// A size value — either automatic, a fixed pixel count, or a percentage.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
 pub enum Dimension {
     #[default]
     Auto,
     Pixels(f32),
     Percent(f32),
+}
+
+impl<'de> Deserialize<'de> for Dimension {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum RawDimension {
+            Explicit(ExplicitDimension),
+            Num(f32),
+            #[allow(dead_code)]
+            Str(String),
+        }
+
+        #[derive(Deserialize)]
+        enum ExplicitDimension {
+            Auto,
+            Pixels(f32),
+            Percent(f32),
+        }
+
+        match RawDimension::deserialize(deserializer)? {
+            RawDimension::Explicit(ExplicitDimension::Auto) | RawDimension::Str(_) => {
+                Ok(Self::Auto)
+            }
+            RawDimension::Explicit(ExplicitDimension::Pixels(px)) => Ok(Self::Pixels(px)),
+            RawDimension::Explicit(ExplicitDimension::Percent(pct)) => Ok(Self::Percent(pct)),
+            RawDimension::Num(n) => Ok(Self::Pixels(n)),
+        }
+    }
 }
 
 /// How an image should be resized to fit its container.
@@ -161,6 +206,20 @@ impl From<AlignItems> for taffy::style::AlignItems {
             AlignItems::Start => Self::FlexStart,
             AlignItems::Center => Self::Center,
             AlignItems::End => Self::FlexEnd,
+        }
+    }
+}
+
+impl From<AlignContent> for taffy::style::AlignContent {
+    fn from(ac: AlignContent) -> Self {
+        match ac {
+            AlignContent::Stretch => Self::Stretch,
+            AlignContent::Start => Self::FlexStart,
+            AlignContent::Center => Self::Center,
+            AlignContent::End => Self::FlexEnd,
+            AlignContent::SpaceBetween => Self::SpaceBetween,
+            AlignContent::SpaceAround => Self::SpaceAround,
+            AlignContent::SpaceEvenly => Self::SpaceEvenly,
         }
     }
 }
