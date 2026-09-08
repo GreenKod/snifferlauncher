@@ -263,3 +263,40 @@ fn test_full_hierarchy_card_position() {
     println!(">>> FULL TREE Card rect: {:?}", card_node.rect);
     assert_eq!(card_node.rect.y, 62.0);
 }
+
+#[test]
+fn test_flex_wrap_align_content_start() {
+    use sniffer_core::style::{AlignContent, FlexDirection, FlexWrap, JustifyContent};
+
+    let make_card = |i: usize| Element::Container {
+        id: Some(format!("card_{i}")),
+        style: Style {
+            width: Dimension::Pixels(200.0),
+            height: Dimension::Pixels(100.0),
+            ..Default::default()
+        },
+        children: vec![],
+    };
+
+    let root = Element::Container {
+        id: Some("grid".to_string()),
+        style: Style {
+            width: Dimension::Pixels(450.0),
+            height: Dimension::Pixels(1000.0),
+            flex_direction: FlexDirection::Row,
+            flex_wrap: FlexWrap::Wrap,
+            justify_content: JustifyContent::Start,
+            align_content: AlignContent::Start,
+            row_gap: 20.0,
+            column_gap: 10.0,
+            ..Default::default()
+        },
+        children: vec![make_card(0), make_card(1), make_card(2), make_card(3)],
+    };
+
+    let layout = calculate_layout(&root, Size::new(450.0, 1000.0), 0.0, 0.0);
+    assert_eq!(layout.children[0].rect.y, 0.0);
+    assert_eq!(layout.children[1].rect.y, 0.0);
+    assert_eq!(layout.children[2].rect.y, 120.0);
+    assert_eq!(layout.children[3].rect.y, 120.0);
+}
