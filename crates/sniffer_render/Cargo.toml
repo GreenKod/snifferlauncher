@@ -10,7 +10,7 @@ devkit = ["sniffer_core/devkit"]
 
 [dependencies]
 sniffer_core = { path = "../sniffer_core" }
-glow = "0.17.0"
+glow = "0.18.0"
 swash = { version = "0.2.9", features = ["scale"] }
 image = { version = "0.25.1", default-features = false, features = ["png", "jpeg"] }
 obfstr = "0.4"
