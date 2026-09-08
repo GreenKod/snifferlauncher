@@ -2,6 +2,11 @@
 
 > A fast, native Android launcher built entirely in Rust, with a plugin-driven UI and an experimental desktop simulator.
 
+[![CI](https://github.com/GreenKod/snifferlauncher/actions/workflows/check.yml/badge.svg)](https://github.com/GreenKod/snifferlauncher/actions/workflows/check.yml)
+[![Rust 2024 Edition](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org/)
+[![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#requirements)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 SnifferLauncher gives you a launcher runtime you can inspect, extend, and iterate on without a JVM or a full Android build stack. The Android app and desktop simulator share the same Rust engine, so UI and plugin work can be tested quickly before deploying to a device.
 
 **No Java. No Kotlin. No Gradle. Just Rust, native Android APIs, and a plugin-oriented UI runtime.**
