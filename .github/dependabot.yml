@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Rust crate bağımlılıklarını haftalık kontrol et
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # GitHub Actions workflow sürümlerini haftalık kontrol et
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
