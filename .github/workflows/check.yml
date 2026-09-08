@@ -12,7 +12,7 @@ permissions:
   pull-requests: write
   issues: write
   checks: write
-  actions: read
+  actions: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
