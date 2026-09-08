@@ -58,7 +58,7 @@ let state = {
     // 2-Floor Architecture State: "top" = Home Screen, "bottom" = App Drawer
     currentFloor: "top",
     drawerSearchQuery: "",
-    showDevKitHud: true,
+    showDevKitHud: typeof host_is_devkit_enabled === "function" && host_is_devkit_enabled(),
 
     allApps: loadInitialApps(),
 

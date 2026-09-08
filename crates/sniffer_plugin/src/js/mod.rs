@@ -67,6 +67,13 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         )
         .unwrap();
 
+    let devkit_enabled = cfg!(feature = "devkit");
+    let is_devkit_enabled_func =
+        Function::new(ctx.clone(), move || -> bool { devkit_enabled }).unwrap();
+    globals
+        .set(obfstr!("host_is_devkit_enabled"), is_devkit_enabled_func)
+        .unwrap();
+
     // host_log, host_warn, host_error
     let p_id_log = plugin_id.clone();
     let log_func = Function::new(ctx.clone(), move |msg: String| {
