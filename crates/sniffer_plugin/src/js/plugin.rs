@@ -1,7 +1,7 @@
 use crate::UiPlugin;
 use crate::dev_err;
 use crate::js::HostApiConfig;
-use crate::js::engine::create_engine;
+use crate::js::engine::{PluginEngine, create_engine};
 use crate::js::register_host_api;
 use crate::registry::{ApiMap, BroadcastQueue};
 use crossbeam_channel::{Sender, unbounded};
@@ -90,13 +90,18 @@ impl JsPlugin {
         let msg_tx_worker = msg_tx.clone();
 
         thread::spawn(move || {
-            let (runtime, context) = match create_engine() {
+            let engine = match create_engine() {
                 Ok(res) => res,
                 Err(e) => {
                     dev_err!("QuickJS worker engine error: {e}");
                     return;
                 }
             };
+            let PluginEngine {
+                runtime,
+                context,
+                deadline_ms,
+            } = engine;
 
             let init_res = context.with(|ctx| {
                 register_host_api(
@@ -228,6 +233,14 @@ impl JsPlugin {
                                 gc_count = 0;
                                 runtime.run_gc();
                             }
+                            // Arm the deadline: if JS takes > 500ms the interrupt
+                            // handler will fire, keeping the launcher responsive.
+                            use std::sync::atomic::Ordering;
+                            deadline_ms.store(
+                                crate::js::engine::now_ms()
+                                    + crate::js::engine::JS_TICK_DEADLINE_MS,
+                                Ordering::Relaxed,
+                            );
                             context.with(|ctx| {
                                 if let Ok(handler) =
                                     ctx.globals().get::<_, rquickjs::Function>("_onTimerTick")
@@ -235,6 +248,8 @@ impl JsPlugin {
                                     let _ = handler.call::<_, ()>(());
                                 }
                             });
+                            // Disarm: normal completion, no interrupt needed.
+                            deadline_ms.store(crate::js::engine::DEADLINE_NONE, Ordering::Relaxed);
                         }
                     }
                     PluginMsg::Broadcast { channel, payload } => {

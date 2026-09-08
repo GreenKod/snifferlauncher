@@ -73,7 +73,7 @@ impl GlowRenderer {
             gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
 
             mod enc {
-                include!(concat!(env!("OUT_DIR"), "/encrypted_assets.rs"));
+                include!(concat!(env!("OUT_DIR"), "/shader_assets.rs"));
             }
 
             #[cfg(target_os = "android")]
@@ -110,21 +110,11 @@ impl GlowRenderer {
                 crate::secure::decrypt(enc::IMAGE_DESKTOP_FS),
             );
 
-            let shape_program = shaders::compile_program(
-                &gl,
-                shape_vertex_src.as_str(),
-                shape_fragment_src.as_str(),
-            )?;
-            let text_program = shaders::compile_program(
-                &gl,
-                text_vertex_src.as_str(),
-                text_fragment_src.as_str(),
-            )?;
-            let image_program = shaders::compile_program(
-                &gl,
-                image_vertex_src.as_str(),
-                image_fragment_src.as_str(),
-            )?;
+            let shape_program =
+                shaders::compile_program(&gl, shape_vertex_src, shape_fragment_src)?;
+            let text_program = shaders::compile_program(&gl, text_vertex_src, text_fragment_src)?;
+            let image_program =
+                shaders::compile_program(&gl, image_vertex_src, image_fragment_src)?;
 
             let (font_texture, font_atlas, atlas_width, atlas_height) =
                 if let Some(font_bytes) = font_data {
