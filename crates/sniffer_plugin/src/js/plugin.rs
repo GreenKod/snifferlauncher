@@ -130,13 +130,17 @@ impl JsPlugin {
                     if let Some(exc) = ctx.catch().as_exception() {
                         let msg = exc.message().unwrap_or_default();
                         let stack = exc.stack().unwrap_or_default();
-                        dev_err!("SCRIPT FAIL {plugin_id}: {msg} | {stack}");
+                        crate::logger::error(
+                            &plugin_id,
+                            &format!("Script eval error: {msg} | {stack}"),
+                        );
                         let _ = std::fs::write(
                             format!("/data/user/0/com.greenkod.snifferlauncher/{plugin_id}.js"),
                             &script_content,
                         );
                         return Err(format!("Script eval error in plugin: {msg}\n{stack}"));
                     }
+                    crate::logger::error(&plugin_id, &format!("Script eval error: {e}"));
                     return Err(format!("Script eval error in plugin: {e}"));
                 }
 
@@ -158,7 +162,10 @@ impl JsPlugin {
                             if let Ok(on_event_fn) = globals.get::<_, rquickjs::Function>("onEvent") {
                                 let event_json = match &event {
                                     UiEvent::Click(id, w, h) => {
-                                        crate::dev_log!("[JS Worker] Dispatching Click to JS: id={id}, w={w}, h={h}");
+                                        crate::logger::info(
+                                            &plugin_id,
+                                            &format!("Dispatching Click: id={id}, w={w}, h={h}"),
+                                        );
                                         format!(r#"{{"type":"Click","id":"{id}","w":{w},"h":{h}}}"#)
                                     }
                                     UiEvent::Hover(id, w, h, x, y) => {
@@ -192,6 +199,8 @@ impl JsPlugin {
                                     UiEvent::PageSnapped { widget_id, page } => {
                                         format!(r#"{{"type":"PageSnapped","widget_id":{widget_id},"page":{page}}}"#)
                                     }
+                                    UiEvent::SwipeUp => r#"{"type":"SwipeUp"}"#.to_string(),
+                                    UiEvent::SwipeDown => r#"{"type":"SwipeDown"}"#.to_string(),
                                 };
                                 let res: Result<rquickjs::Value, _> = on_event_fn.call((event_json,));
                                 if let Err(e) = res {
@@ -199,7 +208,15 @@ impl JsPlugin {
                                     let exc = caught.as_exception();
                                     let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
                                     let stack = exc.as_ref().and_then(|x| x.stack()).unwrap_or_default();
-                                    crate::dev_err!("[JS Worker] onEvent failed in plugin '{}': {msg}\n{stack}\n{e}", plugin_id);
+                                    let err_msg = if !msg.is_empty() {
+                                        format!("{msg}\n{stack}")
+                                    } else {
+                                        e.to_string()
+                                    };
+                                    crate::logger::error(
+                                        &plugin_id,
+                                        &format!("onEvent error: {err_msg}"),
+                                    );
                                 }
                             }
                         });
@@ -256,6 +273,7 @@ impl JsPlugin {
                         is_suspended = false;
                     }
                     PluginMsg::Unload => {
+                        crate::logger::flush();
                         runtime.run_gc();
                         break;
                     }

@@ -1,6 +1,5 @@
 use crate::js::permission_manager::permission_granted;
 use crate::registry::{ApiEntry, ApiMap, BroadcastQueue};
-use crate::{dev_err, dev_log};
 use crossbeam_channel::Sender;
 use obfstr::obfstr;
 use rquickjs::{Ctx, Function, Object};
@@ -55,12 +54,9 @@ pub fn register_ipc_bindings<'js>(
 
         if let Ok(mut map) = api_map_register.lock() {
             if map.contains_key(&name) {
-                dev_log!(
-                    "{} '{}' {} '{}'.",
-                    obfstr!("[IPC] Warning: API"),
-                    name,
-                    obfstr!("is already registered. Overwriting with plugin"),
-                    owning_id
+                crate::logger::warn(
+                    &owning_id,
+                    &format!("API '{name}' is already registered, overwriting"),
                 );
             }
             map.insert(
@@ -70,13 +66,7 @@ pub fn register_ipc_bindings<'js>(
                     callback,
                 },
             );
-            dev_log!(
-                "{} '{}' {} '{}'.",
-                obfstr!("[IPC] Plugin"),
-                owning_id,
-                obfstr!("registered API"),
-                name
-            );
+            crate::logger::info(&owning_id, &format!("registered API '{name}'"));
         }
     })
     .unwrap();
@@ -94,34 +84,29 @@ pub fn register_ipc_bindings<'js>(
             let map = match api_map_call.lock() {
                 Ok(m) => m,
                 Err(_) => {
-                    dev_err!(
-                        "{} '{name}'.",
-                        obfstr!("[IPC] Failed to lock ApiMap for call to")
+                    crate::logger::error(
+                        &calling_plugin_id,
+                        &format!("failed to lock ApiMap for call to '{name}'"),
                     );
                     return None;
                 }
             };
 
             if let Some(entry) = map.get(&name) {
-                dev_log!(
-                    "{} '{}' {} '{}' ({} '{}').",
-                    obfstr!("[IPC] Plugin"),
-                    calling_plugin_id,
-                    obfstr!("calling API"),
-                    name,
-                    obfstr!("owned by"),
-                    entry.plugin_id
+                crate::logger::info(
+                    &calling_plugin_id,
+                    &format!(
+                        "calling API '{name}' (owned by '{}')",
+                        crate::logger::clean_plugin_id(&entry.plugin_id)
+                    ),
                 );
                 let callback = Arc::clone(&entry.callback);
                 drop(map);
                 callback(payload_json)
             } else {
-                dev_err!(
-                    "{} '{}' {} '{}'.",
-                    obfstr!("[IPC] Plugin"),
-                    calling_plugin_id,
-                    obfstr!("tried to call unknown API"),
-                    name
+                crate::logger::error(
+                    &calling_plugin_id,
+                    &format!("tried to call unknown API '{name}'"),
                 );
                 None
             }
@@ -137,12 +122,9 @@ pub fn register_ipc_bindings<'js>(
     let broadcast_plugin_id = plugin_id;
     let broadcast_func =
         Function::new(ctx.clone(), move |channel: String, payload_json: String| {
-            dev_log!(
-                "{} '{}' {} '{}'.",
-                obfstr!("[IPC] Plugin"),
-                broadcast_plugin_id,
-                obfstr!("broadcasting on channel"),
-                channel
+            crate::logger::info(
+                &broadcast_plugin_id,
+                &format!("broadcasting on channel '{channel}'"),
             );
             if let Ok(mut q) = bq.lock() {
                 q.push((channel, payload_json));

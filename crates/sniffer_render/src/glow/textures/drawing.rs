@@ -287,7 +287,7 @@ impl GlowRenderer {
 
             unsafe {
                 self.gl.use_program(Some(self.image_program));
-                self.gl.bind_vertex_array(Some(self.quad_vertex_array));
+                self.ensure_quad_vao();
                 self.gl.active_texture(glow::TEXTURE0);
                 self.gl.bind_texture(glow::TEXTURE_2D, Some(tex));
 

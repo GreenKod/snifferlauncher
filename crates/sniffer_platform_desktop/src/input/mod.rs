@@ -22,12 +22,16 @@ pub fn handle_winit_event(
             app.window_focused = *focused;
             if !*focused {
                 app.is_mouse_down = false;
+                app.is_shift_down = false;
                 if let Some(prev) = app.hovered_btn.take() {
                     app.event_bus.push(UiEvent::HoverEnd(prev));
                 }
                 app.last_mouse_pos = Point::new(-9999.0, -9999.0);
                 input.mouse_moved = true;
             }
+        }
+        WindowEvent::ModifiersChanged(modifiers) => {
+            app.is_shift_down = modifiers.state().shift_key();
         }
         WindowEvent::Ime(ime_event) => match ime_event {
             Ime::Commit(text) => {
@@ -39,6 +43,9 @@ pub fn handle_winit_event(
             _ => {}
         },
         WindowEvent::KeyboardInput { event, .. } => {
+            if event.logical_key == Key::Named(NamedKey::Shift) {
+                app.is_shift_down = event.state == ElementState::Pressed;
+            }
             if event.state == ElementState::Pressed {
                 match event.logical_key {
                     Key::Named(NamedKey::Escape) => {

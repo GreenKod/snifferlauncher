@@ -51,3 +51,52 @@ try {
     var defaultSettings = {};
     globalThis.defaultSettings = defaultSettings;
 }
+
+// =============================================================================
+// Console Polyfill (maps to host logging with deduplication)
+// =============================================================================
+(function() {
+    function formatArgs(args) {
+        if (!args || args.length === 0) return "";
+        return Array.prototype.slice.call(args).map(function(arg) {
+            if (arg === null) return "null";
+            if (arg === undefined) return "undefined";
+            if (typeof arg === "object") {
+                try {
+                    return JSON.stringify(arg);
+                } catch(e) {
+                    return String(arg);
+                }
+            }
+            return String(arg);
+        }).join(" ");
+    }
+
+    globalThis.console = {
+        log: function() {
+            if (typeof host_log === "function") {
+                host_log(formatArgs(arguments));
+            }
+        },
+        info: function() {
+            if (typeof host_log === "function") {
+                host_log(formatArgs(arguments));
+            }
+        },
+        warn: function() {
+            if (typeof host_warn === "function") {
+                host_warn(formatArgs(arguments));
+            } else if (typeof host_log === "function") {
+                host_log(formatArgs(arguments));
+            }
+        },
+        error: function() {
+            if (typeof host_error === "function") {
+                host_error(formatArgs(arguments));
+            } else if (typeof host_log === "function") {
+                host_log(formatArgs(arguments));
+            }
+        }
+    };
+})();
+

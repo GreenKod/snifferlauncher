@@ -10,8 +10,11 @@ use serde::{Deserialize, Serialize};
 pub enum Easing {
     #[default]
     Linear,
+    #[serde(alias = "ease-in")]
     EaseIn,
+    #[serde(alias = "ease-out")]
     EaseOut,
+    #[serde(alias = "ease-in-out")]
     EaseInOut,
     Spring {
         stiffness: f32,

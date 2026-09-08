@@ -81,9 +81,7 @@ pub(crate) fn draw_text_impl(
     col[3] *= renderer.global_alpha;
     unsafe {
         renderer.gl.use_program(Some(renderer.text_program));
-        renderer
-            .gl
-            .bind_vertex_array(Some(renderer.quad_vertex_array));
+        renderer.ensure_quad_vao();
         renderer.gl.active_texture(glow::TEXTURE0);
         renderer
             .gl

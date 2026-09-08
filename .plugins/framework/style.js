@@ -22,6 +22,10 @@ function padXY(v, h) {
     return { top: v, bottom: v, left: h, right: h };
 }
 
+function padTRBL(t, r, b, l) {
+    return { top: t, right: r, bottom: b, left: l };
+}
+
 function vw(percent) {
     return (host_screen_width() * percent) / 100.0;
 }

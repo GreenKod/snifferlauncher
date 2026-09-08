@@ -84,6 +84,11 @@ pub fn handle_mouse_down(
         app.kinetic_scrolls.clear();
     }
 
+    app.active_scrollview_start_y = app
+        .active_scrollview_drag
+        .and_then(|id| app.scroll_physics.get(&id))
+        .map_or(0.0, |p| p.pos_y);
+
     if let Some((clicked_btn, _)) =
         find_clicked_button_with_scroll(root_element, layout_tree, clicked_pt, &|id_opt, sx, sy| {
             resolve_active_scroll(&app.scroll_physics, id_opt, sx, sy)

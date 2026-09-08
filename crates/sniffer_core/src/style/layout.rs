@@ -56,12 +56,44 @@ pub enum AlignItems {
 }
 
 /// A size value — either automatic, a fixed pixel count, or a percentage.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
 pub enum Dimension {
     #[default]
     Auto,
     Pixels(f32),
     Percent(f32),
+}
+
+impl<'de> Deserialize<'de> for Dimension {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum RawDimension {
+            Explicit(ExplicitDimension),
+            Num(f32),
+            #[allow(dead_code)]
+            Str(String),
+        }
+
+        #[derive(Deserialize)]
+        enum ExplicitDimension {
+            Auto,
+            Pixels(f32),
+            Percent(f32),
+        }
+
+        match RawDimension::deserialize(deserializer)? {
+            RawDimension::Explicit(ExplicitDimension::Auto) | RawDimension::Str(_) => {
+                Ok(Self::Auto)
+            }
+            RawDimension::Explicit(ExplicitDimension::Pixels(px)) => Ok(Self::Pixels(px)),
+            RawDimension::Explicit(ExplicitDimension::Percent(pct)) => Ok(Self::Percent(pct)),
+            RawDimension::Num(n) => Ok(Self::Pixels(n)),
+        }
+    }
 }
 
 /// How an image should be resized to fit its container.

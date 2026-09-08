@@ -142,13 +142,9 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
                 style.size.height =
                     Dimension::Length(h_clamped + el_style.padding.top + el_style.padding.bottom);
             }
-            // TextInput must NEVER be shrunk by Taffy flex layout.
-            // flex_shrink=0 and flex_basis matching the explicit height prevents collapse.
-            style.flex_shrink = 0.0;
-            if let Dimension::Length(px_h) = style.size.height {
-                style.flex_basis = Dimension::Length(px_h);
-                // Do NOT set min_size.height here — that would prevent responsive shrinking.
-                // The draw.rs clip rect handles any text overflow.
+            // TextInput must never collapse its height, but allow flex_grow/flex_shrink for width
+            if style.min_size.height == Dimension::Auto {
+                style.min_size.height = style.size.height;
             }
             // Use Visible overflow so Taffy does not try to constrain content size.
             // draw.rs pushes its own clip rect, so GPU clipping is handled there.

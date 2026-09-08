@@ -73,13 +73,13 @@ function SinglePageGridComponent(pageIndex, cfg) {
     const pageApps = state.appsForPage(pageIndex);
     const gridItems = [];
 
-    for (let index = 0; index < cfg.totalSlots; index++) {
-        if (index < pageApps.length) {
-            gridItems.push(AppCardComponent(pageApps[index], pageIndex, index, cfg));
-        } else {
-            gridItems.push(EmptySlotComponent(pageIndex, index, cfg));
-        }
+    for (let index = 0; index < pageApps.length; index++) {
+        gridItems.push(AppCardComponent(pageApps[index], pageIndex, index, cfg));
     }
+
+    const padLeftRight = cfg.isLandscape
+        ? vw(cfg.gapX)
+        : vw(Math.max(0.0, (100.0 - (cfg.cols * cfg.cardW + (cfg.cols - 1) * cfg.gapX)) / 2.0));
 
     return Container("page_grid_" + pageIndex, {
         width: px(vw(cfg.gridW)),
@@ -89,9 +89,14 @@ function SinglePageGridComponent(pageIndex, cfg) {
         flex_wrap: "Wrap",
         justify_content: "Start",
         align_content: "Start",
-        padding: padXY(
+        padding: cfg.isLandscape ? padXY(
             vh(cfg.gapY),
             vw(cfg.gapX)
+        ) : padTRBL(
+            vh(2.6),
+            padLeftRight,
+            vh(1.0),
+            padLeftRight
         ),
         column_gap: vw(cfg.gapX),
         row_gap: vh(cfg.gapY),
@@ -110,7 +115,7 @@ function PageIndicatorDots(totalPages, currentPage, isLandscape) {
                 width: px(vmin(1.6)),
                 height: px(isActive ? vmin(3.6) : vmin(1.6)),
                 border_radius: vmin(0.8),
-                background_color: hex(isActive ? "#00E5FF" : "#ffffff44"),
+                background_color: hex(isActive ? "#00E5FF" : "#55FFFFFF"),
                 transition: { duration: 0.2 },
             }, []));
         } else {
@@ -119,7 +124,7 @@ function PageIndicatorDots(totalPages, currentPage, isLandscape) {
                 width: px(isActive ? vmin(3.6) : vmin(1.6)),
                 height: px(vmin(1.6)),
                 border_radius: vmin(0.8),
-                background_color: hex(isActive ? "#00E5FF" : "#ffffff44"),
+                background_color: hex(isActive ? "#00E5FF" : "#55FFFFFF"),
                 transition: { duration: 0.2 },
             }, []));
         }
