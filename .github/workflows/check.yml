@@ -12,7 +12,7 @@ permissions:
   pull-requests: write
   issues: write
   checks: write
-  actions: read
+  actions: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
@@ -332,11 +332,15 @@ jobs:
         run: |
           SYSROOT="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
           BINDGEN_EXTRA_CLANG_ARGS="--target=aarch64-linux-android30 --sysroot=$SYSROOT" cargo apk build --target aarch64-linux-android --lib --release
+          mkdir -p target/apks/arm64
+          cp target/release/apk/snifferlauncher.apk target/apks/arm64/snifferlauncher-arm64.apk
 
       - name: Build Android Emulator x86_64 Release APK
         run: |
           SYSROOT="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
           BINDGEN_EXTRA_CLANG_ARGS="--target=x86_64-linux-android30 --sysroot=$SYSROOT" cargo apk build --target x86_64-linux-android --lib --release
+          mkdir -p target/apks/x86_64
+          cp target/release/apk/snifferlauncher.apk target/apks/x86_64/snifferlauncher-x86_64.apk
 
       - name: Upload Android Release APKs
         uses: actions/upload-artifact@v4
