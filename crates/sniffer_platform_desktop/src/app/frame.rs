@@ -116,6 +116,11 @@ pub fn render_desktop_frame(
 
     let metrics = ScreenMetrics::from_dpi(width, height, desktop.dpi);
     let layout_tree = calculate_layout(&root_element, Size::new(width, height), 0.0, 0.0);
+    sniffer_core::physics::sync_max_scroll_from_layout(
+        &root_element,
+        &layout_tree,
+        &mut app.scroll_physics,
+    );
 
     process_frame_inputs(
         app,
@@ -162,7 +167,8 @@ pub fn render_desktop_frame(
     renderer.begin_frame(width, height);
     renderer.clear(DESKTOP_BG_COLOR);
 
-    let _rendered_nodes = draw_ui(
+    #[allow(unused_variables)]
+    let rendered_nodes = draw_ui(
         renderer,
         &root_element,
         &layout_tree,
@@ -203,6 +209,8 @@ pub fn render_desktop_frame(
 
     #[cfg(feature = "devkit")]
     if let Ok(mut prof) = app.profiler.lock() {
+        let total_nodes = sniffer_core::profiler::count_elements(&root_element);
+        prof.record_entities(rendered_nodes, total_nodes);
         prof.record_frame(render_start, render_start, draw_end, swap_end);
         prof.touch_telemetry.active_pointers = usize::from(app.is_mouse_down);
         prof.touch_telemetry.touch_x = scaled_last_mouse_pos.x;

@@ -19,6 +19,10 @@ pub enum UiEvent {
         widget_id: u64,
         page: i32,
     },
+    /// Gesture: Vertical swipe upwards (e.g. to open bottom floor/drawer).
+    SwipeUp,
+    /// Gesture: Vertical swipe downwards (e.g. to return to top floor/home).
+    SwipeDown,
 }
 
 #[derive(Default)]

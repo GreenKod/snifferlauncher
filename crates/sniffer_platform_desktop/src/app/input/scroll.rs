@@ -14,6 +14,8 @@ pub fn handle_scroll_events(
     scaled_last_mouse_pos: Point,
 ) {
     for &(x, y) in scroll_events {
+        let eff_y = if y.abs() > 0.001 { y } else { -x };
+
         let target = sniffer_render::draw::find_hovered_scrollview(
             root_element,
             layout_tree,
@@ -21,53 +23,67 @@ pub fn handle_scroll_events(
         )
         .or_else(|| find_first_scrollview(root_element, layout_tree));
 
-        if let Some((
-            Element::ScrollView {
-                id,
-                scroll_sensitivity,
-                dynamic_sensitivity,
-                ..
-            },
-            lay,
-        )) = target
-        {
-            let mut factor = scroll_sensitivity.unwrap_or(1.0);
-            if dynamic_sensitivity.unwrap_or(false) && !lay.children.is_empty() {
-                let view_height = lay.rect.height;
-                let mut min_y = f32::MAX;
-                let mut max_y = f32::MIN;
-                for child in &lay.children {
-                    if child.rect.y < min_y {
-                        min_y = child.rect.y;
+        if app.is_shift_down {
+            // Shift + Scroll: Strictly VERTICAL (Floor transitions or vertical list scrolling)
+            if let Some((Element::ScrollView { id, .. }, _lay)) = target {
+                let sv_id = id
+                    .as_deref()
+                    .map(|id_str| sniffer_core::ui::widget::fnv1a(id_str.as_bytes()));
+
+                if let Some(wid) = sv_id {
+                    if let Some(phys) = app.scroll_physics.get_mut(&wid) {
+                        if phys.snap_x.is_some() {
+                            // Floor 1 (Home Screen pager): Shift + wheel navigates floors
+                            if eff_y < -0.1 {
+                                app.event_bus.push(UiEvent::SwipeUp);
+                            } else if eff_y > 0.1 {
+                                app.event_bus.push(UiEvent::SwipeDown);
+                            }
+                        } else {
+                            // Floor 2 (App Drawer vertical list)
+                            if eff_y > 0.1 && phys.pos_y <= 0.01 {
+                                // At the top of App Drawer and scrolling UP -> return to Floor 1
+                                app.event_bus.push(UiEvent::SwipeDown);
+                            } else {
+                                // Scroll the vertical app list
+                                let delta_y = -eff_y * 24.0;
+                                phys.apply_drag_y(delta_y);
+                                phys.release_drag_y(delta_y * 1.8);
+                            }
+                        }
+                    } else if eff_y < -0.1 {
+                        app.event_bus.push(UiEvent::SwipeUp);
+                    } else if eff_y > 0.1 {
+                        app.event_bus.push(UiEvent::SwipeDown);
                     }
-                    if child.rect.y + child.rect.height > max_y {
-                        max_y = child.rect.y + child.rect.height;
-                    }
+                } else if eff_y < -0.1 {
+                    app.event_bus.push(UiEvent::SwipeUp);
+                } else if eff_y > 0.1 {
+                    app.event_bus.push(UiEvent::SwipeDown);
                 }
-                let content_height = max_y - min_y;
-                if view_height > 0.0 && content_height > view_height {
-                    factor *= content_height / view_height;
-                }
+            } else if eff_y < -0.1 {
+                app.event_bus.push(UiEvent::SwipeUp);
+            } else if eff_y > 0.1 {
+                app.event_bus.push(UiEvent::SwipeDown);
             }
+        } else {
+            // Normal scroll (without Shift): Strictly HORIZONTAL!
+            if let Some((Element::ScrollView { id, .. }, _lay)) = target {
+                let sv_id = id
+                    .as_deref()
+                    .map(|id_str| sniffer_core::ui::widget::fnv1a(id_str.as_bytes()));
 
-            let sv_id = id
-                .as_deref()
-                .map(|id_str| sniffer_core::ui::widget::fnv1a(id_str.as_bytes()));
-
-            if let Some(wid) = sv_id {
-                if let Some(phys) = app.scroll_physics.get_mut(&wid) {
-                    let delta = -x * 30.0 - y * 30.0;
-                    phys.apply_drag(delta);
-                    phys.release_drag(delta * 4.0);
-                } else {
-                    let max_scroll = get_max_scroll_for_lay(lay);
-                    app.event_bus.push(UiEvent::Scroll(
-                        Some(wid),
-                        -x * 20.0 * factor,
-                        -y * 20.0 * factor,
-                        max_scroll.0,
-                        max_scroll.1,
-                    ));
+                if let Some(wid) = sv_id {
+                    if let Some(phys) = app.scroll_physics.get_mut(&wid) {
+                        if phys.snap_x.is_some() {
+                            // Floor 1 (Home Screen pager): Horizontal paging
+                            let delta = -x * 30.0 - y * 30.0;
+                            phys.apply_drag(delta);
+                            phys.release_drag(delta * 4.0);
+                        } else {
+                            // Floor 2 (App Drawer): No horizontal motion exists; do NOT scroll without Shift!
+                        }
+                    }
                 }
             }
         }

@@ -117,8 +117,16 @@ pub fn register_ui_bindings<'js>(
                 }
             }
             Err(e) => {
+                let col = e.column();
+                let start = col.saturating_sub(50);
+                let end = (col + 50).min(json_str.len());
+                let snippet = if start < json_str.len() {
+                    &json_str[start..end]
+                } else {
+                    ""
+                };
                 dev_err!(
-                    "{}: {e}",
+                    "{}: {e} (around col {col}: '{snippet}')",
                     obfstr!("JS Error: Failed to parse host_set_ui JSON")
                 );
             }

@@ -52,6 +52,9 @@ pub fn draw_ui(
     }
 
     let final_alpha = alpha_multiplier * base_style.opacity.clamp(0.0, 1.0);
+    if final_alpha < 0.005 {
+        return 0;
+    }
 
     let screen_w = metrics.physical_width;
     let screen_h = metrics.physical_height;

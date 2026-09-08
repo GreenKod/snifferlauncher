@@ -41,7 +41,13 @@ globalThis._onTimerTick = function() {
         const timer = globalThis._timers[id];
         if (now - timer.lastRun >= timer.delay) {
             timer.lastRun = now;
-            try { timer.callback(); } catch(e) {}
+            try { 
+                timer.callback(); 
+            } catch(e) {
+                if (typeof host_error === "function") {
+                    host_error("Timer callback error: " + (e && e.stack ? e.stack : e));
+                }
+            }
             if (timer.once) {
                 delete globalThis._timers[id];
             }

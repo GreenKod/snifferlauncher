@@ -15,45 +15,54 @@ pub fn handle_touch_release(
     layout_tree: &sniffer_core::layout::LayoutNode,
     point: Point,
 ) -> InputStatus {
+    let cutoff = std::time::Instant::now()
+        .checked_sub(std::time::Duration::from_millis(150))
+        .unwrap_or_else(std::time::Instant::now);
+    let mut recent_count = 0;
+    let mut total_dx = 0.0;
+    let mut first_time = None;
+    let mut last_time = None;
+    let mut total_dy = 0.0;
+
+    for &(dx, dy, t) in &state.drag_history {
+        if t >= cutoff {
+            if first_time.is_none() {
+                first_time = Some(t);
+            }
+            last_time = Some(t);
+            total_dx += dx;
+            total_dy += dy;
+            recent_count += 1;
+        }
+    }
+
+    let (fling_vel_x, fling_vel_y) = if recent_count >= 2 {
+        let dt_recent = last_time
+            .unwrap()
+            .duration_since(first_time.unwrap())
+            .as_secs_f32()
+            .max(0.001);
+        (total_dx / dt_recent, total_dy / dt_recent)
+    } else if let Some(last) = last_time {
+        let dt_recent = std::time::Instant::now()
+            .duration_since(last)
+            .as_secs_f32()
+            .max(0.001);
+        (
+            state.last_drag_delta.0 / dt_recent,
+            state.last_drag_delta.1 / dt_recent,
+        )
+    } else {
+        (0.0, 0.0)
+    };
+
     if let Some(sv_id) = state.active_scrollview_drag {
         if let Some(phys) = state.scroll_physics.get_mut(&sv_id) {
-            let cutoff = std::time::Instant::now()
-                .checked_sub(std::time::Duration::from_millis(150))
-                .unwrap_or_else(std::time::Instant::now);
-            let mut recent_count = 0;
-            let mut total_dx = 0.0;
-            let mut first_time = None;
-            let mut last_time = None;
-
-            for &(dx, _, t) in &state.drag_history {
-                if t >= cutoff {
-                    if first_time.is_none() {
-                        first_time = Some(t);
-                    }
-                    last_time = Some(t);
-                    total_dx += dx;
-                    recent_count += 1;
-                }
-            }
-
-            let fling_vel_x = if recent_count >= 2 {
-                let dt_recent = last_time
-                    .unwrap()
-                    .duration_since(first_time.unwrap())
-                    .as_secs_f32()
-                    .max(0.001);
-                total_dx / dt_recent
-            } else if let Some(last) = last_time {
-                let dt_recent = std::time::Instant::now()
-                    .duration_since(last)
-                    .as_secs_f32()
-                    .max(0.001);
-                state.last_drag_delta.0 / dt_recent
+            if phys.snap_x.is_some() {
+                phys.release_drag(fling_vel_x);
             } else {
-                0.0
-            };
-
-            phys.release_drag(fling_vel_x);
+                phys.release_drag_y(fling_vel_y);
+            }
         } else {
             let momentum_enabled = if let Some((
                 sniffer_core::types::Element::ScrollView {
@@ -68,33 +77,10 @@ pub fn handle_touch_release(
             };
 
             if momentum_enabled {
-                let cutoff = std::time::Instant::now()
-                    .checked_sub(std::time::Duration::from_millis(150))
-                    .unwrap_or_else(std::time::Instant::now);
-                let mut recent_count = 0;
-                let mut sum_dx = 0.0;
-                let mut sum_dy = 0.0;
-
-                for &(dx, dy, t) in &state.drag_history {
-                    if t >= cutoff {
-                        sum_dx += dx;
-                        sum_dy += dy;
-                        recent_count += 1;
-                    }
-                }
-
-                let (vel_x, vel_y) = if recent_count == 0 {
-                    state.last_drag_delta
-                } else {
-                    #[allow(clippy::cast_precision_loss)]
-                    let n = recent_count as f32;
-                    (sum_dx / n, sum_dy / n)
-                };
-
                 state.kinetic_scrolls.push(crate::app::KineticScroll {
                     sv_id,
-                    velocity_x: vel_x,
-                    velocity_y: vel_y,
+                    velocity_x: fling_vel_x,
+                    velocity_y: fling_vel_y,
                 });
             }
         }
@@ -167,16 +153,43 @@ pub fn handle_touch_release(
             state.event_bus.push(UiEvent::ClickOutside);
         }
     } else {
-        sniffer_core::dev_log!(
-            "[Input] Swipe detected (dist={tap_dist:.1}, thresh={tap_threshold:.1})"
-        );
+        let dy = point.y - state.touch_start_pos.y;
+        let dx = point.x - state.touch_start_pos.x;
+        let was_scrolled_down = state.active_scrollview_start_y > 10.0;
+        let vel_y_down = -fling_vel_y;
+
+        let swipe_thresh = 120.0 * density;
+        let flick_thresh = 50.0 * density;
+
+        if dy.abs() > dx.abs() * 1.3 {
+            if dy < 0.0 {
+                // SwipeUp: Open drawer from home screen
+                let upward_dist = -dy;
+                let is_flick = upward_dist > flick_thresh && vel_y_down < -400.0;
+                let is_drag = upward_dist >= swipe_thresh;
+                if is_flick || is_drag {
+                    state.event_bus.push(UiEvent::SwipeUp);
+                }
+            } else if !was_scrolled_down {
+                // SwipeDown: Close drawer back to home screen
+                // Only allowed when NOT scrolled down within the list of apps!
+                let downward_dist = dy;
+                let is_flick = downward_dist > flick_thresh && vel_y_down > 400.0;
+                let is_drag = downward_dist >= (swipe_thresh * 1.1);
+                if is_flick || is_drag {
+                    state.event_bus.push(UiEvent::SwipeDown);
+                }
+            }
+        }
         state.event_bus.push(UiEvent::ClickOutside);
     }
+    state.active_scrollview_start_y = 0.0;
     InputStatus::Handled
 }
 
 pub fn handle_touch_cancel(state: &mut crate::app::AppState) -> InputStatus {
     state.active_scrollview_drag = None;
+    state.active_scrollview_start_y = 0.0;
     state.drag_history.clear();
     let prev_hovered = state.hovered_btn;
     state.hovered_btn = None;

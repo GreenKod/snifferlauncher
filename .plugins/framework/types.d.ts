@@ -190,6 +190,15 @@ declare const Vault: NativeVault;
 declare const SnifferUI: SnifferUIFramework;
 declare function hex(hexStr: string): number;
 declare function hexToColor(hexStr: string): number;
+declare function px(n: number): { Pixels: number };
+declare function pct(n: number): { Percent: number };
+declare function pad(all: number): { top: number; bottom: number; left: number; right: number };
+declare function padXY(v: number, h: number): { top: number; bottom: number; left: number; right: number };
+declare function padTRBL(t: number, r: number, b: number, l: number): { top: number; bottom: number; left: number; right: number };
+declare function vw(percent: number): number;
+declare function vh(percent: number): number;
+declare function vmin(percent: number): number;
+declare function vmax(percent: number): number;
 
 declare function Container(id?: string | null, style?: Style, children?: UIElement[]): UIElement;
 declare function Label(id?: string | null, text?: string, style?: Style): UIElement;
