@@ -51,6 +51,7 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
     style.flex_wrap = el_style.flex_wrap.into();
     style.justify_content = Some(el_style.justify_content.into());
     style.align_items = Some(el_style.align_items.into());
+    style.align_content = Some(el_style.align_content.into());
 
     style.flex_grow = el_style.flex_grow;
     style.flex_shrink = el_style.flex_shrink;
