@@ -382,9 +382,11 @@ jobs:
       - name: Install Android SDK Build-Tools and NDK
         run: |
           sdkmanager "ndk;26.1.10909125" "build-tools;34.0.0" "platforms;android-34"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
-          echo "NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
+          {
+            echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125"
+            echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/26.1.10909125"
+            echo "NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125"
+          } >> "$GITHUB_ENV"
 
       - name: Setup Rust Toolchain and Android Targets
         uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
@@ -469,6 +471,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+
       - name: Enable KVM permissions
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -478,7 +483,7 @@ jobs:
           ls -l /dev/kvm || true
 
       - name: Run Android Emulator and Health Check
-        uses: reactivecircus/android-emulator-runner@e93c997dcab69054e999e3924af3d21c4a736e13 # v2.9.0
+        uses: reactivecircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
         with:
           api-level: 30
           target: default
@@ -545,17 +550,27 @@ jobs:
       - name: Prepare and Deduplicate Artifacts for Scanning
         run: |
           mkdir -p scan_prepared
-          [ -f scan_artifacts/windows/snifferlauncher-desktop.exe ] && cp scan_artifacts/windows/snifferlauncher-desktop.exe scan_prepared/snifferlauncher-windows.exe || true
-          [ -f scan_artifacts/linux/snifferlauncher-desktop ] && cp scan_artifacts/linux/snifferlauncher-desktop scan_prepared/snifferlauncher-linux || true
-          [ -f scan_artifacts/macos/snifferlauncher-desktop ] && cp scan_artifacts/macos/snifferlauncher-desktop scan_prepared/snifferlauncher-macos || true
-          find scan_artifacts/android -name "*.apk" -exec cp {} scan_prepared/ \; 2>/dev/null || true
+          if [ -f scan_artifacts/windows/snifferlauncher-desktop.exe ]; then
+            cp scan_artifacts/windows/snifferlauncher-desktop.exe scan_prepared/snifferlauncher-windows.exe
+          fi
+          if [ -f scan_artifacts/linux/snifferlauncher-desktop ]; then
+            cp scan_artifacts/linux/snifferlauncher-desktop scan_prepared/snifferlauncher-linux
+          fi
+          if [ -f scan_artifacts/macos/snifferlauncher-desktop ]; then
+            cp scan_artifacts/macos/snifferlauncher-desktop scan_prepared/snifferlauncher-macos
+          fi
+          if [ -d scan_artifacts/android ]; then
+            find scan_artifacts/android -name "*.apk" -exec cp {} scan_prepared/ \; 2>/dev/null || true
+          fi
 
       - name: List Artifacts for Scanning
         run: |
-          echo "### 📦 Artifacts Prepared for Security Analysis" >> $GITHUB_STEP_SUMMARY
-          echo "| Artifact File | Size |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          find scan_prepared -type f -exec ls -lh {} + 2>/dev/null | awk '{print "| `" $9 "` | " $5 " |"}' >> $GITHUB_STEP_SUMMARY || echo "No artifacts found."
+          {
+            echo "### 📦 Artifacts Prepared for Security Analysis"
+            echo "| Artifact File | Size |"
+            echo "|---|---|"
+            find scan_prepared -type f -exec ls -lh {} + 2>/dev/null | awk '{print "| `" $9 "` | " $5 " |"}' || echo "No artifacts found."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Scan Artifacts with VirusTotal
         uses: crazy-max/ghaction-virustotal@d34968c958ae283fe976efed637081b9f9dcf74f # v4.2.0
@@ -571,10 +586,12 @@ jobs:
         if: env.VIRUSTOTAL_API_KEY == ''
         run: |
           echo "::warning title=VirusTotal Scan Skipped::VIRUSTOTAL_API_KEY secret is not configured in repository settings. Artifact malware scanning was skipped. To activate automated binary scanning, add VIRUSTOTAL_API_KEY to Repository Secrets."
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ⚠️ VirusTotal Taraması Atlandı" >> $GITHUB_STEP_SUMMARY
-          echo "> **Uyarı:** \`VIRUSTOTAL_API_KEY\` gizli anahtarı tanımlanmadığı için ikili dosya ve APK taraması atlandı." >> $GITHUB_STEP_SUMMARY
-          echo "> Otomatik antivirüs taramasını aktif etmek için GitHub reponuzda **Settings > Secrets and variables > Actions** sekmesine giderek anahtarınızı ekleyebilirsiniz." >> $GITHUB_STEP_SUMMARY
+          {
+            echo ""
+            echo "### ⚠️ VirusTotal Taraması Atlandı"
+            echo "> **Uyarı:** \`VIRUSTOTAL_API_KEY\` gizli anahtarı tanımlanmadığı için ikili dosya ve APK taraması atlandı."
+            echo "> Otomatik antivirüs taramasını aktif etmek için GitHub reponuzda **Settings > Secrets and variables > Actions** sekmesine giderek anahtarınızı ekleyebilirsiniz."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ==========================================
   # STAGE 5: Consolidated Branch Protection Gate
