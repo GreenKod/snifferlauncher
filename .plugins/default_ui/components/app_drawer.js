@@ -221,19 +221,17 @@ function AppDrawerComponent() {
         left: px(0),
         width: pct(100),
         height: pct(100),
-        background_gradient: [hex("#D80B101D"), hex("#F204070D")],
-        border_width: 1.0,
-        border_color: hex("#20FFFFFF"),
+        background_gradient: [hex("#FF0A0E18"), hex("#FF05070D")],
         flex_direction: "Column",
         justify_content: "Start",
         align_items: "Stretch",
         opacity: isBottomFloor ? 1.0 : 0.0,
         transform: {
-            translate_y: isBottomFloor ? 0.0 : vh(50.0),
-            scale: isBottomFloor ? 1.0 : 0.94,
+            translate_y: isBottomFloor ? 0.0 : vh(100.0),
+            scale: 1.0,
         },
         transition: {
-            duration: 0.28,
+            duration: 0.32,
             easing: "ease_out"
         }
     }, drawerChildren);

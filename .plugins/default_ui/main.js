@@ -73,13 +73,13 @@ function Root() {
         flex_direction: isLandscape ? "Row" : "Column",
         justify_content: "Start",
         align_items: "Stretch",
-        opacity: isBottomFloor ? 0.0 : 1.0,
+        opacity: isBottomFloor ? 0.2 : 1.0,
         transform: {
-            scale: isBottomFloor ? 0.92 : 1.0,
-            translate_y: isBottomFloor ? -vh(12.0) : 0.0,
+            scale: 1.0,
+            translate_y: 0.0,
         },
         transition: {
-            duration: 0.28,
+            duration: 0.32,
             easing: "ease_out"
         }
     }, homeChildren);

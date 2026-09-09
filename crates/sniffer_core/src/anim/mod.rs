@@ -62,13 +62,17 @@ pub fn evaluate_easing(easing: &Easing, mut t: f32) -> f32 {
 
     match easing {
         Easing::Linear => t,
-        Easing::EaseIn => t * t,
-        Easing::EaseOut => ((1.0 - t) * (1.0 - t)).mul_add(-(1.0 - t), 1.0),
+        Easing::EaseIn => t * t * t,
+        Easing::EaseOut => {
+            let inv = 1.0 - t;
+            1.0 - (inv * inv * inv * inv)
+        }
         Easing::EaseInOut => {
             if t < 0.5 {
-                2.0 * t * t
+                4.0 * t * t * t
             } else {
-                2.0f32.mul_add(-t, 4.0).mul_add(t, -1.0)
+                let inv = -2.0f32.mul_add(t, -2.0);
+                1.0 - (inv * inv * inv) / 2.0
             }
         }
         Easing::Spring { stiffness, damping } => {
@@ -98,7 +102,10 @@ impl AnimState {
             return;
         }
 
-        self.time_elapsed += dt;
+        // Clamp dt step to 24ms (approx 40 FPS minimum step) to prevent heavy frame-initialization spikes
+        // from skipping the beginning of the animation.
+        let dt_clamped = dt.clamp(0.0, 0.024);
+        self.time_elapsed += dt_clamped;
         let duration = self.target_style.transition.duration;
 
         let mut t = if duration > 0.0 {

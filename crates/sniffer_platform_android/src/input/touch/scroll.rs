@@ -65,48 +65,6 @@ pub fn handle_touch_move_or_down(
         }
     }
 
-    let prev_hovered = state.hovered_btn;
-    let hovered_data =
-        find_hovered_button_with_scroll(root_element, layout_tree, point, &|id_opt, sx, sy| {
-            resolve_active_scroll(&state.scroll_physics, id_opt, sx, sy)
-        });
-    state.hovered_btn = hovered_data.map(|(id, _)| id);
-
-    match (prev_hovered, hovered_data) {
-        (Some(prev), Some((current, rect))) if prev != current => {
-            state.event_bus.push(UiEvent::HoverEnd(prev));
-            state.event_bus.push(UiEvent::Hover(
-                current,
-                rect.width,
-                rect.height,
-                point.x - rect.x,
-                point.y - rect.y,
-            ));
-        }
-        (Some(prev), Some((current, rect))) if prev == current => {
-            state.event_bus.push(UiEvent::Hover(
-                current,
-                rect.width,
-                rect.height,
-                point.x - rect.x,
-                point.y - rect.y,
-            ));
-        }
-        (None, Some((current, rect))) => {
-            state.event_bus.push(UiEvent::Hover(
-                current,
-                rect.width,
-                rect.height,
-                point.x - rect.x,
-                point.y - rect.y,
-            ));
-        }
-        (Some(prev), None) => {
-            state.event_bus.push(UiEvent::HoverEnd(prev));
-        }
-        _ => {}
-    }
-
     if motion_event.action() == MotionAction::Move {
         state.last_drag_delta = (delta_x, delta_y);
         state
@@ -144,6 +102,60 @@ pub fn handle_touch_move_or_down(
         }
     }
 
+    let mut target_name = "None".to_string();
+
+    // Hover management:
+    // When actively dragging/scrolling, touchscreens do not have cursor hover.
+    // Suppress expensive layout tree hit-testing and avoid spamming QuickJS runtimes
+    // with 120Hz UiEvent::Hover IPC messages.
+    if state.active_scrollview_drag.is_some() {
+        if let Some(prev) = state.hovered_btn.take() {
+            state.event_bus.push(UiEvent::HoverEnd(prev));
+        }
+        if let Some(sv_id) = state.active_scrollview_drag {
+            target_name = format!("sv_{sv_id:x}");
+        }
+    } else {
+        let prev_hovered = state.hovered_btn;
+        let hovered_data =
+            find_hovered_button_with_scroll(root_element, layout_tree, point, &|id_opt, sx, sy| {
+                resolve_active_scroll(&state.scroll_physics, id_opt, sx, sy)
+            });
+        state.hovered_btn = hovered_data.map(|(id, _)| id);
+
+        if let Some((btn, _)) = hovered_data {
+            target_name = format!("btn_{btn:x}");
+        }
+
+        match (prev_hovered, hovered_data) {
+            (Some(prev), Some((current, rect))) if prev != current => {
+                state.event_bus.push(UiEvent::HoverEnd(prev));
+                state.event_bus.push(UiEvent::Hover(
+                    current,
+                    rect.width,
+                    rect.height,
+                    point.x - rect.x,
+                    point.y - rect.y,
+                ));
+            }
+            (None, Some((current, rect))) => {
+                state.event_bus.push(UiEvent::Hover(
+                    current,
+                    rect.width,
+                    rect.height,
+                    point.x - rect.x,
+                    point.y - rect.y,
+                ));
+            }
+            (Some(prev), None) => {
+                state.event_bus.push(UiEvent::HoverEnd(prev));
+            }
+            _ => {
+                // When prev == current, do NOT spam UiEvent::Hover on touch move.
+            }
+        }
+    }
+
     let pointer_count = motion_event.pointers().count();
     let gesture_name = match motion_event.action() {
         MotionAction::Down | MotionAction::PointerDown => "DOWN",
@@ -157,9 +169,6 @@ pub fn handle_touch_move_or_down(
         _ => "UNKNOWN",
     }
     .to_string();
-
-    let target_name =
-        hovered_data.map_or_else(|| "None".to_string(), |(btn, _)| format!("btn_{btn:x}"));
 
     if let Ok(mut prof) = state.profiler.lock() {
         prof.touch_telemetry.active_pointers = pointer_count;
