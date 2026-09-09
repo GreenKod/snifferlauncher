@@ -9,10 +9,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
-  checks: write
-  actions: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
@@ -22,23 +18,23 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "-D warnings"
-  CARGO_PROFILE_RELEASE_LTO: "thin"
-  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
 
 jobs:
   changes:
     name: Detect Relevant Changes
     runs-on: ubuntu-latest
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
+      source: ${{ steps.filter.outputs.source }}
+      ci: ${{ steps.filter.outputs.ci }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Filter Changed Files
         id: filter
         if: github.event_name != 'workflow_dispatch'
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
         with:
           filters: .github/paths.yaml
 
@@ -46,49 +42,53 @@ jobs:
   # STAGE 1: Quick Pre-flight Checks (Parallel)
   # ==========================================
   pre-flight:
-    name: Quick Pre-flight Checks
+    name: Pre-flight Quality & Security Gate
     runs-on: ubuntu-latest
     needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.source == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
+      - name: Lint GitHub Actions workflows
+        uses: nicholas-fedor/actionlint-action@78fd91fa48051abcbeac14c695a0921b0a71e9a1 # v1.0.0
+        with:
+          version: "1.7.12"
+
       - name: Dependency 24h Quarantine & Supply-Chain Age Gate
-        run: python3 .github/scripts/check_dependency_age.py
+        run: python3 .github/scripts/check_dependency_age.py ${{ github.event_name == 'pull_request' && '--strict' || '' }}
 
       - name: Secret Leak Detection (Gitleaks)
-        uses: gitleaks/gitleaks-action@v2
-        continue-on-error: true
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Dependency Review
         if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
-        continue-on-error: true
+        uses: actions/dependency-review-action@284c089a1c4d8e8673b7398cdb8df358a9de47ad # v4
         with:
           fail-on-severity: moderate
 
       - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
-          components: rustfmt
+          toolchain: 1.98.0
 
       - name: Check Formatting (cargo fmt)
         run: cargo fmt --all --check
 
       - name: Run Typos Spell Check
-        uses: crate-ci/typos@v1
+        uses: crate-ci/typos@d43b6c087ac471e2ea7b8af622ff15f05c0c365b # v1.50.1
 
       - name: Run cargo-deny (Licenses & Advisories)
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
+        uses: cargo-bins/cargo-binstall@23ee8ab6b7397851bc11705bcdf46f2519ea0285 # v1.9.0
 
       - name: Run cargo-machete (Unused Dependencies)
         run: |
@@ -107,13 +107,13 @@ jobs:
 
   # Linux (Desktop) Verification & Visual Smoke Test
   validate-linux:
-    name: Linux Desktop & Visual Smoke
+    name: Linux Desktop (Quality & Smoke)
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.source == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install System Dependencies
         run: |
@@ -134,12 +134,13 @@ jobs:
             cmake
 
       - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
+          toolchain: 1.98.0
           components: clippy
 
       - name: Cache Dependencies and Build Artifacts
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
         with:
           key: linux-desktop
 
@@ -160,40 +161,54 @@ jobs:
 
       - name: Linux Desktop Visual Smoke Test (Xvfb)
         run: |
-          timeout 60s xvfb-run --auto-servernum --server-args="-screen 0 1280x900x24 +extension GLX" env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_GL_VERSION_OVERRIDE=3.3 SNIFFER_SMOKE_TEST_FRAMES=15 SNIFFER_SCREENSHOT_PATH=desktop_screenshot.png target/release/snifferlauncher-desktop
+          set -eo pipefail
+          echo "Starting Linux desktop visual smoke test under Xvfb..."
+          timeout 60s xvfb-run --auto-servernum --server-args="-screen 0 1280x900x24 +extension GLX" \
+            env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe MESA_GL_VERSION_OVERRIDE=3.3 \
+            SNIFFER_SMOKE_TEST_FRAMES=15 SNIFFER_SCREENSHOT_PATH=desktop_screenshot.png \
+            target/release/snifferlauncher-desktop 2>&1 | tee linux_smoke.log
 
-      - name: Upload Desktop Smoke Screenshot
-        uses: actions/upload-artifact@v4
+          if [ ! -s desktop_screenshot.png ]; then
+            echo "::error::desktop_screenshot.png is missing or empty!"
+            exit 1
+          fi
+          echo "Linux desktop visual smoke test passed successfully."
+
+      - name: Upload Desktop Smoke Artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: desktop-visual-smoke
-          path: desktop_screenshot.png
+          path: |
+            desktop_screenshot.png
+            linux_smoke.log
           if-no-files-found: warn
 
       - name: Upload Linux Desktop Binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: linux-desktop-binary
           path: target/release/snifferlauncher-desktop
           if-no-files-found: warn
 
-  # Windows (Native MSVC) Verification
+  # Windows (Native MSVC) Verification & Visual Smoke Test
   validate-windows:
-    name: Windows Native Verification
+    name: Windows Desktop (Quality & Smoke)
     runs-on: windows-latest
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.source == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
+          toolchain: 1.98.0
           components: clippy
 
       - name: Cache Dependencies
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
         with:
           key: windows-native
 
@@ -203,14 +218,71 @@ jobs:
       - name: Windows Linter Analysis - DevKit Feature (cargo clippy)
         run: cargo clippy --locked --workspace --all-targets --features devkit -- -D warnings
 
+      - name: Windows Minimal Compilation Check (No Default Features)
+        run: cargo check --locked --workspace --no-default-features
+
       - name: Windows Unit & Integration Tests (cargo test)
         run: cargo test --locked --workspace --all-features
 
       - name: Windows Release Build Check
         run: cargo build --locked --release --workspace
 
+      - name: Windows Desktop Visual Smoke Test
+        continue-on-error: true # Reporting mode for initial 2 weeks
+        shell: pwsh
+        run: |
+          Write-Host "Starting Windows desktop visual smoke test (15 frames)..."
+          $env:SNIFFER_SMOKE_TEST_FRAMES = "15"
+          $env:SNIFFER_SCREENSHOT_PATH = "windows_screenshot.png"
+          if (Test-Path "windows_screenshot.png") { Remove-Item "windows_screenshot.png" -Force }
+
+          $pinfo = New-Object System.Diagnostics.ProcessStartInfo
+          $pinfo.FileName = (Resolve-Path "target/release/snifferlauncher-desktop.exe").Path
+          $pinfo.UseShellExecute = $false
+          $pinfo.RedirectStandardOutput = $true
+          $pinfo.RedirectStandardError = $true
+
+          $process = New-Object System.Diagnostics.Process
+          $process.StartInfo = $pinfo
+          $process.Start() | Out-Null
+
+          $finished = $process.WaitForExit(60000)
+          if (-not $finished) {
+              $process.Kill()
+              throw "Windows desktop smoke test timed out after 60s!"
+          }
+
+          $stdout = $process.StandardOutput.ReadToEnd()
+          $stderr = $process.StandardError.ReadToEnd()
+          $stdout | Set-Content "windows_smoke_stdout.log"
+          $stderr | Set-Content "windows_smoke_stderr.log"
+
+          Write-Host "--- Smoke Process Output ---"
+          Write-Host $stdout
+          if ($stderr) { Write-Host $stderr }
+
+          if ($process.ExitCode -ne 0) {
+              throw "Windows desktop smoke test exited with non-zero exit code: $($process.ExitCode)"
+          }
+
+          if (-not (Test-Path "windows_screenshot.png") -or (Get-Item "windows_screenshot.png").Length -le 0) {
+              throw "Windows desktop smoke test failed: windows_screenshot.png is missing or empty!"
+          }
+          Write-Host "SUCCESS: Windows smoke test completed. Screenshot captured ($((Get-Item "windows_screenshot.png").Length) bytes)."
+
+      - name: Upload Windows Smoke Artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: windows-visual-smoke
+          path: |
+            windows_screenshot.png
+            windows_smoke_stdout.log
+            windows_smoke_stderr.log
+          if-no-files-found: warn
+
       - name: Upload Windows Desktop Binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-desktop-binary
           path: target/release/snifferlauncher-desktop.exe
@@ -218,49 +290,71 @@ jobs:
 
   # macOS verification on Apple Silicon
   validate-macos-aarch64:
-    name: macOS Verification (Apple Silicon)
+    name: macOS Desktop (Quality & Smoke)
     runs-on: macos-14
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.source == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install System Dependencies
         run: brew install pkg-config
 
       - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
+          toolchain: 1.98.0
           targets: aarch64-apple-darwin
           components: clippy
 
       - name: Cache Dependencies
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
         with:
           key: macos-arm64
 
-      - name: macOS Linter Analysis (cargo clippy)
+      - name: macOS Linter Analysis - Default Features (cargo clippy)
         run: cargo clippy --locked --workspace --all-targets --target aarch64-apple-darwin -- -D warnings
 
-      - name: macOS Release Build Check
-        run: cargo build --locked --release --target aarch64-apple-darwin
+      - name: macOS Linter Analysis - DevKit Feature (cargo clippy)
+        run: cargo clippy --locked --workspace --all-targets --features devkit --target aarch64-apple-darwin -- -D warnings
+
+      - name: macOS Minimal Compilation Check (No Default Features)
+        run: cargo check --locked --workspace --no-default-features --target aarch64-apple-darwin
+
+      - name: macOS Unit & Integration Tests (cargo test)
+        run: cargo test --locked --workspace --all-features --target aarch64-apple-darwin
+
+      - name: macOS Workspace Release Build Check
+        run: cargo build --locked --release --workspace --target aarch64-apple-darwin
 
       - name: macOS Desktop Visual Smoke Test
+        continue-on-error: true # Reporting mode for initial 2 weeks
         timeout-minutes: 3
         run: |
-          env SNIFFER_SMOKE_TEST_FRAMES=15 SNIFFER_SCREENSHOT_PATH=macos_screenshot.png target/aarch64-apple-darwin/release/snifferlauncher-desktop
+          set -eo pipefail
+          echo "Starting macOS desktop visual smoke test (15 frames)..."
+          env SNIFFER_SMOKE_TEST_FRAMES=15 SNIFFER_SCREENSHOT_PATH=macos_screenshot.png \
+            target/aarch64-apple-darwin/release/snifferlauncher-desktop 2>&1 | tee macos_smoke.log
 
-      - name: Upload macOS Smoke Screenshot
-        uses: actions/upload-artifact@v4
+          if [ ! -s macos_screenshot.png ]; then
+            echo "::error::macos_screenshot.png is missing or empty!"
+            exit 1
+          fi
+          echo "macOS desktop visual smoke test passed successfully."
+
+      - name: Upload macOS Smoke Artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: macos-visual-smoke
-          path: macos_screenshot.png
+          path: |
+            macos_screenshot.png
+            macos_smoke.log
           if-no-files-found: warn
 
       - name: Upload macOS Desktop Binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: macos-desktop-binary
           path: target/aarch64-apple-darwin/release/snifferlauncher-desktop
@@ -268,22 +362,22 @@ jobs:
 
   # Android Compilation & Real APK Packaging Verification
   validate-android:
-    name: Android Packaging (cargo-apk & cargo-ndk)
+    name: Android Build & Packaging
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.source == 'true' || needs.changes.outputs.ci == 'true'
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup Java (JDK 17)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
 
       - name: Install Android SDK Build-Tools and NDK
         run: |
@@ -293,18 +387,19 @@ jobs:
           echo "NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
 
       - name: Setup Rust Toolchain and Android Targets
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
         with:
+          toolchain: 1.98.0
           targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
           components: clippy
 
       - name: Cache Dependencies
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
         with:
           key: android-linux
 
-      - name: Install cargo-binstall and cargo-ndk
-        uses: cargo-bins/cargo-binstall@main
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@23ee8ab6b7397851bc11705bcdf46f2519ea0285 # v1.9.0
 
       - name: Install Android Cargo Tools
         run: |
@@ -312,16 +407,16 @@ jobs:
           cargo install --locked cargo-apk
 
       - name: Android (ARM64) Check & Clippy
-        run: BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android30" cargo ndk --target aarch64-linux-android clippy --workspace --all-targets -- -D warnings
+        run: BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--target=aarch64-linux-android30" cargo ndk --target aarch64-linux-android clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Android (ARMv7) Check
-        run: BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--target=armv7-linux-androideabi" cargo ndk --target armv7-linux-androideabi check
+        run: BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--target=armv7-linux-androideabi" cargo ndk --target armv7-linux-androideabi check --locked
 
       - name: Android (Emulator x86_64) Check & Clippy
-        run: BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android clippy --workspace --all-targets -- -D warnings
+        run: BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android="--target=x86_64-linux-android" cargo ndk --target x86_64-linux-android clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Android (x86 32-bit) Check
-        run: BINDGEN_EXTRA_CLANG_ARGS_i686_linux_android="--target=i686-linux-android" cargo ndk --target i686-linux-android check
+        run: BINDGEN_EXTRA_CLANG_ARGS_i686_linux_android="--target=i686-linux-android" cargo ndk --target i686-linux-android check --locked
 
       - name: Generate CI Keystore
         run: |
@@ -343,34 +438,33 @@ jobs:
           cp target/release/apk/snifferlauncher.apk target/apks/x86_64/snifferlauncher-x86_64.apk
 
       - name: Upload Android Release APKs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: android-release-apks
           path: target/**/*.apk
           if-no-files-found: warn
 
   # ==========================================
-  # STAGE 3: Android Emulator Smoke Test (Visual)
+  # STAGE 3: Android Emulator Smoke Test (Visual & Health)
   # ==========================================
   android-emulator-smoke:
-    name: Android Emulator Visual Smoke Test
+    name: Android Emulator Health & Smoke
     runs-on: ubuntu-latest
     needs: [changes, validate-android]
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.source == 'true' || needs.changes.outputs.ci == 'true'
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Download Android Release APKs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: android-release-apks
           path: apks
 
       - name: Setup Java (JDK 17)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -383,8 +477,8 @@ jobs:
           sudo chmod 777 /dev/kvm || true
           ls -l /dev/kvm || true
 
-      - name: Run Android Emulator and Capture Screenshot
-        uses: reactivecircus/android-emulator-runner@v2
+      - name: Run Android Emulator and Health Check
+        uses: reactivecircus/android-emulator-runner@e93c997dcab69054e999e3924af3d21c4a736e13 # v2.9.0
         with:
           api-level: 30
           target: default
@@ -395,56 +489,54 @@ jobs:
           script: bash .github/scripts/android_smoke_test.sh
 
       - name: Upload Android Smoke Screenshot & Logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: android-visual-smoke
           path: |
             android_screen.png
             logcat_snippet.txt
+            logcat_full.txt
+            am_start_output.txt
           if-no-files-found: warn
 
   # ==========================================
   # STAGE 4: Security & VirusTotal Artifact Scanning
   # ==========================================
   security-scan-artifacts:
-    name: VirusTotal & Artifact Security Scan
+    name: Artifact Security Scan (VirusTotal)
     runs-on: ubuntu-latest
     needs: [changes, validate-linux, validate-windows, validate-macos-aarch64, validate-android]
-    if: (github.event_name == 'workflow_dispatch' || needs.changes.outputs.rust == 'true') && always()
+    if: (github.event_name == 'workflow_dispatch' || needs.changes.outputs.source == 'true' || needs.changes.outputs.ci == 'true') && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     continue-on-error: true
     permissions:
-      contents: read
       actions: read
     env:
       VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
       - name: Download Windows Desktop Binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         continue-on-error: true
         with:
           name: windows-desktop-binary
           path: scan_artifacts/windows
 
       - name: Download Linux Desktop Binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         continue-on-error: true
         with:
           name: linux-desktop-binary
           path: scan_artifacts/linux
 
       - name: Download macOS Desktop Binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         continue-on-error: true
         with:
           name: macos-desktop-binary
           path: scan_artifacts/macos
 
       - name: Download Android Release APKs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         continue-on-error: true
         with:
           name: android-release-apks
@@ -458,7 +550,7 @@ jobs:
           find scan_artifacts -type f -exec ls -lh {} + 2>/dev/null | awk '{print "| `" $9 "` | " $5 " |"}' >> $GITHUB_STEP_SUMMARY || echo "No artifacts found."
 
       - name: Scan Artifacts with VirusTotal
-        uses: crazy-max/ghaction-virustotal@v4
+        uses: crazy-max/ghaction-virustotal@d34968c958ae283fe976efed637081b9f9dcf74f # v4.2.0
         if: env.VIRUSTOTAL_API_KEY != ''
         with:
           vt_api_key: ${{ env.VIRUSTOTAL_API_KEY }}
@@ -476,3 +568,44 @@ jobs:
           echo "### ⚠️ VirusTotal Taraması Atlandı" >> $GITHUB_STEP_SUMMARY
           echo "> **Uyarı:** \`VIRUSTOTAL_API_KEY\` gizli anahtarı tanımlanmadığı için ikili dosya ve APK taraması atlandı." >> $GITHUB_STEP_SUMMARY
           echo "> Otomatik antivirüs taramasını aktif etmek için GitHub reponuzda **Settings > Secrets and variables > Actions** sekmesine giderek anahtarınızı ekleyebilirsiniz." >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================
+  # STAGE 5: Consolidated Branch Protection Gate
+  # ==========================================
+  ci-gate:
+    name: CI Quality Gate (Branch Protection)
+    runs-on: ubuntu-latest
+    needs: [changes, pre-flight, validate-linux, validate-windows, validate-macos-aarch64, validate-android, android-emulator-smoke]
+    if: always()
+    steps:
+      - name: Consolidate Quality Gates
+        run: |
+          echo "=========================================================="
+          echo " 🛡️ CI Quality Gate Status Check"
+          echo "=========================================================="
+          RESULTS=(
+            "Pre-flight:${{ needs.pre-flight.result }}"
+            "Linux-Desktop:${{ needs.validate-linux.result }}"
+            "Windows-Desktop:${{ needs.validate-windows.result }}"
+            "macOS-Desktop:${{ needs.validate-macos-aarch64.result }}"
+            "Android-Build:${{ needs.validate-android.result }}"
+            "Android-Smoke:${{ needs.android-emulator-smoke.result }}"
+          )
+
+          FAILED=0
+          for entry in "${RESULTS[@]}"; do
+            JOB="${entry%%:*}"
+            STATUS="${entry##*:}"
+            echo "Gate '$JOB' -> $STATUS"
+            if [ "$STATUS" = "failure" ] || [ "$STATUS" = "cancelled" ]; then
+              echo "::error::Quality Gate '$JOB' failed or was cancelled!"
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "❌ CI Quality Gate FAILED: One or more required platform checks failed."
+            exit 1
+          fi
+
+          echo "✅ All required quality gates PASSED or were cleanly skipped!"

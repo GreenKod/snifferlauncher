@@ -1,12 +1,29 @@
 # ==============================================================================
-# SnifferLauncher Path Filters (Inverse / Ignore-List Strategy)
+# SnifferLauncher Path Filters
 # ==============================================================================
-# Triggers CI for ANY change across the entire codebase EXCEPT documentation,
-# licenses, and non-executable metadata.
+# Maps file paths to category outputs for selective CI execution.
 # ==============================================================================
 
-rust:
-  - '!**/*.md'
-  - '!LICENSE*'
+source:
+  - 'src/**'
+  - 'crates/**'
+  - 'packages/**'
+  - 'patches/**'
+  - 'android/**'
+  - 'AndroidManifest.xml'
+  - '.plugins/**'
+  - 'build.rs'
+  - 'Cargo.toml'
+  - 'Cargo.lock'
+  - 'rust-toolchain.toml'
+  - 'deny.toml'
+  - '_typos.toml'
+
+ci:
+  - '.github/**'
+  - 'scripts/**'
+
+docs:
+  - '**/*.md'
+  - 'LICENSE*'
   - '!.gitignore'
-  - '!_typos.toml'
