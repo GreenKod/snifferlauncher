@@ -1,7 +1,7 @@
 use super::discovery::discover_system_fonts;
 use super::rasterizer::{GlyphData, render_character};
 use super::upload::{update_font_texture_sub, upload_font_texture};
-use crate::dev_err;
+use crate::{dev_err, dev_log};
 use obfstr::obfstr;
 use std::collections::HashMap;
 use swash::FontRef;
@@ -104,14 +104,14 @@ pub fn build_font_atlas(
     initial_chars.push_str("çÇğĞıİöÖşŞüÜ");
     atlas.ensure_glyphs(gl, &initial_chars);
 
-    dev_err!(
+    dev_log!(
         "{} {}x{} {}, {} {}, {}={:.1}, {} fonts in fallback stack",
         obfstr!("[FontAtlas] Built dynamic 2D"),
         atlas_w,
         atlas_h,
-        obfstr!("atlas,"),
+        obfstr!("atlas"),
         atlas.glyphs.len(),
-        obfstr!("glyphs,"),
+        obfstr!("glyphs"),
         obfstr!("ascent"),
         ascent,
         atlas.font_bytes_list.len()

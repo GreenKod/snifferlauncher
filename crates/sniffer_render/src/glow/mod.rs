@@ -1,7 +1,7 @@
 use sniffer_core::math::Rect;
 
-use crate::dev_err;
 use crate::text::font_atlas::{self, FontAtlas};
+use crate::{dev_err, dev_log};
 use glow::HasContext;
 use obfstr::obfstr;
 
@@ -119,7 +119,7 @@ impl GlowRenderer {
             let (font_texture, font_atlas, atlas_width, atlas_height) =
                 if let Some(font_bytes) = font_data {
                     if let Ok(atlas) = font_atlas::build_font_atlas(&gl, font_bytes, 64.0) {
-                        dev_err!(
+                        dev_log!(
                             "{} ({}x{})",
                             obfstr!("[DEBUG] Using TTF font atlas"),
                             atlas.atlas_width,
