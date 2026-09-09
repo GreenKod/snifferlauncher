@@ -1,7 +1,7 @@
 use sniffer_core::math::Rect;
 
-use crate::{dev_err, dev_log};
 use crate::text::font_atlas::{self, FontAtlas};
+use crate::{dev_err, dev_log};
 use glow::HasContext;
 use obfstr::obfstr;
 

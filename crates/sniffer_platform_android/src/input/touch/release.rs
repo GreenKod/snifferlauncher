@@ -39,8 +39,9 @@ pub fn handle_touch_release(
 
     // If the last touch movement was more than 60ms ago, the user paused before lifting
     // (stationary hold), meaning no kinetic fling momentum should be imparted.
-    let is_recent_movement = last_time
-        .map_or(false, |lt| now.duration_since(lt) <= std::time::Duration::from_millis(60));
+    let is_recent_movement = last_time.map_or(false, |lt| {
+        now.duration_since(lt) <= std::time::Duration::from_millis(60)
+    });
 
     let (fling_vel_x, fling_vel_y) = if !is_recent_movement {
         (0.0, 0.0)
@@ -55,10 +56,7 @@ pub fn handle_touch_release(
         let vy = if vy.abs() < 50.0 { 0.0 } else { vy };
         (vx, vy)
     } else if let Some(last) = last_time {
-        let dt_recent = now
-            .duration_since(last)
-            .as_secs_f32()
-            .max(0.016);
+        let dt_recent = now.duration_since(last).as_secs_f32().max(0.016);
         let vx = (state.last_drag_delta.0 / dt_recent).clamp(-8000.0, 8000.0);
         let vy = (state.last_drag_delta.1 / dt_recent).clamp(-8000.0, 8000.0);
         let vx = if vx.abs() < 50.0 { 0.0 } else { vx };
