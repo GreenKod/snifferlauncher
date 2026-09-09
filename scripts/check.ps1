@@ -24,7 +24,8 @@ try {
     # 2. Workspace Cargo Check
     Print-Header -Title "2/5: Checking Workspace Compilation (cargo check)"
     cargo check --locked --workspace --all-targets --all-features
-    Write-Host "✔ Workspace compilation check passed." -ForegroundColor Green
+    cargo check --locked --workspace --no-default-features
+    Write-Host "✔ Workspace compilation checks (all-features & no-default-features) passed." -ForegroundColor Green
 
     # 3. Linter & Static Analysis
     Print-Header -Title "3/5: Running Strict Linter (cargo clippy)"

@@ -203,10 +203,11 @@ def main() -> int:
 
     base_lock = get_base_cargo_lock(args.base_ref)
     if base_lock is None:
-        if args.strict:
-            print("::error::Could not find base Cargo.lock to compare against!")
+        if args.strict or os.environ.get("GITHUB_BASE_REF"):
+            print("::error::Could not find base Cargo.lock to compare against in pull request / strict mode!")
+            print("::error::Ensure git fetch-depth includes base ref (e.g. origin/${GITHUB_BASE_REF}) to perform quarantine verification.")
             return 1
-        print("[info] No base Cargo.lock found to compare. Skipping age check for existing dependencies.")
+        print("[info] No base Cargo.lock found to compare (non-PR or initial setup). Skipping age check for existing dependencies.")
         return 0
 
     base_packages = parse_cargo_lock_packages(base_lock)

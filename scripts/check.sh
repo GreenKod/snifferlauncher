@@ -13,6 +13,7 @@ cargo fmt --all --check
 
 echo -e "\033[1;34m[2/5] Checking Workspace Compilation (cargo check)...\033[0m"
 cargo check --locked --workspace --all-targets --all-features
+cargo check --locked --workspace --no-default-features
 
 echo -e "\033[1;34m[3/5] Running Strict Linter (cargo clippy)...\033[0m"
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
