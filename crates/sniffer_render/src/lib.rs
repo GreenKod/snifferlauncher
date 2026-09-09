@@ -9,5 +9,5 @@ pub use draw::{
 };
 pub use glow::GlowRenderer;
 pub use glow::textures::MemoryTrimLevel;
-pub use sniffer_core::dev_err;
+pub use sniffer_core::{dev_err, dev_log};
 pub use sniffer_core::render::Renderer;

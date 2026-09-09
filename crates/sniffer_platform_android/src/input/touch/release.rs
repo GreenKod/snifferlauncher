@@ -15,9 +15,10 @@ pub fn handle_touch_release(
     layout_tree: &sniffer_core::layout::LayoutNode,
     point: Point,
 ) -> InputStatus {
-    let cutoff = std::time::Instant::now()
+    let now = std::time::Instant::now();
+    let cutoff = now
         .checked_sub(std::time::Duration::from_millis(150))
-        .unwrap_or_else(std::time::Instant::now);
+        .unwrap_or(now);
     let mut recent_count = 0;
     let mut total_dx = 0.0;
     let mut first_time = None;
@@ -36,22 +37,33 @@ pub fn handle_touch_release(
         }
     }
 
-    let (fling_vel_x, fling_vel_y) = if recent_count >= 2 {
-        let dt_recent = last_time
-            .unwrap()
+    // If the last touch movement was more than 60ms ago, the user paused before lifting
+    // (stationary hold), meaning no kinetic fling momentum should be imparted.
+    let is_recent_movement = last_time
+        .map_or(false, |lt| now.duration_since(lt) <= std::time::Duration::from_millis(60));
+
+    let (fling_vel_x, fling_vel_y) = if !is_recent_movement {
+        (0.0, 0.0)
+    } else if recent_count >= 2 {
+        let dt_recent = now
             .duration_since(first_time.unwrap())
             .as_secs_f32()
-            .max(0.001);
-        (total_dx / dt_recent, total_dy / dt_recent)
+            .max(0.01);
+        let vx = (total_dx / dt_recent).clamp(-8000.0, 8000.0);
+        let vy = (total_dy / dt_recent).clamp(-8000.0, 8000.0);
+        let vx = if vx.abs() < 50.0 { 0.0 } else { vx };
+        let vy = if vy.abs() < 50.0 { 0.0 } else { vy };
+        (vx, vy)
     } else if let Some(last) = last_time {
-        let dt_recent = std::time::Instant::now()
+        let dt_recent = now
             .duration_since(last)
             .as_secs_f32()
-            .max(0.001);
-        (
-            state.last_drag_delta.0 / dt_recent,
-            state.last_drag_delta.1 / dt_recent,
-        )
+            .max(0.016);
+        let vx = (state.last_drag_delta.0 / dt_recent).clamp(-8000.0, 8000.0);
+        let vy = (state.last_drag_delta.1 / dt_recent).clamp(-8000.0, 8000.0);
+        let vx = if vx.abs() < 50.0 { 0.0 } else { vx };
+        let vy = if vy.abs() < 50.0 { 0.0 } else { vy };
+        (vx, vy)
     } else {
         (0.0, 0.0)
     };
@@ -90,17 +102,17 @@ pub fn handle_touch_release(
     state.last_drag_delta = (0.0, 0.0);
     state.drag_history.clear();
 
-    let prev_hovered = state.hovered_btn;
+    let prev_hovered = state.hovered_btn.take();
     let hovered_data =
         find_hovered_button_with_scroll(root_element, layout_tree, point, &|id_opt, sx, sy| {
             resolve_active_scroll(&state.scroll_physics, id_opt, sx, sy)
         });
-    state.hovered_btn = hovered_data.map(|(id, _)| id);
+    let released_btn = hovered_data.map(|(id, _)| id);
     if let Some(prev) = prev_hovered {
         state.event_bus.push(UiEvent::HoverEnd(prev));
     }
 
-    state.event_bus.push(UiEvent::PointerUp(state.hovered_btn));
+    state.event_bus.push(UiEvent::PointerUp(released_btn));
 
     let density = state.cached_density.0.max(1.0);
     let tap_threshold = 48.0 * density;
@@ -178,6 +190,12 @@ pub fn handle_touch_release(
                 let is_drag = downward_dist >= (swipe_thresh * 1.1);
                 if is_flick || is_drag {
                     state.event_bus.push(UiEvent::SwipeDown);
+                    for phys in state.scroll_physics.values_mut() {
+                        if phys.snap_x.is_none() && phys.pos_y < 0.0 {
+                            phys.pos_y = 0.0;
+                            phys.vel_y = 0.0;
+                        }
+                    }
                 }
             }
         }
