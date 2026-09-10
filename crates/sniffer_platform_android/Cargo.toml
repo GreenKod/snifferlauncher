@@ -16,7 +16,7 @@ sniffer_pkg = { path = "../sniffer_pkg" }
 pkg_perfmon = { path = "../../packages/perf_monitor" }
 pkg_scroll  = { path = "../../packages/scroll_view" }
 
-glow = "0.17.0"
+glow = "0.18.0"
 serde_json = "1.0"
 crossbeam-channel = "0.5"
 obfstr = "0.4"

@@ -19,7 +19,7 @@ pkg_scroll  = { path = "../../packages/scroll_view" }
 winit = "0.30.5"
 glutin = "0.32.2"
 glutin-winit = "0.5.0"
-glow = "0.17.0"
+glow = "0.18.0"
 obfstr = "0.4"
 image = { version = "0.25.1", default-features = false, features = ["png", "jpeg"] }
 
