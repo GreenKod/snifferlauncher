@@ -224,6 +224,7 @@ impl PluginLoader {
                 match crate::JsPlugin::new(crate::js::JsPluginConfig {
                     script_content: full_script,
                     plugin_id: manifest.id.clone(),
+                    is_master: manifest.is_master,
                     vault: registry.vault(),
                     action_queue: action_queue.clone(),
                     api_map: api_map.clone(),
