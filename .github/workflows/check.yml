@@ -447,6 +447,10 @@ jobs:
           mkdir -p target/apks/x86_64
           cp target/release/apk/snifferlauncher.apk target/apks/x86_64/snifferlauncher-x86_64.apk
 
+      - name: Verify Android Release APK Security Policy
+        run: |
+          python3 .github/scripts/verify_release_apk.py target/apks
+
       - name: Upload Android Release APKs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
