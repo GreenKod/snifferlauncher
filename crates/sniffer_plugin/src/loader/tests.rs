@@ -67,7 +67,11 @@ fn validate_manifest_rejects_malicious_path_traversal() {
 
     let issues = PluginLoader::validate_manifest(&manifest);
     assert!(!issues.is_empty(), "Path traversal must be rejected");
-    assert!(issues.iter().any(|i| i.contains("traversal") || i.contains("invalid")));
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.contains("traversal") || i.contains("invalid"))
+    );
 }
 
 #[test]

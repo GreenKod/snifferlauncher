@@ -47,7 +47,9 @@ impl PluginManifest {
         if trimmed_name.is_empty() {
             issues.push(obfstr!("manifest name must not be empty").to_string());
         } else if trimmed_name.len() > 128 {
-            issues.push(obfstr!("manifest name exceeds maximum allowed length of 128 chars").to_string());
+            issues.push(
+                obfstr!("manifest name exceeds maximum allowed length of 128 chars").to_string(),
+            );
         }
 
         let trimmed_version = self.version.trim();
@@ -64,7 +66,10 @@ impl PluginManifest {
         if trimmed_main.is_empty() {
             issues.push(obfstr!("manifest main entry must not be empty").to_string());
         } else if let Err(err) = validate_script_path(trimmed_main) {
-            issues.push(format!("{}: {err}", obfstr!("manifest main entry path invalid")));
+            issues.push(format!(
+                "{}: {err}",
+                obfstr!("manifest main entry path invalid")
+            ));
         }
 
         for (idx, script) in self.scripts.iter().enumerate() {
@@ -112,7 +117,9 @@ impl PluginManifest {
         }
 
         if !self.default_settings.is_null() && !self.default_settings.is_object() {
-            issues.push(obfstr!("manifest defaultSettings must be a JSON object if present").to_string());
+            issues.push(
+                obfstr!("manifest defaultSettings must be a JSON object if present").to_string(),
+            );
         }
 
         issues
@@ -143,7 +150,10 @@ fn is_valid_plugin_id(id: &str) -> bool {
         if !first.is_ascii_alphanumeric() {
             return false;
         }
-        if !seg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        if !seg
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
             return false;
         }
     }

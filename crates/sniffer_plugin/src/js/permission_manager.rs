@@ -69,7 +69,9 @@ pub fn permission_granted(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_baseline_permission, permission_granted, PERM_IMAGE, PERM_INPUT, PERM_IPC, PERM_UI};
+    use super::{
+        PERM_IMAGE, PERM_INPUT, PERM_IPC, PERM_UI, is_baseline_permission, permission_granted,
+    };
     use std::sync::Mutex;
 
     #[test]
@@ -79,7 +81,9 @@ mod tests {
         assert!(is_baseline_permission("shared_view.provider"));
         assert!(!is_baseline_permission(PERM_INPUT));
         assert!(!is_baseline_permission(PERM_IMAGE));
-        assert!(!is_baseline_permission("android.permission.QUERY_ALL_PACKAGES"));
+        assert!(!is_baseline_permission(
+            "android.permission.QUERY_ALL_PACKAGES"
+        ));
     }
 
     #[test]
