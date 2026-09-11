@@ -102,11 +102,12 @@ impl PluginLoader {
             let issues = manifest.validate();
             if !issues.is_empty() {
                 dev_err!(
-                    "{} '{}': {:?}",
-                    obfstr!("Manifest validation issues for plugin"),
+                    "{} '{}': {:?}. Skipping plugin registration.",
+                    obfstr!("Manifest validation failed for plugin"),
                     manifest.name,
                     issues
                 );
+                continue;
             }
 
             let mut preload_scripts: Vec<String> = Vec::new();
