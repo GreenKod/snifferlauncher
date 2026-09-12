@@ -132,8 +132,10 @@ impl PluginLoader {
                 match fs::read_to_string(&preload_path) {
                     Ok(src) => {
                         if let Some(expected_hash) = manifest.checksums.get(preload_rel) {
-                            let actual_hash =
-                                sniffer_pkg::manifest::sha256::compute_sha256_hex(src.as_bytes());
+                            let normalized = src.replace("\r\n", "\n");
+                            let actual_hash = sniffer_pkg::manifest::sha256::compute_sha256_hex(
+                                normalized.as_bytes(),
+                            );
                             if actual_hash != *expected_hash {
                                 dev_err!(
                                     "{} '{}' {} '{}' ({} {}, {} {}). Skipping plugin.",
@@ -188,8 +190,9 @@ impl PluginLoader {
                 match fs::read_to_string(&script_path) {
                     Ok(content) => {
                         if let Some(expected_hash) = manifest.checksums.get(script_rel) {
+                            let normalized = content.replace("\r\n", "\n");
                             let actual_hash = sniffer_pkg::manifest::sha256::compute_sha256_hex(
-                                content.as_bytes(),
+                                normalized.as_bytes(),
                             );
                             if actual_hash != *expected_hash {
                                 dev_err!(

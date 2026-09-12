@@ -77,9 +77,11 @@ fn test_all_plugin_manifests_are_valid_and_files_exist() {
             );
 
             if let Some(expected_hash) = manifest.checksums.get(script) {
-                let bytes = fs::read(&script_file)
+                let content = fs::read_to_string(&script_file)
                     .unwrap_or_else(|e| panic!("Failed to read {script_file:?}: {e}"));
-                let actual_hash = sniffer_pkg::manifest::sha256::compute_sha256_hex(&bytes);
+                let normalized = content.replace("\r\n", "\n");
+                let actual_hash =
+                    sniffer_pkg::manifest::sha256::compute_sha256_hex(normalized.as_bytes());
                 assert_eq!(
                     &actual_hash, expected_hash,
                     "Checksum mismatch for script {script:?} in {folder}"
@@ -99,9 +101,11 @@ fn test_all_plugin_manifests_are_valid_and_files_exist() {
                 "Preload {preload_path:?} not found for plugin {folder}"
             );
             if let Some(expected_hash) = manifest.checksums.get(preload_rel) {
-                let bytes = fs::read(&preload_path)
+                let content = fs::read_to_string(&preload_path)
                     .unwrap_or_else(|e| panic!("Failed to read {preload_path:?}: {e}"));
-                let actual_hash = sniffer_pkg::manifest::sha256::compute_sha256_hex(&bytes);
+                let normalized = content.replace("\r\n", "\n");
+                let actual_hash =
+                    sniffer_pkg::manifest::sha256::compute_sha256_hex(normalized.as_bytes());
                 assert_eq!(
                     &actual_hash, expected_hash,
                     "Checksum mismatch for preload {preload_rel:?} in {folder}"
@@ -197,6 +201,53 @@ fn test_plugin_loader_rejects_tampered_checksum() {
         registry.len(),
         0,
         "Tampered plugin should have been rejected by the loader"
+    );
+
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_plugin_loader_normalizes_crlf_checksum() {
+    let temp_dir = std::env::temp_dir().join(format!("sniffer_test_crlf_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&temp_dir);
+    fs::create_dir_all(temp_dir.join("crlf_plugin")).expect("Failed to create temp dir");
+
+    let plugins_json = r#"{ "active_plugins": ["crlf_plugin"] }"#;
+    fs::write(temp_dir.join("plugins.json"), plugins_json).expect("Failed to write plugins.json");
+
+    // The code with LF has a known hash
+    let lf_code = "const x = 1;\nconst y = 2;\n";
+    let lf_hash = sniffer_pkg::manifest::sha256::compute_sha256_hex(lf_code.as_bytes());
+
+    let manifest_json = format!(
+        r#"{{
+        "id": "com.sniffer.crlf",
+        "name": "CRLF Plugin",
+        "version": "1.0.0",
+        "main": "main.js",
+        "permissions": ["plugin.permission.UI"],
+        "checksums": {{
+            "main.js": "{lf_hash}"
+        }}
+    }}"#
+    );
+    fs::write(temp_dir.join("crlf_plugin/manifest.json"), manifest_json)
+        .expect("Failed to write manifest.json");
+
+    // Write file with Windows CRLF (\r\n) line endings on disk
+    let crlf_code = "const x = 1;\r\nconst y = 2;\r\n";
+    fs::write(temp_dir.join("crlf_plugin/main.js"), crlf_code).expect("Failed to write main.js");
+
+    let mut registry = sniffer_plugin::PluginRegistry::default();
+    let action_queue = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let loader = sniffer_plugin::loader::PluginLoader::new(&temp_dir);
+    loader.register_all(&mut registry, &action_queue);
+
+    // Plugin MUST be successfully registered because CRLF was normalized to LF!
+    assert_eq!(
+        registry.len(),
+        1,
+        "Plugin with CRLF line endings should be accepted after normalization"
     );
 
     let _ = fs::remove_dir_all(&temp_dir);
