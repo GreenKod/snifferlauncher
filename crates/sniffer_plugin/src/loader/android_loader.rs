@@ -63,6 +63,17 @@ impl PluginLoader {
                     if asset.read_to_string(&mut manifest_str).is_ok() {
                         if let Ok(manifest) = serde_json::from_str::<PluginManifest>(&manifest_str)
                         {
+                            let issues = manifest.validate();
+                            if !issues.is_empty() {
+                                dev_err!(
+                                    "{} '{}': {:?}. Skipping plugin registration.",
+                                    obfstr!("Android manifest validation failed for plugin"),
+                                    manifest.name,
+                                    issues
+                                );
+                                continue;
+                            }
+
                             let mut preload_scripts: Vec<String> = Vec::new();
                             for preload_rel in &manifest.preload {
                                 let resolved =
@@ -141,6 +152,7 @@ impl PluginLoader {
                                 match crate::JsPlugin::new(crate::js::JsPluginConfig {
                                     script_content: full_script,
                                     plugin_id: manifest.id.clone(),
+                                    is_master: manifest.is_master,
                                     vault: registry.vault(),
                                     action_queue: action_queue.clone(),
                                     api_map: api_map.clone(),

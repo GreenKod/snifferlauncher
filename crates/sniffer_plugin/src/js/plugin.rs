@@ -47,6 +47,7 @@ unsafe impl Sync for JsPlugin {}
 pub struct JsPluginConfig {
     pub script_content: String,
     pub plugin_id: String,
+    pub is_master: bool,
     pub vault: Arc<sniffer_core::vault::DataVault>,
     pub action_queue: Arc<Mutex<Vec<sniffer_core::types::Action>>>,
     pub api_map: ApiMap,
@@ -64,16 +65,16 @@ impl JsPlugin {
         let ui_tree = Arc::new(Mutex::new(config.cached_ui));
         let ui_tree_worker = ui_tree.clone();
 
-        #[cfg(not(target_os = "android"))]
-        let initial_granted = config.permissions.clone();
-
-        #[cfg(target_os = "android")]
-        let initial_granted: Vec<String> = config
-            .permissions
-            .iter()
-            .filter(|p| p.starts_with("plugin.permission.") || p.starts_with("android.permission."))
-            .cloned()
-            .collect();
+        let initial_granted: Vec<String> = if config.is_master {
+            config.permissions.clone()
+        } else {
+            config
+                .permissions
+                .iter()
+                .filter(|p| crate::js::permission_manager::is_baseline_permission(p))
+                .cloned()
+                .collect()
+        };
 
         let granted_permissions = Arc::new(Mutex::new(initial_granted));
         let permissions_clone = config.permissions.clone();
