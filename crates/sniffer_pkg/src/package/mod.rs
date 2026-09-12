@@ -10,6 +10,8 @@
 //! Both share [`PackageMeta`] for identification and [`MemoryTrimLevel`] for
 //! back-pressure signals from the Android / desktop memory subsystem.
 
+pub mod c_abi;
+
 use crate::error::PackageError;
 use sniffer_core::{
     math::{Rect, Size},

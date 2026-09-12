@@ -50,3 +50,89 @@ fn test_eval_framework_file_in_quickjs() {
         });
     }
 }
+
+#[test]
+fn validate_manifest_rejects_malicious_path_traversal() {
+    let manifest = PluginManifest {
+        id: "com.example.evil".to_string(),
+        name: "Evil Plugin".to_string(),
+        version: "1.0.0".to_string(),
+        main: "../../etc/passwd.js".to_string(),
+        scripts: vec!["../secret.js".to_string()],
+        is_master: false,
+        preload: vec!["../../outside.js".to_string()],
+        permissions: vec!["plugin.permission.UI".to_string()],
+        default_settings: serde_json::Value::Null,
+    };
+
+    let issues = PluginLoader::validate_manifest(&manifest);
+    assert!(!issues.is_empty(), "Path traversal must be rejected");
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.contains("traversal") || i.contains("invalid"))
+    );
+}
+
+#[test]
+fn validate_manifest_rejects_invalid_id_and_semver() {
+    let manifest = PluginManifest {
+        id: "invalid_id_no_dot".to_string(),
+        name: "Bad ID Plugin".to_string(),
+        version: "not_a_semver".to_string(),
+        main: "main.js".to_string(),
+        scripts: vec![],
+        is_master: false,
+        preload: vec![],
+        permissions: vec!["plugin.permission.UI".to_string()],
+        default_settings: serde_json::Value::Null,
+    };
+
+    let issues = PluginLoader::validate_manifest(&manifest);
+    assert!(!issues.is_empty());
+    assert!(issues.iter().any(|i| i.contains("id")));
+    assert!(issues.iter().any(|i| i.contains("version")));
+}
+
+#[test]
+fn validate_manifest_rejects_duplicate_and_bad_permissions() {
+    let manifest = PluginManifest {
+        id: "com.example.permtest".to_string(),
+        name: "Perm Test".to_string(),
+        version: "1.0.0".to_string(),
+        main: "main.js".to_string(),
+        scripts: vec![],
+        is_master: false,
+        preload: vec![],
+        permissions: vec![
+            "plugin.permission.UI".to_string(),
+            "plugin.permission.UI".to_string(),
+            "badperm".to_string(),
+        ],
+        default_settings: serde_json::Value::Null,
+    };
+
+    let issues = PluginLoader::validate_manifest(&manifest);
+    assert!(!issues.is_empty());
+    assert!(issues.iter().any(|i| i.contains("duplicate")));
+    assert!(issues.iter().any(|i| i.contains("namespace")));
+}
+
+#[test]
+fn validate_manifest_rejects_non_object_default_settings() {
+    let manifest = PluginManifest {
+        id: "com.example.settingstest".to_string(),
+        name: "Settings Test".to_string(),
+        version: "1.0.0".to_string(),
+        main: "main.js".to_string(),
+        scripts: vec![],
+        is_master: false,
+        preload: vec![],
+        permissions: vec!["plugin.permission.UI".to_string()],
+        default_settings: serde_json::json!([1, 2, 3]),
+    };
+
+    let issues = PluginLoader::validate_manifest(&manifest);
+    assert!(!issues.is_empty());
+    assert!(issues.iter().any(|i| i.contains("defaultSettings")));
+}

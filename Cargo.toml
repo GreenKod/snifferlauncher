@@ -54,9 +54,9 @@ target_sdk_version = 35
 compile_sdk_version = 35
 
 [package.metadata.android.signing.release]
-path = "keystores/debug.keystore"
+path = "keystores/release.keystore"
 keystore_password = "android"
-key_alias = "androiddebugkey"
+key_alias = "snifferrelease"
 key_password = "android"
 
 [profile.dev]

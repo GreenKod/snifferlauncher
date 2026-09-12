@@ -420,10 +420,18 @@ jobs:
       - name: Android (x86 32-bit) Check
         run: BINDGEN_EXTRA_CLANG_ARGS_i686_linux_android="--target=i686-linux-android" cargo ndk --target i686-linux-android check --locked
 
-      - name: Generate CI Keystore
+      - name: Setup Android Release Keystore (CI / Secret)
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
         run: |
           mkdir -p keystores
-          keytool -genkey -v -keystore keystores/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > keystores/release.keystore
+            echo "Release keystore decoded from repository secrets."
+          else
+            echo "::warning title=Using CI Test Keystore::No ANDROID_RELEASE_KEYSTORE_BASE64 secret found; generating a temporary CI test keystore for automated verification."
+            keytool -genkey -v -keystore keystores/release.keystore -storepass android -alias snifferrelease -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=SnifferLauncher CI Build,O=GreenKod,C=US"
+          fi
 
       - name: Build Android ARM64 Release APK
         run: |
@@ -438,6 +446,10 @@ jobs:
           BINDGEN_EXTRA_CLANG_ARGS="--target=x86_64-linux-android30 --sysroot=$SYSROOT" cargo apk build --target x86_64-linux-android --lib --release
           mkdir -p target/apks/x86_64
           cp target/release/apk/snifferlauncher.apk target/apks/x86_64/snifferlauncher-x86_64.apk
+
+      - name: Verify Android Release APK Security Policy
+        run: |
+          python3 .github/scripts/verify_release_apk.py target/apks
 
       - name: Upload Android Release APKs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
