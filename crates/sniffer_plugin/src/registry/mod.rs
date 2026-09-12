@@ -87,6 +87,18 @@ impl PluginRegistry {
         }
     }
 
+    /// Returns the number of currently registered plugins.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.plugins.len()
+    }
+
+    /// Returns `true` if no plugins are currently registered.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.plugins.is_empty()
+    }
+
     /// Attach a native PackageRegistry reference to the PluginRegistry.
     pub fn set_pkg_registry(&mut self, reg: Arc<RwLock<sniffer_pkg::PackageRegistry>>) {
         self.pkg_registry = Some(reg);

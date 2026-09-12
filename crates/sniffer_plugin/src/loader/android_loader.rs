@@ -75,6 +75,7 @@ impl PluginLoader {
                             }
 
                             let mut preload_scripts: Vec<String> = Vec::new();
+                            let mut integrity_failed = false;
                             for preload_rel in &manifest.preload {
                                 let resolved =
                                     if let Some(stripped) = preload_rel.strip_prefix("../") {
@@ -95,6 +96,29 @@ impl PluginLoader {
                                 if let Some(mut pa) = asset_opt {
                                     let mut src = String::new();
                                     if pa.read_to_string(&mut src).is_ok() {
+                                        if let Some(expected_hash) =
+                                            manifest.checksums.get(preload_rel)
+                                        {
+                                            let normalized = src.replace("\r\n", "\n");
+                                            let actual_hash =
+                                                sniffer_pkg::manifest::sha256::compute_sha256_hex(
+                                                    normalized.as_bytes(),
+                                                );
+                                            if actual_hash != *expected_hash {
+                                                dev_err!(
+                                                    "{} '{}' in plugin '{}' (expected: {}, actual: {}). Skipping.",
+                                                    obfstr!(
+                                                        "Android Integrity mismatch for preload"
+                                                    ),
+                                                    preload_rel,
+                                                    manifest.id,
+                                                    expected_hash,
+                                                    actual_hash
+                                                );
+                                                integrity_failed = true;
+                                                break;
+                                            }
+                                        }
                                         let clean_src = src.replace('\0', "").trim().to_string();
                                         dev_log!(
                                             "{} '{}' {} '{}'",
@@ -114,6 +138,10 @@ impl PluginLoader {
                                 }
                             }
 
+                            if integrity_failed {
+                                continue;
+                            }
+
                             let files_to_read = if !manifest.scripts.is_empty() {
                                 manifest.scripts.clone()
                             } else {
@@ -129,6 +157,29 @@ impl PluginLoader {
                                     {
                                         let mut content = String::new();
                                         if asset.read_to_string(&mut content).is_ok() {
+                                            if let Some(expected_hash) =
+                                                manifest.checksums.get(script_rel)
+                                            {
+                                                let normalized = content.replace("\r\n", "\n");
+                                                let actual_hash =
+                                                    sniffer_pkg::manifest::sha256::compute_sha256_hex(
+                                                        normalized.as_bytes(),
+                                                    );
+                                                if actual_hash != *expected_hash {
+                                                    dev_err!(
+                                                        "{} '{}' in plugin '{}' (expected: {}, actual: {}). Skipping.",
+                                                        obfstr!(
+                                                            "Android Integrity mismatch for script"
+                                                        ),
+                                                        script_rel,
+                                                        manifest.id,
+                                                        expected_hash,
+                                                        actual_hash
+                                                    );
+                                                    integrity_failed = true;
+                                                    break;
+                                                }
+                                            }
                                             let clean_content =
                                                 content.replace('\0', "").trim().to_string();
                                             if !plugin_code.is_empty() {
@@ -138,6 +189,10 @@ impl PluginLoader {
                                         }
                                     }
                                 }
+                            }
+
+                            if integrity_failed {
+                                continue;
                             }
 
                             if !plugin_code.is_empty() {
@@ -162,6 +217,7 @@ impl PluginLoader {
                                     cached_ui: None,
                                     cache_path: None,
                                     pkg_registry: registry.pkg_registry(),
+                                    max_memory_mb: manifest.max_memory_mb,
                                 }) {
                                     Ok(plugin) => {
                                         registry.register(

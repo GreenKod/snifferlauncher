@@ -1,6 +1,6 @@
 use obfstr::obfstr;
 use serde::Deserialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Deserialize, Debug)]
 pub struct PluginsConfig {
@@ -25,6 +25,10 @@ pub struct PluginManifest {
     pub permissions: Vec<String>,
     #[serde(default, rename = "defaultSettings")]
     pub default_settings: serde_json::Value,
+    #[serde(default)]
+    pub checksums: HashMap<String, String>,
+    #[serde(default, rename = "maxMemoryMb")]
+    pub max_memory_mb: Option<usize>,
 }
 
 impl PluginManifest {
@@ -122,8 +126,44 @@ impl PluginManifest {
             );
         }
 
+        if let Some(mem_mb) = self.max_memory_mb {
+            if !(2..=64).contains(&mem_mb) {
+                issues.push(format!(
+                    "{}: {mem_mb} MiB (must be between 2 and 64 MiB)",
+                    obfstr!("manifest maxMemoryMb is out of allowed range")
+                ));
+            }
+        }
+
+        for (path, hash) in &self.checksums {
+            let trimmed_path = path.trim();
+            if let Err(err) = validate_script_path(trimmed_path) {
+                if let Err(preload_err) = validate_preload_path(trimmed_path) {
+                    issues.push(format!(
+                        "{} '{trimmed_path}': {err}; {preload_err}",
+                        obfstr!("manifest checksum path invalid")
+                    ));
+                }
+            }
+
+            let trimmed_hash = hash.trim();
+            if !is_valid_sha256_hex(trimmed_hash) {
+                issues.push(format!(
+                    "{}: '{trimmed_path}' has hash '{trimmed_hash}' (must be 64 lowercase hex chars)",
+                    obfstr!("manifest checksum hash format invalid")
+                ));
+            }
+        }
+
         issues
     }
+}
+
+fn is_valid_sha256_hex(hash: &str) -> bool {
+    hash.len() == 64
+        && hash
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
 fn is_valid_plugin_id(id: &str) -> bool {

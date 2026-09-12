@@ -18,6 +18,16 @@
     "plugin.permission.UI",
     "plugin.permission.IPC",
     "plugin.permission.INPUT",
-    "android.permission.QUERY_ALL_PACKAGES"
-  ]
+    "android.permission.QUERY_ALL_PACKAGES",
+    "android.permission.LAUNCH_APP"
+  ],
+  "maxMemoryMb": 16,
+  "checksums": {
+    "../framework/sniffer_ui.js": "fd5c4ad2ce5fc83572670401bf242c068cc10c2b8a316a6016ec615e6386ed1f",
+    "state.js": "a45ac2b379f3f948597371c54cadc1d78191729936c544d43c9a107aabf73ba3",
+    "components/layout.js": "b75a27b3e7741863a2b01d3c9a20f94fde9dae2f3e4280d0077bc4162f7d17a7",
+    "components/app_grid.js": "bd2a880ed4d2d9ff1302a3eab626f8fe8d65b79cbeea8f940a2e54a172bec762",
+    "components/app_drawer.js": "2c603be9924052574049eaa4999cd14d186ad2532425da757dad6abaa3a459eb",
+    "main.js": "28f9ab208f729be2de9bf1c1df7d0105f3d912673c16c42df69eb35504624de4"
+  }
 }
