@@ -1,0 +1,57 @@
+name: "Feature Request"
+description: Propose an architecture, API, or UX enhancement for SnifferLauncher.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please outline your feature proposal, intended use case, and technical requirements.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: Subsystem or area related to this proposal.
+      options:
+        - "Launcher UX and Navigation (App Drawer, Dock, Gestures, Animations)"
+        - "Plugin System (JavaScript, QuickJS bindings, IPC)"
+        - "Native Dynamic Packages (sniffer_pkg, C ABI, shared libraries)"
+        - "Rendering and Engine (Glow, OpenGL shaders, layout, fonts)"
+        - "Developer Experience (DevKit HUD, hot-reload, diagnostics)"
+        - "Architecture and Core Infrastructure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem_statement
+    attributes:
+      label: Problem Statement
+      description: A concise description of the limitation, inefficiency, or missing capability.
+      placeholder: "Current limitation..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Solution and Design
+      description: Technical description of the proposed solution, including API surface or manifest changes if applicable.
+      placeholder: "Proposed architecture or API change..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives_considered
+    attributes:
+      label: Alternatives Considered
+      description: Alternative approaches or workarounds evaluated.
+      placeholder: "Alternative approaches considered..."
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I am interested in contributing an implementation via Pull Request.
+          required: false

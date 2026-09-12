@@ -1,0 +1,50 @@
+name: "Security Vulnerability Report"
+description: Report a security vulnerability through responsible disclosure.
+title: "[Security]: "
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Responsible Disclosure Policy
+        > [!CAUTION]
+        > **Do not report critical security vulnerabilities in public issues.**
+        > If this vulnerability involves **privilege escalation, QuickJS sandbox escape, unauthorized app launching, or arbitrary native code execution**, please submit a private disclosure through GitHub Security Advisories:
+        > [Submit Private Security Advisory](https://github.com/GreenKod/snifferlauncher/security/advisories/new)
+        > 
+        > For general defensive hardening proposals or non-exploitable security refactoring, proceed with the form below.
+
+  - type: dropdown
+    id: severity_tier
+    attributes:
+      label: Severity Assessment
+      description: Estimated security impact.
+      options:
+        - "Low (Defense-in-depth / Hardening proposal)"
+        - "Medium (Denial of Service / Uncontrolled resource consumption)"
+        - "High (Capability gating / Permission bypass)"
+        - "Critical (Sandbox escape / Remote code execution)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: vulnerability_summary
+    attributes:
+      label: Vulnerability Summary
+      description: Overview of the vulnerability, affected components, and potential impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Proof of Concept / Reproduction
+      description: Minimal reproduction steps, manifest payload, or script snippet.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested_mitigation
+    attributes:
+      label: Suggested Remediation
+      description: Proposed code modifications, boundary enforcement, or architectural fixes.

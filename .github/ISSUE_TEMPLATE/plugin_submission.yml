@@ -1,0 +1,68 @@
+name: "Plugin or Package Submission"
+description: Propose a new JavaScript plugin or native C ABI package for inclusion.
+title: "[Plugin]: "
+labels: ["plugin", "submission"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please provide details about the plugin or native package you wish to contribute or submit.
+
+  - type: dropdown
+    id: plugin_type
+    attributes:
+      label: Component Type
+      description: Type of module being submitted.
+      options:
+        - "JavaScript UI Plugin (QuickJS)"
+        - "JavaScript Widget (QuickJS shared_view)"
+        - "Native Dynamic Package (sniffer_pkg C ABI .so)"
+    validations:
+      required: true
+
+  - type: input
+    id: plugin_id
+    attributes:
+      label: Unique Identifier
+      description: Reverse-DNS format identifier (e.g. `com.example.weatherwidget`).
+      placeholder: "com.developer.pluginname"
+    validations:
+      required: true
+
+  - type: textarea
+    id: overview
+    attributes:
+      label: Description and Functionality
+      description: Overview of what the plugin does and why it benefits SnifferLauncher users.
+    validations:
+      required: true
+
+  - type: textarea
+    id: requested_permissions
+    attributes:
+      label: Requested Permissions
+      description: List all permissions declared in manifest.json (e.g., `plugin.permission.UI`, `android.permission.LAUNCH_APP`).
+      placeholder: "plugin.permission.UI\nplugin.permission.INPUT"
+    validations:
+      required: true
+
+  - type: textarea
+    id: source_location
+    attributes:
+      label: Source Code Location
+      description: Link to repository, branch, or Pull Request containing the plugin.
+      placeholder: "https://github.com/..."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: compliance
+    attributes:
+      label: Security and Architecture Compliance
+      options:
+        - label: The plugin strictly respects the QuickJS sandbox and declares all needed permissions.
+          required: true
+        - label: All script files have SHA-256 checksums declared in manifest.json.
+          required: true
+        - label: Memory limit does not exceed 32 MiB.
+          required: true

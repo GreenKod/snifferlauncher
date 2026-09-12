@@ -1,0 +1,86 @@
+name: "Bug Report"
+description: Report a defect to help diagnose and resolve issues in SnifferLauncher.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please provide detailed technical information to help reproduce and resolve this defect.
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Target Environment
+      description: Platform where the issue was observed.
+      options:
+        - "Android (Physical Device)"
+        - "Android (Emulator / AVD)"
+        - "Desktop Linux"
+        - "Desktop Windows"
+        - "Desktop macOS"
+    validations:
+      required: true
+
+  - type: input
+    id: version_info
+    attributes:
+      label: Version and Hardware Details
+      description: Launcher version, Git commit hash, Android version, or Device Model (e.g., commit 81ada06, Android 14, Samsung Galaxy S23, or Ubuntu 24.04).
+      placeholder: "e.g., SnifferLauncher commit 81ada06, Android 14, Pixel 7"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem Description
+      description: A concise explanation of the observed defect.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction_steps
+    attributes:
+      label: Steps to Reproduce
+      description: Specific sequence of actions to trigger the issue.
+      placeholder: |
+        1. Start the launcher on desktop / device
+        2. Open App Drawer
+        3. Click on ...
+        4. Observe unexpected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected Behavior
+      description: The expected outcome under correct operation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: visual_evidence
+    attributes:
+      label: Screenshots or Screen Recordings
+      description: Drag and drop screenshots or screen recordings showing the defect. Recommended for UI layout, culling, or rendering bugs.
+      placeholder: "Drag and drop images or videos here..."
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Diagnostic Logs and Backtraces
+      description: "Terminal outputs, logcat streams, or panic backtraces. Capture Android logs via: `adb logcat -s Sniffer* RustAndroid:V *:S`."
+      render: shell
+      placeholder: "Paste adb logcat or terminal output here..."
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues to verify this is not a duplicate.
+          required: true
+        - label: I have tested against the latest commit on `master`.
+          required: false

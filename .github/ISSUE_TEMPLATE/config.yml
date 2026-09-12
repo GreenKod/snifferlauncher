@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/GreenKod/snifferlauncher/discussions
+    about: Ask questions, share ideas, and discuss with the community.
+  - name: Security Vulnerability Disclosure
+    url: https://github.com/GreenKod/snifferlauncher/security/advisories/new
+    about: Privately report critical security vulnerabilities.
