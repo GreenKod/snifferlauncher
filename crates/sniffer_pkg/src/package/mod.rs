@@ -12,6 +12,11 @@
 
 pub mod c_abi;
 
+pub use c_abi::{
+    CApiPackageAdapter, SNIFFER_PKG_ABI_VERSION_1, SNIFFER_PKG_MAGIC, SnifferPackageDescriptorV1,
+    SnifferPackageHeader, SnifferPackageVTableV1, SnifferSlice,
+};
+
 use crate::error::PackageError;
 use sniffer_core::{
     math::{Rect, Size},

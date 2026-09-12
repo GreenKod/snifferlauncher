@@ -81,6 +81,7 @@ impl JsPlugin {
 
         let script_content = config.script_content;
         let plugin_id = config.plugin_id;
+        let is_master = config.is_master;
         let vault = config.vault;
         let action_queue = config.action_queue;
         let api_map = config.api_map;
@@ -109,6 +110,7 @@ impl JsPlugin {
                     &ctx,
                     HostApiConfig {
                         plugin_id: plugin_id.clone(),
+                        is_master,
                         msg_tx: msg_tx_worker,
                         vault,
                         ui_tree: ui_tree_worker,

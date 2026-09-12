@@ -45,6 +45,9 @@ pub struct ManifestPackageInfo {
     /// Minimum compatible SnifferLauncher engine version.
     #[serde(default = "default_min_engine")]
     pub min_engine_version: String,
+    /// Optional cryptographic SHA-256 digest of the compiled package binary.
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 fn default_min_engine() -> String {

@@ -18,6 +18,7 @@
     "plugin.permission.UI",
     "plugin.permission.IPC",
     "plugin.permission.INPUT",
-    "android.permission.QUERY_ALL_PACKAGES"
+    "android.permission.QUERY_ALL_PACKAGES",
+    "android.permission.LAUNCH_APP"
   ]
 }

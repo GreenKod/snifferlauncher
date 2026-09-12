@@ -8,6 +8,8 @@ use std::sync::{Arc, Mutex};
 pub fn register_app_launch_bindings<'js>(
     ctx: &Ctx<'js>,
     globals: &Object<'js>,
+    plugin_id: String,
+    is_master: bool,
     action_queue: Arc<Mutex<Vec<sniffer_core::types::Action>>>,
     plugin_permissions: &[String],
     granted_permissions: Arc<Mutex<Vec<String>>>,
@@ -17,6 +19,7 @@ pub fn register_app_launch_bindings<'js>(
     // host_get_application_list
     let plugin_permissions_app_list = plugin_permissions_vec.clone();
     let granted_permissions_app_list = Arc::clone(&granted_permissions);
+    let caller_id_app_list = plugin_id.clone();
     let get_app_list_func = Function::new(ctx.clone(), move || -> String {
         if !permission_granted(
             obfstr!("android.permission.QUERY_ALL_PACKAGES"),
@@ -26,7 +29,7 @@ pub fn register_app_launch_bindings<'js>(
             return "[]".to_string();
         }
 
-        let result = super::super::host_bridge::get_application_list();
+        let result = super::super::host_bridge::get_application_list(&caller_id_app_list);
 
         match result {
             Ok(apps) => serde_json::to_string(&apps).unwrap_or_else(|_| "[]".to_string()),
@@ -43,8 +46,25 @@ pub fn register_app_launch_bindings<'js>(
 
     // host_launch_app
     let aq_launch = action_queue.clone();
+    let plugin_permissions_launch = plugin_permissions_vec.clone();
+    let granted_permissions_launch = Arc::clone(&granted_permissions);
+    let caller_id_launch = plugin_id.clone();
     let launch_app_func = Function::new(ctx.clone(), move |package_name: String| {
-        if let Err(e) = super::super::host_bridge::launch_app(&package_name) {
+        if !crate::js::permission_manager::has_launch_permission(
+            &plugin_permissions_launch,
+            &granted_permissions_launch,
+        ) {
+            dev_err!(
+                "{} '{}' {} '{}' (DENIED)",
+                obfstr!("Security Audit: Plugin"),
+                caller_id_launch,
+                obfstr!("is not authorized to launch app"),
+                package_name
+            );
+            return;
+        }
+
+        if let Err(e) = super::super::host_bridge::launch_app(&caller_id_launch, &package_name) {
             crate::dev_err!("{}: {e}", obfstr!("Direct host_launch_app failed"));
         }
         if let Ok(mut q) = aq_launch.lock() {
@@ -58,8 +78,19 @@ pub fn register_app_launch_bindings<'js>(
 
     // host_request_default_launcher
     let aq_req_home = action_queue.clone();
+    let caller_id_home = plugin_id.clone();
+    let is_master_home = is_master;
     let req_home_func = Function::new(ctx.clone(), move || {
-        let _ = super::super::host_bridge::open_default_home_picker();
+        if !is_master_home {
+            dev_err!(
+                "{} '{}' {} (DENIED)",
+                obfstr!("Security Audit: Non-master plugin"),
+                caller_id_home,
+                obfstr!("attempted to request default launcher")
+            );
+            return;
+        }
+        let _ = super::super::host_bridge::open_default_home_picker(&caller_id_home);
         if let Ok(mut q) = aq_req_home.lock() {
             q.push(sniffer_core::types::Action::RequestDefaultLauncher);
         }
@@ -86,6 +117,8 @@ pub fn register_app_launch_bindings<'js>(
     // host_request_permissions
     let plugin_permissions_clone2 = plugin_permissions_vec.clone();
     let granted_permissions_clone2 = granted_permissions.clone();
+    let caller_id_perms = plugin_id;
+    let is_master_perms = is_master;
     let request_permissions_func =
         Function::new(ctx.clone(), move |permissions: Vec<String>| -> String {
             let valid_permissions: Vec<String> = permissions
@@ -95,14 +128,23 @@ pub fn register_app_launch_bindings<'js>(
 
             if valid_permissions.is_empty() {
                 dev_err!(
-                    "{}",
-                    obfstr!("Plugin requested permissions it did not declare or are invalid.")
+                    "{} '{}' {}.",
+                    obfstr!("Security Audit: Plugin"),
+                    caller_id_perms,
+                    obfstr!("requested permissions it did not declare or are invalid (DENIED)")
                 );
                 return "[]".to_string();
             }
 
-            super::super::host_bridge::request_permissions(&valid_permissions);
-            let granted: Result<Vec<String>, String> = Ok(valid_permissions);
+            let granted: Result<Vec<String>, String> = if is_master_perms {
+                let _ = super::super::host_bridge::request_permissions(
+                    &caller_id_perms,
+                    &valid_permissions,
+                );
+                Ok(valid_permissions)
+            } else {
+                super::super::host_bridge::request_permissions(&caller_id_perms, &valid_permissions)
+            };
 
             match granted {
                 Ok(granted) => {
@@ -116,7 +158,11 @@ pub fn register_app_launch_bindings<'js>(
                     serde_json::to_string(&granted).unwrap_or_else(|_| "[]".to_string())
                 }
                 Err(e) => {
-                    dev_err!("{}: {e}", obfstr!("Failed to request permissions"));
+                    dev_err!(
+                        "{} '{}': {e}",
+                        obfstr!("Security Audit: Failed to grant permissions for"),
+                        caller_id_perms
+                    );
                     "[]".to_string()
                 }
             }
