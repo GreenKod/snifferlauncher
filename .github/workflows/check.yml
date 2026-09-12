@@ -34,7 +34,7 @@ jobs:
       - name: Filter Changed Files
         id: filter
         if: github.event_name != 'workflow_dispatch'
-        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: .github/paths.yaml
 
@@ -72,7 +72,7 @@ jobs:
           fail-on-severity: moderate
 
       - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.98.0
 
@@ -88,7 +88,7 @@ jobs:
           command: check
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@23ee8ab6b7397851bc11705bcdf46f2519ea0285 # v1.9.0
+        uses: cargo-bins/cargo-binstall@b874e25ea559687bec77e281e9b271aa1367b624 # v1.23.0
 
       - name: Run cargo-machete (Unused Dependencies)
         run: |
@@ -134,13 +134,13 @@ jobs:
             cmake
 
       - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.98.0
           components: clippy
 
       - name: Cache Dependencies and Build Artifacts
-        uses: swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
+        uses: swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2.7.7
         with:
           key: linux-desktop
 
@@ -175,7 +175,7 @@ jobs:
           echo "Linux desktop visual smoke test passed successfully."
 
       - name: Upload Desktop Smoke Artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: desktop-visual-smoke
@@ -185,7 +185,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload Linux Desktop Binary
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linux-desktop-binary
           path: target/release/snifferlauncher-desktop
@@ -202,13 +202,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.98.0
           components: clippy
 
       - name: Cache Dependencies
-        uses: swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
+        uses: swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2.7.7
         with:
           key: windows-native
 
@@ -271,7 +271,7 @@ jobs:
           Write-Host "SUCCESS: Windows smoke test completed. Screenshot captured ($((Get-Item "windows_screenshot.png").Length) bytes)."
 
       - name: Upload Windows Smoke Artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: windows-visual-smoke
@@ -282,7 +282,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload Windows Desktop Binary
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-desktop-binary
           path: target/release/snifferlauncher-desktop.exe
@@ -302,14 +302,14 @@ jobs:
         run: brew install pkg-config
 
       - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.98.0
           targets: aarch64-apple-darwin
           components: clippy
 
       - name: Cache Dependencies
-        uses: swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
+        uses: swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2.7.7
         with:
           key: macos-arm64
 
@@ -344,7 +344,7 @@ jobs:
           echo "macOS desktop visual smoke test passed successfully."
 
       - name: Upload macOS Smoke Artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: macos-visual-smoke
@@ -354,7 +354,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload macOS Desktop Binary
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: macos-desktop-binary
           path: target/aarch64-apple-darwin/release/snifferlauncher-desktop
@@ -371,7 +371,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Java (JDK 17)
-        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -389,19 +389,19 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Setup Rust Toolchain and Android Targets
-        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.98.0
           targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android, i686-linux-android
           components: clippy
 
       - name: Cache Dependencies
-        uses: swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
+        uses: swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2.7.7
         with:
           key: android-linux
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@23ee8ab6b7397851bc11705bcdf46f2519ea0285 # v1.9.0
+        uses: cargo-bins/cargo-binstall@b874e25ea559687bec77e281e9b271aa1367b624 # v1.23.0
 
       - name: Install Android Cargo Tools
         run: |
@@ -452,7 +452,7 @@ jobs:
           python3 .github/scripts/verify_release_apk.py target/apks
 
       - name: Upload Android Release APKs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-release-apks
           path: target/**/*.apk
@@ -478,7 +478,7 @@ jobs:
           path: apks
 
       - name: Setup Java (JDK 17)
-        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -495,7 +495,7 @@ jobs:
           ls -l /dev/kvm || true
 
       - name: Run Android Emulator and Health Check
-        uses: reactivecircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 30
           target: default
@@ -506,7 +506,7 @@ jobs:
           script: bash .github/scripts/android_smoke_test.sh
 
       - name: Upload Android Smoke Screenshot & Logs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: android-visual-smoke
@@ -585,7 +585,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Scan Artifacts with VirusTotal
-        uses: crazy-max/ghaction-virustotal@d34968c958ae283fe976efed637081b9f9dcf74f # v4.2.0
+        uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 # v5.0.0
         continue-on-error: true # Reporting mode: non-blocking on API conflict (409) or rate limits
         if: env.VIRUSTOTAL_API_KEY != ''
         with:
