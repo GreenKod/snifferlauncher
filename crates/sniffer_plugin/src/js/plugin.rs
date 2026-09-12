@@ -1,7 +1,7 @@
 use crate::UiPlugin;
 use crate::dev_err;
 use crate::js::HostApiConfig;
-use crate::js::engine::{PluginEngine, create_engine};
+use crate::js::engine::{DeadlineGuard, PluginEngine, create_engine};
 use crate::js::register_host_api;
 use crate::registry::{ApiMap, BroadcastQueue};
 use crossbeam_channel::{Sender, unbounded};
@@ -57,6 +57,7 @@ pub struct JsPluginConfig {
     pub cached_ui: Option<Element>,
     pub cache_path: Option<std::path::PathBuf>,
     pub pkg_registry: Option<Arc<std::sync::RwLock<sniffer_pkg::PackageRegistry>>>,
+    pub max_memory_mb: Option<usize>,
 }
 
 impl JsPlugin {
@@ -81,6 +82,7 @@ impl JsPlugin {
 
         let script_content = config.script_content;
         let plugin_id = config.plugin_id;
+        let is_master = config.is_master;
         let vault = config.vault;
         let action_queue = config.action_queue;
         let api_map = config.api_map;
@@ -88,10 +90,12 @@ impl JsPlugin {
         let default_settings = config.default_settings;
         let cache_path = config.cache_path;
         let pkg_registry = config.pkg_registry;
+        let max_memory_mb = config.max_memory_mb;
         let msg_tx_worker = msg_tx.clone();
 
         thread::spawn(move || {
-            let engine = match create_engine() {
+            let memory_limit_bytes = max_memory_mb.map(|mb| mb * 1024 * 1024);
+            let engine = match create_engine(memory_limit_bytes) {
                 Ok(res) => res,
                 Err(e) => {
                     dev_err!("QuickJS worker engine error: {e}");
@@ -109,6 +113,7 @@ impl JsPlugin {
                     &ctx,
                     HostApiConfig {
                         plugin_id: plugin_id.clone(),
+                        is_master,
                         msg_tx: msg_tx_worker,
                         vault,
                         ui_tree: ui_tree_worker,
@@ -132,14 +137,23 @@ impl JsPlugin {
                     return Err(format!("IPC_PREAMBLE error: {e}"));
                 }
 
+                // Arm watchdog for initial script evaluation (2000 ms allowance)
+                let _guard = DeadlineGuard::arm_with_timeout(&deadline_ms, 2000);
                 if let Err(e) = ctx.eval::<Value, _>(script_content.as_bytes()) {
                     if let Some(exc) = ctx.catch().as_exception() {
                         let msg = exc.message().unwrap_or_default();
                         let stack = exc.stack().unwrap_or_default();
-                        crate::logger::error(
-                            &plugin_id,
-                            &format!("Script eval error: {msg} | {stack}"),
-                        );
+                        if msg.to_lowercase().contains("interrupted") {
+                            crate::logger::error(
+                                &plugin_id,
+                                "Security Watchdog: script evaluation exceeded 2000ms deadline and was interrupted.",
+                            );
+                        } else {
+                            crate::logger::error(
+                                &plugin_id,
+                                &format!("Script eval error: {msg} | {stack}"),
+                            );
+                        }
                         let _ = std::fs::write(
                             format!("/data/user/0/com.greenkod.snifferlauncher/{plugin_id}.js"),
                             &script_content,
@@ -163,6 +177,7 @@ impl JsPlugin {
             while let Ok(msg) = msg_rx.recv() {
                 match msg {
                     PluginMsg::Event(event) => {
+                        let _guard = DeadlineGuard::arm(&deadline_ms);
                         context.with(|ctx| {
                             let globals = ctx.globals();
                             if let Ok(on_event_fn) = globals.get::<_, rquickjs::Function>("onEvent") {
@@ -214,15 +229,22 @@ impl JsPlugin {
                                     let exc = caught.as_exception();
                                     let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
                                     let stack = exc.as_ref().and_then(|x| x.stack()).unwrap_or_default();
-                                    let err_msg = if !msg.is_empty() {
-                                        format!("{msg}\n{stack}")
+                                    if msg.to_lowercase().contains("interrupted") {
+                                        crate::logger::error(
+                                            &plugin_id,
+                                            "Security Watchdog: onEvent exceeded 500ms deadline and was interrupted.",
+                                        );
                                     } else {
-                                        e.to_string()
-                                    };
-                                    crate::logger::error(
-                                        &plugin_id,
-                                        &format!("onEvent error: {err_msg}"),
-                                    );
+                                        let err_msg = if !msg.is_empty() {
+                                            format!("{msg}\n{stack}")
+                                        } else {
+                                            e.to_string()
+                                        };
+                                        crate::logger::error(
+                                            &plugin_id,
+                                            &format!("onEvent error: {err_msg}"),
+                                        );
+                                    }
                                 }
                             }
                         });
@@ -234,32 +256,50 @@ impl JsPlugin {
                                 gc_count = 0;
                                 runtime.run_gc();
                             }
-                            // Arm the deadline: if JS takes > 500ms the interrupt
-                            // handler will fire, keeping the launcher responsive.
-                            use std::sync::atomic::Ordering;
-                            deadline_ms.store(
-                                crate::js::engine::now_ms()
-                                    + crate::js::engine::JS_TICK_DEADLINE_MS,
-                                Ordering::Relaxed,
-                            );
+                            let _guard = DeadlineGuard::arm(&deadline_ms);
                             context.with(|ctx| {
                                 if let Ok(handler) =
                                     ctx.globals().get::<_, rquickjs::Function>("_onTimerTick")
+                                    && let Err(e) = handler.call::<_, ()>(())
                                 {
-                                    let _ = handler.call::<_, ()>(());
+                                    let caught = ctx.catch();
+                                    let exc = caught.as_exception();
+                                    let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
+                                    if msg.to_lowercase().contains("interrupted") {
+                                        crate::logger::error(
+                                            &plugin_id,
+                                            "Security Watchdog: _onTimerTick exceeded 500ms deadline and was interrupted.",
+                                        );
+                                    } else if !msg.is_empty() {
+                                        crate::logger::error(&plugin_id, &format!("_onTimerTick error: {msg}"));
+                                    } else {
+                                        crate::logger::error(&plugin_id, &format!("_onTimerTick error: {e}"));
+                                    }
                                 }
                             });
-                            // Disarm: normal completion, no interrupt needed.
-                            deadline_ms.store(crate::js::engine::DEADLINE_NONE, Ordering::Relaxed);
                         }
                     }
                     PluginMsg::Broadcast { channel, payload } => {
+                        let _guard = DeadlineGuard::arm(&deadline_ms);
                         context.with(|ctx| {
                             if let Ok(handler) = ctx
                                 .globals()
                                 .get::<_, rquickjs::Function>("_dispatchBroadcast")
+                                && let Err(e) = handler.call::<_, ()>((channel, payload))
                             {
-                                let _ = handler.call::<_, ()>((channel, payload));
+                                let caught = ctx.catch();
+                                let exc = caught.as_exception();
+                                let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
+                                if msg.to_lowercase().contains("interrupted") {
+                                    crate::logger::error(
+                                        &plugin_id,
+                                        "Security Watchdog: _dispatchBroadcast exceeded 500ms deadline and was interrupted.",
+                                    );
+                                } else if !msg.is_empty() {
+                                    crate::logger::error(&plugin_id, &format!("_dispatchBroadcast error: {msg}"));
+                                } else {
+                                    crate::logger::error(&plugin_id, &format!("_dispatchBroadcast error: {e}"));
+                                }
                             }
                         });
                     }
@@ -269,14 +309,33 @@ impl JsPlugin {
                         responder,
                     } => {
                         let mut result: Option<String> = None;
+                        let _guard = DeadlineGuard::arm(&deadline_ms);
                         context.with(|ctx| {
                             if let Ok(handler) = ctx
                                 .globals()
                                 .get::<_, rquickjs::Function>(obfstr::obfstr!("_handleApiCall"))
-                                && let Ok(ret) = handler.call::<_, rquickjs::Value>((name, payload))
-                                && ret.is_string()
                             {
-                                result = ret.as_string().and_then(|s| s.to_string().ok());
+                                match handler.call::<_, rquickjs::Value>((name, payload)) {
+                                    Ok(ret) if ret.is_string() => {
+                                        result = ret.as_string().and_then(|s| s.to_string().ok());
+                                    }
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        let caught = ctx.catch();
+                                        let exc = caught.as_exception();
+                                        let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
+                                        if msg.to_lowercase().contains("interrupted") {
+                                            crate::logger::error(
+                                                &plugin_id,
+                                                "Security Watchdog: _handleApiCall exceeded 500ms deadline and was interrupted.",
+                                            );
+                                        } else if !msg.is_empty() {
+                                            crate::logger::error(&plugin_id, &format!("_handleApiCall error: {msg}"));
+                                        } else {
+                                            crate::logger::error(&plugin_id, &format!("_handleApiCall error: {e}"));
+                                        }
+                                    }
+                                }
                             }
                         });
                         let _ = responder.send(result);

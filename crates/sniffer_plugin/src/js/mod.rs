@@ -21,6 +21,7 @@ pub use plugin::{JsPlugin, JsPluginConfig, PluginMsg};
 /// Configuration bundle passed to `register_host_api`.
 pub struct HostApiConfig {
     pub plugin_id: String,
+    pub is_master: bool,
     pub msg_tx: Sender<PluginMsg>,
     pub vault: Arc<DataVault>,
     pub ui_tree: Arc<Mutex<Option<Element>>>,
@@ -38,6 +39,7 @@ pub struct HostApiConfig {
 pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
     let HostApiConfig {
         plugin_id,
+        is_master,
         msg_tx,
         vault,
         ui_tree,
@@ -156,6 +158,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         ctx,
         &globals,
         plugin_id.clone(),
+        is_master,
         msg_tx,
         action_queue,
         api_map,

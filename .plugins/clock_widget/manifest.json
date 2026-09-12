@@ -15,5 +15,11 @@
   ],
   "defaultSettings": {
     "utcOffset": 3
+  },
+  "maxMemoryMb": 8,
+  "checksums": {
+    "services/time_service.js": "55e2718c6107c825bc2262b8f90135847598667f4f111d64f9115297d0a9d016",
+    "components/clock_card.js": "6ff6de8450325f3b10382ef2c34dadd43f1d99704d7c3c9a5044099c75a6a949",
+    "main.js": "c3257b4bccbbcfc92be35f38e2b6b50bbe093b2f74b03737768626a7cdb185d6"
   }
 }

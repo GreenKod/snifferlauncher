@@ -1,4 +1,5 @@
 use crate::loader::{PluginLoader, PluginManifest};
+use std::collections::HashMap;
 
 #[test]
 fn validate_manifest_accepts_basic_plugin_manifest() {
@@ -15,6 +16,8 @@ fn validate_manifest_accepts_basic_plugin_manifest() {
             "shared_view.provider".to_string(),
         ],
         default_settings: serde_json::Value::Null,
+        checksums: HashMap::new(),
+        max_memory_mb: Some(16),
     };
 
     let issues = PluginLoader::validate_manifest(&manifest);
@@ -63,6 +66,8 @@ fn validate_manifest_rejects_malicious_path_traversal() {
         preload: vec!["../../outside.js".to_string()],
         permissions: vec!["plugin.permission.UI".to_string()],
         default_settings: serde_json::Value::Null,
+        checksums: HashMap::new(),
+        max_memory_mb: None,
     };
 
     let issues = PluginLoader::validate_manifest(&manifest);
@@ -86,6 +91,8 @@ fn validate_manifest_rejects_invalid_id_and_semver() {
         preload: vec![],
         permissions: vec!["plugin.permission.UI".to_string()],
         default_settings: serde_json::Value::Null,
+        checksums: HashMap::new(),
+        max_memory_mb: None,
     };
 
     let issues = PluginLoader::validate_manifest(&manifest);
@@ -110,6 +117,8 @@ fn validate_manifest_rejects_duplicate_and_bad_permissions() {
             "badperm".to_string(),
         ],
         default_settings: serde_json::Value::Null,
+        checksums: HashMap::new(),
+        max_memory_mb: None,
     };
 
     let issues = PluginLoader::validate_manifest(&manifest);
@@ -130,9 +139,36 @@ fn validate_manifest_rejects_non_object_default_settings() {
         preload: vec![],
         permissions: vec!["plugin.permission.UI".to_string()],
         default_settings: serde_json::json!([1, 2, 3]),
+        checksums: HashMap::new(),
+        max_memory_mb: None,
     };
 
     let issues = PluginLoader::validate_manifest(&manifest);
     assert!(!issues.is_empty());
     assert!(issues.iter().any(|i| i.contains("defaultSettings")));
+}
+
+#[test]
+fn validate_manifest_checksums_and_memory_bounds() {
+    let mut bad_checksums = HashMap::new();
+    bad_checksums.insert("main.js".to_string(), "not_a_valid_hex_hash".to_string());
+
+    let manifest = PluginManifest {
+        id: "com.example.bounds".to_string(),
+        name: "Bounds Test".to_string(),
+        version: "1.0.0".to_string(),
+        main: "main.js".to_string(),
+        scripts: vec![],
+        is_master: false,
+        preload: vec![],
+        permissions: vec!["plugin.permission.UI".to_string()],
+        default_settings: serde_json::Value::Null,
+        checksums: bad_checksums,
+        max_memory_mb: Some(128), // exceeds 64 MiB ceiling
+    };
+
+    let issues = PluginLoader::validate_manifest(&manifest);
+    assert!(!issues.is_empty());
+    assert!(issues.iter().any(|i| i.contains("checksum hash format")));
+    assert!(issues.iter().any(|i| i.contains("maxMemoryMb")));
 }

@@ -7,8 +7,36 @@ use sniffer_render::GlowRenderer;
 struct DesktopHostBridge;
 
 impl sniffer_plugin::js::host_bridge::HostPlatformBridge for DesktopHostBridge {
-    fn get_application_list(&self) -> Result<Vec<sniffer_core::types::AppInfo>, String> {
+    fn get_application_list(
+        &self,
+        caller_id: &str,
+    ) -> Result<Vec<sniffer_core::types::AppInfo>, String> {
+        sniffer_core::dev_log!(
+            "DesktopHostBridge: get_application_list requested by '{caller_id}'"
+        );
         get_application_list()
+    }
+    fn launch_app(&self, caller_id: &str, package_name: &str) -> Result<(), String> {
+        sniffer_core::dev_log!(
+            "DesktopHostBridge: launch_app '{package_name}' requested by '{caller_id}'"
+        );
+        Ok(())
+    }
+    fn open_default_home_picker(&self, caller_id: &str) -> Result<(), String> {
+        sniffer_core::dev_log!(
+            "DesktopHostBridge: open_default_home_picker requested by '{caller_id}'"
+        );
+        Ok(())
+    }
+    fn request_permissions(
+        &self,
+        caller_id: &str,
+        perms: &[String],
+    ) -> Result<Vec<String>, String> {
+        sniffer_core::dev_log!(
+            "DesktopHostBridge: request_permissions {perms:?} by '{caller_id}' (granted in simulator)"
+        );
+        Ok(perms.to_vec())
     }
 }
 

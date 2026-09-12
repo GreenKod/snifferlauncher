@@ -5,6 +5,7 @@
 //! permissions, and dependencies.
 
 pub mod schema;
+pub mod sha256;
 
 #[cfg(test)]
 mod tests;
@@ -13,3 +14,4 @@ pub use schema::{
     ManifestEntry, ManifestPackageInfo, ManifestPackageKind, ManifestPermissions,
     ManifestWidgetConfig, PackageManifest,
 };
+pub use sha256::{compute_sha256, compute_sha256_hex};

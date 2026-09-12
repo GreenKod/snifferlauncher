@@ -9,5 +9,10 @@
   ],
   "permissions": [
     "plugin.permission.IPC"
-  ]
+  ],
+  "maxMemoryMb": 4,
+  "checksums": {
+    "services/logger_service.js": "37b18f9d25012a0ece9a071df47ada8156c69cf513ecf8b58e086bb9ca29ae68",
+    "main.js": "4c92dd5311cb31c59aa504198ffaaa95a52acdeddf19d55ddcd469fc7c18efbe"
+  }
 }

@@ -8,18 +8,33 @@ pub const PERM_IPC: &str = "plugin.permission.IPC";
 pub const PERM_IMAGE: &str = "plugin.permission.IMAGE";
 pub const PERM_INPUT: &str = "plugin.permission.INPUT";
 pub const PERM_SHARED_VIEW: &str = "shared_view.provider";
+pub const PERM_PLUGIN_APP_LAUNCH: &str = "plugin.permission.APP_LAUNCH";
 
 // Android Platform permissions
 pub const PERM_ANDROID_QUERY_PACKAGES: &str = "android.permission.QUERY_ALL_PACKAGES";
 pub const PERM_ANDROID_READ_STORAGE: &str = "android.permission.READ_EXTERNAL_STORAGE";
 pub const PERM_ANDROID_READ_MEDIA_IMAGES: &str = "android.permission.READ_MEDIA_IMAGES";
 pub const PERM_ANDROID_SET_WALLPAPER: &str = "android.permission.SET_WALLPAPER";
+pub const PERM_LAUNCH_APP: &str = "android.permission.LAUNCH_APP";
 
 /// Returns true if the given permission is a safe baseline capability
 /// that can be granted automatically to sub-plugins and widgets.
 #[must_use]
 pub fn is_baseline_permission(perm: &str) -> bool {
     matches!(perm, PERM_UI | PERM_IPC | PERM_SHARED_VIEW)
+}
+
+/// Checks whether the plugin is authorized to launch external applications.
+pub fn has_launch_permission(
+    plugin_permissions: &[String],
+    granted_permissions: &Mutex<Vec<String>>,
+) -> bool {
+    permission_granted(PERM_LAUNCH_APP, plugin_permissions, granted_permissions)
+        || permission_granted(
+            PERM_PLUGIN_APP_LAUNCH,
+            plugin_permissions,
+            granted_permissions,
+        )
 }
 
 /// Check if the plugin declared and was granted the requested permission.
@@ -108,5 +123,30 @@ mod tests {
             &plugin_permissions,
             &granted_permissions,
         ));
+    }
+
+    #[test]
+    fn test_has_launch_permission_gating() {
+        use super::{PERM_LAUNCH_APP, PERM_PLUGIN_APP_LAUNCH, has_launch_permission};
+
+        // Case 1: Neither declared nor granted
+        let empty_declared = vec![];
+        let empty_granted = Mutex::new(vec![]);
+        assert!(!has_launch_permission(&empty_declared, &empty_granted));
+
+        // Case 2: Declared android.permission.LAUNCH_APP and granted
+        let android_declared = vec![PERM_LAUNCH_APP.to_string()];
+        let android_granted = Mutex::new(vec![PERM_LAUNCH_APP.to_string()]);
+        assert!(has_launch_permission(&android_declared, &android_granted));
+
+        // Case 3: Declared plugin.permission.APP_LAUNCH and granted
+        let plugin_declared = vec![PERM_PLUGIN_APP_LAUNCH.to_string()];
+        let plugin_granted = Mutex::new(vec![PERM_PLUGIN_APP_LAUNCH.to_string()]);
+        assert!(has_launch_permission(&plugin_declared, &plugin_granted));
+
+        // Case 4: Declared but NOT granted (e.g. pending user consent)
+        let declared_only = vec![PERM_LAUNCH_APP.to_string()];
+        let not_granted = Mutex::new(vec![]);
+        assert!(!has_launch_permission(&declared_only, &not_granted));
     }
 }

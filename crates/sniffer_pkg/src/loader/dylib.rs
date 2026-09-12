@@ -20,6 +20,58 @@ type ServiceCreateFn = unsafe extern "C" fn() -> *mut Box<dyn crate::package::La
 #[cfg(feature = "dynamic")]
 type WidgetCreateFn = unsafe extern "C" fn() -> *mut Box<dyn crate::package::WidgetPackage>;
 
+#[cfg(feature = "dynamic")]
+type PackageCreateV1Fn = unsafe extern "C" fn() -> *mut crate::package::SnifferPackageDescriptorV1;
+
+/// Load a package implementing the C ABI v1 contract from a shared library.
+///
+/// # Safety
+/// Caller guarantees that `path` points to a valid dynamic library.
+#[cfg(feature = "dynamic")]
+pub unsafe fn load_c_abi_package(
+    path: &Path,
+    symbol_name: Option<&str>,
+) -> Result<
+    (
+        std::sync::Arc<dyn crate::package::LauncherPackage>,
+        DynamicHandle,
+    ),
+    crate::error::PackageError,
+> {
+    let lib = unsafe { libloading::Library::new(path) }?;
+
+    let sym_name = symbol_name.unwrap_or("sniffer_package_v1_create");
+    let sym_bytes = std::ffi::CString::new(sym_name).map_err(|e| {
+        crate::error::PackageError::DynLoad(format!("invalid symbol name '{sym_name}': {e}"))
+    })?;
+
+    let descriptor_ptr: *mut crate::package::SnifferPackageDescriptorV1 = {
+        let sym_res: Result<libloading::Symbol<PackageCreateV1Fn>, _> =
+            unsafe { lib.get(sym_bytes.as_bytes_with_nul()) };
+
+        match sym_res {
+            Ok(create) => unsafe { create() },
+            Err(_) => {
+                let fallback: libloading::Symbol<PackageCreateV1Fn> =
+                    unsafe { lib.get(b"sniffer_package_v1_create\0") }?;
+                unsafe { fallback() }
+            }
+        }
+    };
+
+    if descriptor_ptr.is_null() {
+        return Err(crate::error::PackageError::DynLoad(format!(
+            "symbol '{sym_name}' returned null descriptor"
+        )));
+    }
+
+    let descriptor = unsafe { *descriptor_ptr };
+    let adapter = crate::package::CApiPackageAdapter::new(descriptor)?;
+    let arc: std::sync::Arc<dyn crate::package::LauncherPackage> = std::sync::Arc::new(adapter);
+
+    Ok((arc, DynamicHandle { _lib: lib }))
+}
+
 /// Load a service ([`LauncherPackage`][crate::package::LauncherPackage]) from a shared library.
 ///
 /// # Safety

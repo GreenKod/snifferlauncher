@@ -13,5 +13,10 @@
     "plugin.permission.UI",
     "plugin.permission.IPC",
     "plugin.permission.INPUT"
-  ]
+  ],
+  "maxMemoryMb": 8,
+  "checksums": {
+    "../framework/sniffer_ui.js": "fd5c4ad2ce5fc83572670401bf242c068cc10c2b8a316a6016ec615e6386ed1f",
+    "main.js": "420c6776b406ae102083f70d64419068613418f592d27663a9f7c50b0a840e14"
+  }
 }

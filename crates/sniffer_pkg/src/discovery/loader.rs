@@ -4,8 +4,14 @@ use crate::registry::PackageRegistry;
 
 /// Dynamically loads a package described by `manifest` into `registry`.
 ///
+/// Implements full ADR 001 verification:
+/// 1. Path resolution & boundary containment
+/// 2. Cryptographic SHA-256 integrity verification (if declared in manifest)
+/// 3. C ABI v1 loading with header handshake ("SNIF", v1) and fallback
+///
 /// # Errors
-/// Returns [`PackageError`] if dynamic loading is disabled or fails to load.
+/// Returns [`PackageError`] if dynamic loading is disabled, binary fails integrity,
+/// or fails to load.
 pub fn load_manifest_into_registry(
     manifest: &PackageManifest,
     registry: &mut PackageRegistry,
@@ -53,20 +59,69 @@ pub fn load_manifest_into_registry(
                 .join(&lib_file_name),
         ];
 
-        let lib_path = candidates
-            .into_iter()
-            .find(|p| p.is_file())
-            .unwrap_or_else(|| manifest.root_dir.join(&lib_file_name));
+        let Some(lib_path) = candidates.into_iter().find(|p| p.is_file()) else {
+            return Err(PackageError::DynLoad(format!(
+                "Native library '{}' not found in search paths for package '{}'",
+                lib_file_name, manifest.package.id
+            )));
+        };
 
+        // 1. Path Containment Check: Verify candidate does not escape repository root
+        if let (Ok(canonical_lib), Ok(canonical_root)) =
+            (lib_path.canonicalize(), manifest.root_dir.canonicalize())
+        {
+            let root_parent = canonical_root.parent().unwrap_or(&canonical_root);
+            if !canonical_lib.starts_with(&canonical_root)
+                && !canonical_lib.starts_with(root_parent)
+            {
+                return Err(PackageError::DynLoad(format!(
+                    "Security: Library path '{}' escapes authorized package root boundaries",
+                    lib_path.display()
+                )));
+            }
+        }
+
+        // 2. Cryptographic SHA-256 Digest Integrity Verification
+        if let Some(ref expected_sha) = manifest.package.sha256 {
+            let bytes = std::fs::read(&lib_path).map_err(|e| {
+                PackageError::DynLoad(format!(
+                    "Failed to read library '{}' for integrity check: {e}",
+                    lib_path.display()
+                ))
+            })?;
+            let actual_sha = crate::manifest::compute_sha256_hex(&bytes);
+            if !actual_sha.eq_ignore_ascii_case(expected_sha.trim()) {
+                return Err(PackageError::DynLoad(format!(
+                    "Security: SHA-256 integrity verification failed for package '{}': expected '{}', computed '{}'",
+                    manifest.package.id,
+                    expected_sha.trim(),
+                    actual_sha
+                )));
+            }
+        }
+
+        // 3. Dynamic library loading & C ABI handshake
         match manifest.package.kind {
             ManifestPackageKind::Service => {
-                let (pkg, handle) = unsafe {
-                    crate::loader::load_service_dylib_with_symbol(
-                        &lib_path,
-                        &manifest.entry.symbol,
-                    )?
+                // Prioritize C ABI v1 loader
+                let c_abi_res = unsafe {
+                    crate::loader::load_c_abi_package(&lib_path, Some(&manifest.entry.symbol))
                 };
-                registry.register_dynamic_service(pkg, handle);
+                match c_abi_res {
+                    Ok((pkg, handle)) => {
+                        registry.register_dynamic_service(pkg, handle);
+                    }
+                    Err(_) => {
+                        // Fallback to legacy service loader
+                        let (pkg, handle) = unsafe {
+                            crate::loader::load_service_dylib_with_symbol(
+                                &lib_path,
+                                &manifest.entry.symbol,
+                            )?
+                        };
+                        registry.register_dynamic_service(pkg, handle);
+                    }
+                }
             }
             ManifestPackageKind::Widget => {
                 let (pkg, handle) = unsafe {

@@ -127,3 +127,47 @@ kind = "widget"
 
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+#[cfg(feature = "dynamic")]
+#[test]
+fn test_load_manifest_sha256_mismatch_fails() {
+    let tmp = std::env::temp_dir().join(format!(
+        "sniffer_sha_test_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&tmp).unwrap();
+
+    let dll_ext = std::env::consts::DLL_EXTENSION;
+    let lib_file_name = if cfg!(target_os = "windows") {
+        format!("com.mock.corrupt.{dll_ext}")
+    } else {
+        format!("libcom.mock.corrupt.{dll_ext}")
+    };
+
+    let fake_lib = tmp.join(&lib_file_name);
+    std::fs::write(&fake_lib, b"corrupted payload bytes").unwrap();
+
+    let manifest_content = r#"
+[package]
+id = "com.mock.corrupt"
+name = "Mock Corrupt"
+version = "0.1.0"
+kind = "service"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+"#;
+    let mut manifest = PackageManifest::parse_str(manifest_content).unwrap();
+    manifest.root_dir = tmp.clone();
+
+    let vault = std::sync::Arc::new(sniffer_core::DataVault::new(None));
+    let mut registry = PackageRegistry::new(vault);
+    let res = PackageDiscovery::load_manifest_into_registry(&manifest, &mut registry);
+
+    assert!(res.is_err());
+    let err_msg = format!("{}", res.unwrap_err());
+    assert!(err_msg.contains("SHA-256 integrity verification failed"));
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}

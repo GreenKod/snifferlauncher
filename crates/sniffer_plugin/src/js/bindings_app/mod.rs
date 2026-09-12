@@ -10,6 +10,7 @@ pub fn register_app_bindings<'js>(
     ctx: &Ctx<'js>,
     globals: &Object<'js>,
     plugin_id: String,
+    is_master: bool,
     msg_tx: Sender<crate::js::plugin::PluginMsg>,
     action_queue: Arc<Mutex<Vec<sniffer_core::types::Action>>>,
     api_map: ApiMap,
@@ -20,6 +21,8 @@ pub fn register_app_bindings<'js>(
     apps::register_app_launch_bindings(
         ctx,
         globals,
+        plugin_id.clone(),
+        is_master,
         action_queue,
         plugin_permissions,
         granted_permissions.clone(),

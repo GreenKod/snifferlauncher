@@ -22,9 +22,7 @@ pub enum PackageError {
     /// parsed or contains invalid values.
     InvalidDescriptor(String),
 
-    /// A dynamic-library operation failed (only available with the
-    /// `dynamic` feature).
-    #[cfg(feature = "dynamic")]
+    /// A dynamic-library operation failed.
     DynLoad(String),
 
     /// A file-system error occurred (e.g. while copying a `.so` to the
@@ -50,7 +48,6 @@ impl fmt::Display for PackageError {
             Self::UnsupportedMethod(m) => write!(f, "unsupported method: '{m}'"),
             Self::NotFound(id) => write!(f, "package not found: '{id}'"),
             Self::InvalidDescriptor(msg) => write!(f, "invalid descriptor: {msg}"),
-            #[cfg(feature = "dynamic")]
             Self::DynLoad(msg) => write!(f, "dynamic load error: {msg}"),
             Self::Io(e) => write!(f, "I/O error: {e}"),
             Self::Poisoned(ctx) => write!(f, "lock poisoned in: {ctx}"),
