@@ -70,6 +70,13 @@ impl Renderer for GlowRenderer {
 
     fn end_frame(&mut self) {
         self.flush_shapes();
+        unsafe {
+            self.ensure_quad_vao();
+        }
+    }
+
+    fn flush(&mut self) {
+        self.flush_shapes();
     }
 
     fn set_clip_rect(&mut self, rect: Rect) {

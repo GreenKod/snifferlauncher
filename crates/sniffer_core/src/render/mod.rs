@@ -26,6 +26,7 @@ pub trait Renderer {
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: u32);
     fn begin_frame(&mut self, width: f32, height: f32);
     fn end_frame(&mut self);
+    fn flush(&mut self) {}
     fn set_clip_rect(&mut self, rect: Rect);
     fn clear_clip_rect(&mut self);
     fn push_clip_rect(&mut self, rect: Rect, _radius: f32) {
