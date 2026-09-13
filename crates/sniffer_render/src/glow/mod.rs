@@ -234,6 +234,16 @@ impl GlowRenderer {
         }
     }
 
+    #[inline]
+    pub(crate) unsafe fn ensure_text_vao(&mut self) {
+        if self.current_vao != Some(self.text_vertex_array) {
+            unsafe {
+                self.gl.bind_vertex_array(Some(self.text_vertex_array));
+            }
+            self.current_vao = Some(self.text_vertex_array);
+        }
+    }
+
     pub fn trim_memory(&mut self) {
         self.trim_memory_level(textures::MemoryTrimLevel::Critical);
     }

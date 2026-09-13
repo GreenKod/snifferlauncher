@@ -228,10 +228,7 @@ pub(crate) fn draw_text_impl(
 
     unsafe {
         renderer.gl.use_program(Some(renderer.text_program));
-        renderer
-            .gl
-            .bind_vertex_array(Some(renderer.text_vertex_array));
-        renderer.current_vao = Some(renderer.text_vertex_array);
+        renderer.ensure_text_vao();
         renderer.gl.active_texture(glow::TEXTURE0);
         renderer
             .gl
