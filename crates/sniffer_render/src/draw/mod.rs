@@ -30,7 +30,7 @@ pub fn draw_ui(
     accumulated_scroll_y: f32,
 ) -> usize {
     let is_animating = transition_manager.states.values().any(|s| s.is_active);
-    draw_ui_node(
+    let count = draw_ui_node(
         renderer,
         element,
         layout,
@@ -42,7 +42,9 @@ pub fn draw_ui(
         accumulated_scroll_x,
         accumulated_scroll_y,
         is_animating,
-    )
+    );
+    renderer.flush();
+    count
 }
 
 #[allow(clippy::too_many_lines)]
