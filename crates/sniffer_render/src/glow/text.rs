@@ -97,10 +97,8 @@ pub(crate) fn draw_text_impl(
         let mut curr_x = x;
         let baseline_y = atlas.ascent.mul_add(scale, y);
 
-        let aw =
-            f32::from(u16::try_from(renderer.atlas_width).expect("atlas width fits in u16"));
-        let ah =
-            f32::from(u16::try_from(renderer.atlas_height).expect("atlas height fits in u16"));
+        let aw = f32::from(u16::try_from(renderer.atlas_width).expect("atlas width fits in u16"));
+        let ah = f32::from(u16::try_from(renderer.atlas_height).expect("atlas height fits in u16"));
 
         for c in text.chars() {
             if c == ' ' {
@@ -128,9 +126,9 @@ pub(crate) fn draw_text_impl(
                 f32::from(u16::try_from(glyph.atlas_x).expect("atlas x fits in u16")) / aw;
             let u_min_y =
                 f32::from(u16::try_from(glyph.atlas_y).expect("atlas y fits in u16")) / ah;
-            let u_max_x = f32::from(
-                u16::try_from(glyph.atlas_x + glyph.width).expect("atlas x fits in u16"),
-            ) / aw;
+            let u_max_x =
+                f32::from(u16::try_from(glyph.atlas_x + glyph.width).expect("atlas x fits in u16"))
+                    / aw;
             let u_max_y = f32::from(
                 u16::try_from(glyph.atlas_y + glyph.height).expect("atlas y fits in u16"),
             ) / ah;
