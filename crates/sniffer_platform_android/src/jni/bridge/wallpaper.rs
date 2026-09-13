@@ -90,6 +90,100 @@ fn save_wallpaper_to_disk(env: &mut Env, pixels: &[u8], width: u32, height: u32)
     }
 }
 
+/// Applies a fast, 2-pass box blur to RGBA pixel buffer to achieve a frosted glass effect.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::many_single_char_names
+)]
+pub fn fast_blur_rgba(pixels: &mut [u8], width: u32, height: u32, radius: usize) {
+    if radius == 0 || width == 0 || height == 0 {
+        return;
+    }
+    let w = width as usize;
+    let h = height as usize;
+    if pixels.len() < w * h * 4 {
+        return;
+    }
+
+    let mut temp = vec![0u8; pixels.len()];
+    let r_i = radius as isize;
+    let div = (radius * 2 + 1) as u32;
+
+    // Pass 1: Horizontal Blur (pixels -> temp)
+    for y in 0..h {
+        let row_start = y * w * 4;
+        let mut sum_r = 0u32;
+        let mut sum_g = 0u32;
+        let mut sum_b = 0u32;
+        let mut sum_a = 0u32;
+
+        for i in -r_i..=r_i {
+            let px = i.clamp(0, (w - 1) as isize) as usize;
+            let idx = row_start + px * 4;
+            sum_r += u32::from(pixels[idx]);
+            sum_g += u32::from(pixels[idx + 1]);
+            sum_b += u32::from(pixels[idx + 2]);
+            sum_a += u32::from(pixels[idx + 3]);
+        }
+
+        for x in 0..w {
+            let out_idx = row_start + x * 4;
+            temp[out_idx] = (sum_r / div) as u8;
+            temp[out_idx + 1] = (sum_g / div) as u8;
+            temp[out_idx + 2] = (sum_b / div) as u8;
+            temp[out_idx + 3] = (sum_a / div) as u8;
+
+            let left_x = (x as isize - r_i).clamp(0, (w - 1) as isize) as usize;
+            let right_x = (x as isize + r_i + 1).clamp(0, (w - 1) as isize) as usize;
+
+            let left_idx = row_start + left_x * 4;
+            let right_idx = row_start + right_x * 4;
+
+            sum_r = sum_r + u32::from(pixels[right_idx]) - u32::from(pixels[left_idx]);
+            sum_g = sum_g + u32::from(pixels[right_idx + 1]) - u32::from(pixels[left_idx + 1]);
+            sum_b = sum_b + u32::from(pixels[right_idx + 2]) - u32::from(pixels[left_idx + 2]);
+            sum_a = sum_a + u32::from(pixels[right_idx + 3]) - u32::from(pixels[left_idx + 3]);
+        }
+    }
+
+    // Pass 2: Vertical Blur (temp -> pixels)
+    for x in 0..w {
+        let mut sum_r = 0u32;
+        let mut sum_g = 0u32;
+        let mut sum_b = 0u32;
+        let mut sum_a = 0u32;
+
+        for i in -r_i..=r_i {
+            let py = i.clamp(0, (h - 1) as isize) as usize;
+            let idx = (py * w + x) * 4;
+            sum_r += u32::from(temp[idx]);
+            sum_g += u32::from(temp[idx + 1]);
+            sum_b += u32::from(temp[idx + 2]);
+            sum_a += u32::from(temp[idx + 3]);
+        }
+
+        for y in 0..h {
+            let out_idx = (y * w + x) * 4;
+            pixels[out_idx] = (sum_r / div) as u8;
+            pixels[out_idx + 1] = (sum_g / div) as u8;
+            pixels[out_idx + 2] = (sum_b / div) as u8;
+            pixels[out_idx + 3] = (sum_a / div) as u8;
+
+            let top_y = (y as isize - r_i).clamp(0, (h - 1) as isize) as usize;
+            let bottom_y = (y as isize + r_i + 1).clamp(0, (h - 1) as isize) as usize;
+
+            let top_idx = (top_y * w + x) * 4;
+            let bottom_idx = (bottom_y * w + x) * 4;
+
+            sum_r = sum_r + u32::from(temp[bottom_idx]) - u32::from(temp[top_idx]);
+            sum_g = sum_g + u32::from(temp[bottom_idx + 1]) - u32::from(temp[top_idx + 1]);
+            sum_b = sum_b + u32::from(temp[bottom_idx + 2]) - u32::from(temp[top_idx + 2]);
+            sum_a = sum_a + u32::from(temp[bottom_idx + 3]) - u32::from(temp[top_idx + 3]);
+        }
+    }
+}
+
 /// Requests the system wallpaper asynchronously without blocking the UI thread.
 pub fn request_system_wallpaper_async(target_w: u32, target_h: u32) {
     init_wallpaper_channel();
@@ -97,7 +191,8 @@ pub fn request_system_wallpaper_async(target_w: u32, target_h: u32) {
         return;
     }
     std::thread::spawn(move || {
-        if let Some((pixels, w, h)) = get_system_wallpaper_pixels(target_w, target_h) {
+        if let Some((mut pixels, w, h)) = get_system_wallpaper_pixels(target_w, target_h) {
+            fast_blur_rgba(&mut pixels, w, h, 12);
             if let Some(sender) = WALLPAPER_RES_SENDER.get() {
                 let _ = sender.send(WallpaperLoadResult {
                     pixels,

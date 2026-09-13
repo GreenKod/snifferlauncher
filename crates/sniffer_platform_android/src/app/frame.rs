@@ -41,14 +41,20 @@ pub fn update_and_render_state(
 
     if screen_changed {
         state.cached_screen_size = (width, height);
-        state.cached_safe_area =
-            crate::jni::get_safe_area(app).map_or((0.0, 0.0), |(top, bottom)| {
+        state.cached_density = crate::jni::get_density();
+        state.cached_safe_area = crate::jni::get_safe_area(app).map_or_else(
+            || {
+                let (density, _) = state.cached_density;
+                let fallback_top = (36.0 * density).round();
+                (fallback_top, 0.0)
+            },
+            |(top, bottom)| {
                 (
                     f32::from(i16::try_from(top).expect("safe-area top fits in i16")),
                     f32::from(i16::try_from(bottom).expect("safe-area bottom fits in i16")),
                 )
-            });
-        state.cached_density = crate::jni::get_density();
+            },
+        );
 
         state.cached_layout = None;
         state.cached_max_scroll.clear();

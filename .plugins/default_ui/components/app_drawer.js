@@ -221,7 +221,7 @@ function AppDrawerComponent() {
         left: px(0),
         width: pct(100),
         height: pct(100),
-        background_gradient: [hex("#FF0A0E18"), hex("#FF05070D")],
+        background_gradient: [hex("#B80A0E18"), hex("#D405070D")],
         flex_direction: "Column",
         justify_content: "Start",
         align_items: "Stretch",

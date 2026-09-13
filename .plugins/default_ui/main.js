@@ -262,6 +262,17 @@ globalThis.onEvent = function (eventJsonString) {
             return "[]";
         }
 
+        // Toggle DevKit HUD expansion
+        if (idStr.indexOf("devkit_") === 0) {
+            if (typeof callApi === "function") {
+                try {
+                    callApi("devkit_hud.toggle");
+                    SnifferUI.forceUpdate();
+                } catch (e) {}
+            }
+            return "[]";
+        }
+
         // App card click (both main app grid and app drawer)
         const pkg = state.getAppPackageByHash(idStr);
         if (typeof host_log === "function") {
