@@ -131,7 +131,7 @@ pub fn android_main(app: AndroidApp) {
             &root_element,
             sniffer_core::types::Element::Container { children, .. } if children.is_empty()
         );
-        let has_pending_actions = state.action_queue.lock().map_or(false, |q| !q.is_empty());
+        let has_pending_actions = state.action_queue.lock().is_ok_and(|q| !q.is_empty());
 
         let should_update = needs_redraw
             || ui_changed
