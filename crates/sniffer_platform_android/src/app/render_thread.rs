@@ -10,7 +10,7 @@ use std::time::Duration;
 
 #[allow(clippy::too_many_lines)]
 pub fn spawn_render_thread(
-    app: AndroidApp,
+    _app: AndroidApp,
     shared_render_state: Arc<RwLock<Arc<SharedRenderState>>>,
     action_queue: Arc<Mutex<Vec<Action>>>,
     profiler: Arc<Mutex<sniffer_core::profiler::FrameProfiler>>,
@@ -76,47 +76,18 @@ pub fn spawn_render_thread(
                     if let Some(ref mut renderer) = egl.renderer {
                         if let Ok(mut q) = action_queue.lock() {
                             let mut unhandled = Vec::new();
-                            let mut loaded_textures = 0;
 
                             for action in q.drain(..) {
-                                if loaded_textures >= 16 {
-                                    unhandled.push(action);
-                                    continue;
-                                }
                                 match action {
-                                    Action::LoadImage { id: _, src } => {
+                                    Action::LoadImage { id, src } => {
                                         if let Some(pkg_name) =
                                             src.strip_prefix(obfstr!("app-icon://"))
                                         {
                                             crate::jni::bridge::request_async_app_icon(pkg_name);
                                         } else {
-                                            let asset_path =
-                                                format!("{}/{}", obfstr!(".plugins"), src);
-                                            if let Ok(cstr) =
-                                                std::ffi::CString::new(asset_path.clone())
-                                            {
-                                                if let Some(mut asset) =
-                                                    app.asset_manager().open(cstr.as_c_str())
-                                                {
-                                                    use std::io::Read;
-                                                    let mut buffer = Vec::new();
-                                                    if asset.read_to_end(&mut buffer).is_ok() {
-                                                        if let Ok(img) =
-                                                            image::load_from_memory(&buffer)
-                                                        {
-                                                            let rgba = img.to_rgba8();
-                                                            let (w, h) = rgba.dimensions();
-                                                            renderer.load_image(
-                                                                &src,
-                                                                rgba.as_raw(),
-                                                                w,
-                                                                h,
-                                                            );
-                                                            loaded_textures += 1;
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                            crate::image_loader::request_async_image(
+                                                crate::image_loader::ImageLoadRequest::new(id, src),
+                                            );
                                         }
                                     }
                                     _ => {
@@ -154,6 +125,23 @@ pub fn spawn_render_thread(
                             let image_id =
                                 format!("{}{}", obfstr!("app-icon://"), res.package_name);
                             renderer.load_image(&image_id, &res.pixels, res.width, res.height);
+                        }
+
+                        const MAX_TEXTURE_UPLOADS_PER_FRAME: usize = 4;
+                        for res in
+                            crate::image_loader::poll_async_images(MAX_TEXTURE_UPLOADS_PER_FRAME)
+                        {
+                            if res.is_valid() {
+                                renderer.load_image(&res.src, &res.pixels, res.width, res.height);
+                                if !res.id.is_empty() && res.id != res.src {
+                                    renderer.load_image(
+                                        &res.id,
+                                        &res.pixels,
+                                        res.width,
+                                        res.height,
+                                    );
+                                }
+                            }
                         }
 
                         renderer.begin_frame(width, height);
