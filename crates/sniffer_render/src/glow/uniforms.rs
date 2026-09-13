@@ -14,6 +14,7 @@ pub struct ShapeUniforms {
     pub u_color_bottom: Option<glow::UniformLocation>,
     pub u_shape_size: Option<glow::UniformLocation>,
     pub u_transform: Option<glow::UniformLocation>,
+    pub u_instanced: Option<glow::UniformLocation>,
 }
 
 #[derive(Clone)]
