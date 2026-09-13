@@ -122,6 +122,8 @@ pub fn android_main(app: AndroidApp) {
             &root_element,
             sniffer_core::types::Element::Container { children, .. } if children.is_empty()
         );
+        let is_dragging = state.active_scrollview_drag.is_some();
+        let has_pending_actions = state.action_queue.lock().map_or(false, |q| !q.is_empty());
 
         let should_update = needs_redraw
             || ui_changed
@@ -129,6 +131,9 @@ pub fn android_main(app: AndroidApp) {
             || has_active_transitions
             || is_first_frame
             || state.cached_layout.is_none();
+
+        let has_active_work = should_update || is_dragging || has_pending_actions;
+        state.update_idle_state(has_active_work);
 
         if should_update {
             frame::update_and_render_state(

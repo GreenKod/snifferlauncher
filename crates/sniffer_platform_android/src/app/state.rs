@@ -46,6 +46,9 @@ pub struct AppState {
     pub virtual_page_manager: sniffer_core::virtualization::VirtualPageManager,
     pub total_touch_drag_distance: f32,
     pub profiler: Arc<Mutex<sniffer_core::profiler::FrameProfiler>>,
+    pub idle_detector: crate::idle::IdleDetector,
+    pub is_idle: bool,
+    pub last_interaction_time: std::time::Instant,
 }
 
 impl AppState {
@@ -87,6 +90,9 @@ impl AppState {
             &action_queue,
         );
 
+        let idle_detector = crate::idle::IdleDetector::default();
+        let last_interaction_time = idle_detector.last_interaction_time();
+
         Self {
             running: true,
             touch_start_pos: Point::zero(),
@@ -118,6 +124,9 @@ impl AppState {
             virtual_page_manager: sniffer_core::virtualization::VirtualPageManager::new(),
             total_touch_drag_distance: 0.0,
             profiler,
+            idle_detector,
+            is_idle: false,
+            last_interaction_time,
         }
     }
 
@@ -130,6 +139,26 @@ impl AppState {
         self.cached_layout = None;
         self.layout_dirty = true;
         self.memory_pressure_pending = false;
+    }
+
+    /// Marks user or system activity, resetting the idle state and updating the interaction timestamp.
+    pub fn mark_interaction(&mut self) {
+        self.idle_detector.mark_interaction();
+        self.is_idle = false;
+        self.last_interaction_time = self.idle_detector.last_interaction_time();
+    }
+
+    /// Returns the duration elapsed since the last recorded interaction or activity.
+    #[must_use]
+    pub fn time_since_last_interaction(&self) -> std::time::Duration {
+        self.idle_detector.time_since_last_interaction()
+    }
+
+    /// Evaluates and updates the idle state based on whether active work is currently underway.
+    pub fn update_idle_state(&mut self, has_active_work: bool) -> bool {
+        self.is_idle = self.idle_detector.update(has_active_work);
+        self.last_interaction_time = self.idle_detector.last_interaction_time();
+        self.is_idle
     }
 
     #[must_use]
