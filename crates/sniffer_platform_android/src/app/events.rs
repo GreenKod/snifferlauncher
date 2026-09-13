@@ -18,13 +18,16 @@ pub fn poll_and_handle_events(
 
     app.poll_events(Some(Duration::from_millis(0)), |event| match event {
         PollEvent::Wake => {
+            state.mark_interaction();
             needs_redraw = true;
         }
         PollEvent::Main(main_event) => match main_event {
             MainEvent::Resume { .. } => {
+                state.mark_interaction();
                 needs_redraw = true;
             }
             MainEvent::InitWindow { .. } => {
+                state.mark_interaction();
                 if let Some(window) = app.native_window() {
                     let ptr = window.ptr().as_ptr() as usize;
                     let width = f32::from(u16::try_from(window.width()).unwrap_or(1080));
@@ -34,6 +37,7 @@ pub fn poll_and_handle_events(
                 needs_redraw = true;
             }
             MainEvent::WindowResized { .. } | MainEvent::ConfigChanged { .. } => {
+                state.mark_interaction();
                 let (width, height) = if let Some(window) = app.native_window() {
                     let ptr = window.ptr().as_ptr() as usize;
                     let w =
@@ -65,6 +69,7 @@ pub fn poll_and_handle_events(
                 needs_redraw = true;
             }
             MainEvent::InputAvailable => {
+                state.mark_interaction();
                 if let Ok(mut iter) = app.input_events_iter() {
                     loop {
                         let had_event = iter.next(|input_event| {

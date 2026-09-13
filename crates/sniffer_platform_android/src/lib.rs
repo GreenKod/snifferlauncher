@@ -1,3 +1,4 @@
+pub mod idle;
 pub mod image_loader;
 
 #[cfg(target_os = "android")]
@@ -9,6 +10,7 @@ pub mod jni;
 #[cfg(target_os = "android")]
 pub mod window;
 
+pub use idle::IdleDetector;
 pub use image_loader::{ImageLoadRequest, ImageLoadResult};
 
 #[cfg(target_os = "android")]
