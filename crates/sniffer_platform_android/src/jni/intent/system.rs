@@ -1,8 +1,9 @@
 use crate::jni::bridge::{add_new_task_flag, context, start_activity, vm};
 use android_activity::AndroidApp;
-use jni::objects::JValue;
+use jni::objects::{JValue, JValueOwned};
 use jni::{Env, jni_sig, jni_str};
 
+#[allow(clippy::redundant_closure_for_method_calls)]
 pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
     let jvm = vm();
 
@@ -13,6 +14,9 @@ pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
                 return Ok(None);
             }
 
+            let mut top = 0i32;
+            let mut bottom = 0i32;
+
             let window = env
                 .call_method(
                     &activity,
@@ -22,55 +26,172 @@ pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
                 )?
                 .l()?;
 
-            if window.is_null() {
-                return Ok(None);
+            if !window.is_null() {
+                let decor_view = env
+                    .call_method(
+                        &window,
+                        jni_str!("getDecorView"),
+                        jni_sig!("()Landroid/view/View;"),
+                        &[],
+                    )?
+                    .l()?;
+
+                if !decor_view.is_null() {
+                    if let Ok(insets_val) = env.call_method(
+                        &decor_view,
+                        jni_str!("getRootWindowInsets"),
+                        jni_sig!("()Landroid/view/WindowInsets;"),
+                        &[],
+                    ) {
+                        let insets = insets_val.l()?;
+                        if !insets.is_null() {
+                            // API 30+: insets.getInsets(135 = systemBars | displayCutout)
+                            if let Ok(insets_obj_val) = env.call_method(
+                                &insets,
+                                jni_str!("getInsets"),
+                                jni_sig!("(I)Landroid/graphics/Insets;"),
+                                &[JValue::Int(135i32)],
+                            ) {
+                                let insets_obj = insets_obj_val.l()?;
+                                if !insets_obj.is_null() {
+                                    if let Ok(t) = env
+                                        .get_field(&insets_obj, jni_str!("top"), jni_sig!("I"))
+                                        .and_then(JValueOwned::i)
+                                    {
+                                        top = t;
+                                    }
+                                    if let Ok(b) = env
+                                        .get_field(&insets_obj, jni_str!("bottom"), jni_sig!("I"))
+                                        .and_then(JValueOwned::i)
+                                    {
+                                        bottom = b;
+                                    }
+                                }
+                            }
+                            env.exception_clear();
+
+                            if top == 0 {
+                                if let Ok(t) = env
+                                    .call_method(
+                                        &insets,
+                                        jni_str!("getSystemWindowInsetTop"),
+                                        jni_sig!("()I"),
+                                        &[],
+                                    )
+                                    .and_then(JValueOwned::i)
+                                {
+                                    top = t;
+                                }
+                                env.exception_clear();
+                            }
+                            if bottom == 0 {
+                                if let Ok(b) = env
+                                    .call_method(
+                                        &insets,
+                                        jni_str!("getSystemWindowInsetBottom"),
+                                        jni_sig!("()I"),
+                                        &[],
+                                    )
+                                    .and_then(JValueOwned::i)
+                                {
+                                    bottom = b;
+                                }
+                                env.exception_clear();
+                            }
+                        }
+                    }
+                }
             }
 
-            let decor_view = env
-                .call_method(
-                    &window,
-                    jni_str!("getDecorView"),
-                    jni_sig!("()Landroid/view/View;"),
+            // Fallback to system framework resources if status_bar_height or navigation_bar_height is missing
+            if top == 0 || bottom == 0 {
+                if let Ok(res_val) = env.call_method(
+                    &activity,
+                    jni_str!("getResources"),
+                    jni_sig!("()Landroid/content/res/Resources;"),
                     &[],
-                )?
-                .l()?;
-
-            if decor_view.is_null() {
-                return Ok(None);
+                ) {
+                    let res = res_val.l()?;
+                    if !res.is_null() {
+                        if top == 0 {
+                            let name = env.new_string("status_bar_height")?;
+                            let dimen = env.new_string("dimen")?;
+                            let android = env.new_string("android")?;
+                            if let Ok(id) = env
+                                .call_method(
+                                    &res,
+                                    jni_str!("getIdentifier"),
+                                    jni_sig!(
+                                        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I"
+                                    ),
+                                    &[
+                                        JValue::Object(&name),
+                                        JValue::Object(&dimen),
+                                        JValue::Object(&android),
+                                    ],
+                                )
+                                .and_then(JValueOwned::i)
+                            {
+                                if id > 0 {
+                                    if let Ok(val) = env
+                                        .call_method(
+                                            &res,
+                                            jni_str!("getDimensionPixelSize"),
+                                            jni_sig!("(I)I"),
+                                            &[JValue::Int(id)],
+                                        )
+                                        .and_then(JValueOwned::i)
+                                    {
+                                        top = val;
+                                    }
+                                }
+                            }
+                            env.exception_clear();
+                        }
+                        if bottom == 0 {
+                            let name = env.new_string("navigation_bar_height")?;
+                            let dimen = env.new_string("dimen")?;
+                            let android = env.new_string("android")?;
+                            if let Ok(id) = env
+                                .call_method(
+                                    &res,
+                                    jni_str!("getIdentifier"),
+                                    jni_sig!(
+                                        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I"
+                                    ),
+                                    &[
+                                        JValue::Object(&name),
+                                        JValue::Object(&dimen),
+                                        JValue::Object(&android),
+                                    ],
+                                )
+                                .and_then(JValueOwned::i)
+                            {
+                                if id > 0 {
+                                    if let Ok(val) = env
+                                        .call_method(
+                                            &res,
+                                            jni_str!("getDimensionPixelSize"),
+                                            jni_sig!("(I)I"),
+                                            &[JValue::Int(id)],
+                                        )
+                                        .and_then(JValueOwned::i)
+                                    {
+                                        bottom = val;
+                                    }
+                                }
+                            }
+                            env.exception_clear();
+                        }
+                    }
+                }
             }
 
-            let insets = env
-                .call_method(
-                    &decor_view,
-                    jni_str!("getRootWindowInsets"),
-                    jni_sig!("()Landroid/view/WindowInsets;"),
-                    &[],
-                )?
-                .l()?;
-
-            if insets.is_null() {
-                return Ok(None);
+            if top > 0 || bottom > 0 {
+                Ok(Some((top, bottom)))
+            } else {
+                Ok(None)
             }
-
-            let top = env
-                .call_method(
-                    &insets,
-                    jni_str!("getSystemWindowInsetTop"),
-                    jni_sig!("()I"),
-                    &[],
-                )?
-                .i()?;
-
-            let bottom = env
-                .call_method(
-                    &insets,
-                    jni_str!("getSystemWindowInsetBottom"),
-                    jni_sig!("()I"),
-                    &[],
-                )?
-                .i()?;
-
-            Ok(Some((top, bottom)))
         })();
 
         if res.is_err() {

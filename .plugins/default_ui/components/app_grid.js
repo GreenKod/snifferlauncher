@@ -93,7 +93,7 @@ function SinglePageGridComponent(pageIndex, cfg) {
             vh(cfg.gapY),
             vw(cfg.gapX)
         ) : padTRBL(
-            vh(2.6),
+            vh(3.2),
             padLeftRight,
             vh(1.0),
             padLeftRight

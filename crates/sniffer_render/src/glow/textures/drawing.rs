@@ -225,15 +225,20 @@ impl GlowRenderer {
     }
 
     pub(crate) fn draw_wallpaper_impl(&mut self, width: f32, height: f32) {
+        let full_rect = Rect::new(0.0, 0.0, width, height);
         if self.has_image_impl("__system_wallpaper__") {
-            let full_rect = Rect::new(0.0, 0.0, width, height);
             self.draw_image(
                 "__system_wallpaper__",
                 full_rect,
                 0.0,
                 sniffer_core::style::ObjectFit::Cover,
             );
-            self.draw_rect(full_rect, 0x4000_0000, 0.0, 0.0, None);
+            // Frosted dark overlay tint for enhanced contrast and readability
+            self.draw_rect(full_rect, 0x4D0B_0F19, 0.0, 0.0, None);
+        } else {
+            // Translucent frosted glass tint allowing system wallpaper (blurred by SurfaceFlinger
+            // FLAG_BLUR_BEHIND) to shine through without blocking window transparency.
+            self.draw_rect_gradient_impl(full_rect, 0x330F_172A, 0x4D05_070D, 0.0, 0.0, None);
         }
     }
 

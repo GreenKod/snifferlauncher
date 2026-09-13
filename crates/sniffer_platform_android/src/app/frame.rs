@@ -41,23 +41,28 @@ pub fn update_and_render_state(
 
     if screen_changed {
         state.cached_screen_size = (width, height);
-        state.cached_safe_area =
-            crate::jni::get_safe_area(app).map_or((0.0, 0.0), |(top, bottom)| {
+        state.cached_density = crate::jni::get_density();
+        state.cached_safe_area = crate::jni::get_safe_area(app).map_or_else(
+            || {
+                let (density, _) = state.cached_density;
+                let fallback_top = (36.0 * density).round();
+                (fallback_top, 0.0)
+            },
+            |(top, bottom)| {
                 (
                     f32::from(i16::try_from(top).expect("safe-area top fits in i16")),
                     f32::from(i16::try_from(bottom).expect("safe-area bottom fits in i16")),
                 )
-            });
-        state.cached_density = crate::jni::get_density();
+            },
+        );
 
         state.cached_layout = None;
         state.cached_max_scroll.clear();
 
-        let content_h = height - state.cached_safe_area.0 - state.cached_safe_area.1;
         sniffer_core::types::SCREEN_WIDTH
             .store(width.to_bits(), std::sync::atomic::Ordering::Relaxed);
         sniffer_core::types::SCREEN_HEIGHT
-            .store(content_h.to_bits(), std::sync::atomic::Ordering::Relaxed);
+            .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
         ui_changed = true;
     }
@@ -72,10 +77,9 @@ pub fn update_and_render_state(
     }
 
     if screen_changed || is_first_frame {
-        let content_h = height - state.cached_safe_area.0 - state.cached_safe_area.1;
         state
             .virtual_page_manager
-            .on_viewport_resized(width, content_h, root_element);
+            .on_viewport_resized(width, height, root_element);
     }
 
     state.virtual_page_manager.virtualize_tree(root_element);
@@ -83,7 +87,6 @@ pub fn update_and_render_state(
     state.transition_manager.sync_tree(root_element);
     let _ = state.transition_manager.tick(dt);
 
-    let (safe_area_top, safe_area_bottom) = state.cached_safe_area;
     let (density, scaled_density) = state.cached_density;
 
     let metrics = ScreenMetrics::from_scale(width, height, density, scaled_density);
@@ -108,9 +111,9 @@ pub fn update_and_render_state(
         state.last_ui_version = current_ui_version;
         let fresh = Arc::new(calculate_layout(
             root_element,
-            Size::new(width, height - safe_area_top - safe_area_bottom),
+            Size::new(width, height),
             0.0,
-            safe_area_top,
+            0.0,
         ));
         super::state::update_max_scroll_cache(state, root_element, &fresh);
         state.cached_layout = Some(fresh.clone());
@@ -141,8 +144,7 @@ pub fn update_and_render_state(
         }
     });
 
-    let content_h_for_js = height - safe_area_top - safe_area_bottom;
-    let vmin_px = width.min(content_h_for_js) / 100.0;
+    let vmin_px = width.min(height) / 100.0;
     let phys_ids: Vec<u64> = state.scroll_physics.keys().copied().collect();
     for sv_id in phys_ids {
         if let Some(phys) = state.scroll_physics.get_mut(&sv_id) {
