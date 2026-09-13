@@ -20,6 +20,9 @@ pub struct GlowRenderer {
     pub(crate) _quad_vertex_buffer: glow::Buffer,
     pub(crate) text_vertex_array: glow::VertexArray,
     pub(crate) text_vertex_buffer: glow::Buffer,
+    pub(crate) shape_instance_vao: glow::VertexArray,
+    pub(crate) shape_instance_vbo: glow::Buffer,
+    pub(crate) shape_batch: batching::QuadBatch,
     pub(crate) shape_program: glow::Program,
     pub(crate) text_program: glow::Program,
     pub(crate) font_texture: glow::Texture,
@@ -82,6 +85,43 @@ impl GlowRenderer {
             gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 16, 0);
             gl.enable_vertex_attrib_array(1);
             gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, 16, 8);
+
+            let shape_instance_vao = gl.create_vertex_array()?;
+            gl.bind_vertex_array(Some(shape_instance_vao));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vertex_buffer));
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+
+            let shape_instance_vbo = gl.create_buffer()?;
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(shape_instance_vbo));
+
+            let stride = i32::try_from(std::mem::size_of::<batching::QuadInstanceData>())
+                .expect("stride fits in i32");
+
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(1, 4, glow::FLOAT, false, stride, 0);
+            gl.vertex_attrib_divisor(1, 1);
+
+            gl.enable_vertex_attrib_array(2);
+            gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, stride, 16);
+            gl.vertex_attrib_divisor(2, 1);
+
+            gl.enable_vertex_attrib_array(3);
+            gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, stride, 32);
+            gl.vertex_attrib_divisor(3, 1);
+
+            gl.enable_vertex_attrib_array(4);
+            gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, stride, 48);
+            gl.vertex_attrib_divisor(4, 1);
+
+            gl.enable_vertex_attrib_array(5);
+            gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, stride, 64);
+            gl.vertex_attrib_divisor(5, 1);
+
+            gl.enable_vertex_attrib_array(6);
+            gl.vertex_attrib_pointer_f32(6, 4, glow::FLOAT, false, stride, 80);
+            gl.vertex_attrib_divisor(6, 1);
+
             gl.bind_vertex_array(Some(quad_vertex_array));
 
             mod enc {
@@ -169,6 +209,7 @@ impl GlowRenderer {
                 u_color_bottom: gl.get_uniform_location(shape_program, "u_color_bottom"),
                 u_shape_size: gl.get_uniform_location(shape_program, "u_shape_size"),
                 u_transform: gl.get_uniform_location(shape_program, "u_transform"),
+                u_instanced: gl.get_uniform_location(shape_program, "u_instanced"),
             };
 
             let image_uniforms = ImageUniforms {
@@ -204,6 +245,9 @@ impl GlowRenderer {
                 _quad_vertex_buffer: quad_vertex_buffer,
                 text_vertex_array,
                 text_vertex_buffer,
+                shape_instance_vao,
+                shape_instance_vbo,
+                shape_batch: batching::QuadBatch::default(),
                 shape_program,
                 text_program,
                 font_texture,
@@ -244,6 +288,16 @@ impl GlowRenderer {
         }
     }
 
+    #[inline]
+    pub(crate) unsafe fn ensure_shape_instance_vao(&mut self) {
+        if self.current_vao != Some(self.shape_instance_vao) {
+            unsafe {
+                self.gl.bind_vertex_array(Some(self.shape_instance_vao));
+            }
+            self.current_vao = Some(self.shape_instance_vao);
+        }
+    }
+
     pub fn trim_memory(&mut self) {
         self.trim_memory_level(textures::MemoryTrimLevel::Critical);
     }
@@ -258,6 +312,7 @@ impl GlowRenderer {
         self.draw_rect_impl(dummy_rect, alpha_zero, 0.0, 1.0, Some(alpha_zero));
         self.draw_rect_impl(dummy_rect, alpha_zero, 10.0, 0.0, None);
         self.draw_rect_gradient_impl(dummy_rect, alpha_zero, alpha_zero, 0.0, 0.0, None);
+        self.flush_shapes();
         self.draw_shadow_impl(dummy_rect, 0.0, 5.0, 10.0, alpha_zero);
         self.draw_circle_impl(0.0, 0.0, 1.0, alpha_zero);
         text::draw_text_impl(self, "W", 0.0, 0.0, 12.0, alpha_zero);
