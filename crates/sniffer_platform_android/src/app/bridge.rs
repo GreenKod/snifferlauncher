@@ -55,6 +55,9 @@ impl sniffer_plugin::js::host_bridge::HostPlatformBridge for AndroidHostBridge {
         let _ = crate::jni::bridge::request_permissions(perms);
         Ok(perms.to_vec())
     }
+    fn wake(&self) {
+        crate::wake_app();
+    }
 }
 
 #[allow(clippy::implicit_hasher)]
