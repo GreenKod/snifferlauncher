@@ -10,6 +10,13 @@ pub const ACTIVE_POLL_TIMEOUT: Duration = Duration::from_millis(0);
 /// Event polling timeout during normal paced rendering without active animations (8 milliseconds).
 pub const PACED_POLL_TIMEOUT: Duration = Duration::from_millis(8);
 
+/// Target frame pacing duration when the application is idle (100 milliseconds, minimizing wakeups).
+pub const IDLE_FRAME_DURATION: Duration = Duration::from_millis(100);
+/// Target frame pacing duration during active physics, animations, or dragging (8 milliseconds, ~120 FPS).
+pub const ACTIVE_FRAME_DURATION: Duration = Duration::from_millis(8);
+/// Target frame pacing duration during standard active UI interaction (16 milliseconds, ~60 FPS).
+pub const STANDARD_FRAME_DURATION: Duration = Duration::from_millis(16);
+
 /// Tracks user interaction timestamps and evaluates whether the application is in an idle state.
 #[derive(Debug, Clone)]
 pub struct IdleDetector {
@@ -107,12 +114,51 @@ impl IdleDetector {
             PACED_POLL_TIMEOUT
         }
     }
+
+    /// Returns the target frame pacing duration based on current idle state and active animations:
+    /// - `ACTIVE_FRAME_DURATION` (8ms, ~120 FPS) when physics, drag, or transitions are active.
+    /// - `IDLE_FRAME_DURATION` (100ms, ~10 FPS) when the application is in an idle state.
+    /// - `STANDARD_FRAME_DURATION` (16ms, ~60 FPS) when active without high-refresh animations.
+    #[must_use]
+    pub fn target_frame_duration(&self, has_active_animation: bool) -> Duration {
+        if has_active_animation {
+            ACTIVE_FRAME_DURATION
+        } else if self.is_idle {
+            IDLE_FRAME_DURATION
+        } else {
+            STANDARD_FRAME_DURATION
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::thread::sleep;
+
+    #[test]
+    fn test_target_frame_duration() {
+        let mut detector = IdleDetector::new(Duration::from_millis(15));
+        // Not idle, standard state -> STANDARD_FRAME_DURATION (16ms)
+        assert_eq!(
+            detector.target_frame_duration(false),
+            STANDARD_FRAME_DURATION
+        );
+
+        // Not idle, active animation -> ACTIVE_FRAME_DURATION (8ms)
+        assert_eq!(detector.target_frame_duration(true), ACTIVE_FRAME_DURATION);
+
+        // Transition to idle
+        sleep(Duration::from_millis(25));
+        detector.update(false);
+        assert!(detector.is_idle());
+
+        // Idle, no animation -> IDLE_FRAME_DURATION (100ms)
+        assert_eq!(detector.target_frame_duration(false), IDLE_FRAME_DURATION);
+
+        // Idle, but active animation flag passed -> ACTIVE_FRAME_DURATION (8ms)
+        assert_eq!(detector.target_frame_duration(true), ACTIVE_FRAME_DURATION);
+    }
 
     #[test]
     fn test_recommended_poll_timeout() {

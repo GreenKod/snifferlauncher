@@ -13,7 +13,6 @@ pub use state::{AppState, KineticScroll};
 use android_activity::AndroidApp;
 use sniffer_core::ScreenMetrics;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
 
 #[allow(clippy::pedantic, clippy::too_many_lines)]
 pub fn android_main(app: AndroidApp) {
@@ -156,15 +155,18 @@ pub fn android_main(app: AndroidApp) {
             );
         }
 
-        let elapsed = frame_start.elapsed();
-        let target_frame_duration = if has_active_physics
-            || has_active_transitions
+        let has_active_animation_after = !state.kinetic_scrolls.is_empty()
+            || state.transition_manager.is_animating()
             || state.active_scrollview_drag.is_some()
-        {
-            Duration::from_millis(8)
-        } else {
-            Duration::from_millis(16)
-        };
+            || state.scroll_physics.values().any(|p| {
+                p.is_dragging
+                    || p.snap_target_x.is_some()
+                    || p.vel_x.abs() > 0.5
+                    || p.vel_y.abs() > 0.5
+            });
+
+        let elapsed = frame_start.elapsed();
+        let target_frame_duration = state.target_frame_duration(has_active_animation_after);
 
         if elapsed < target_frame_duration {
             std::thread::sleep(target_frame_duration - elapsed);
