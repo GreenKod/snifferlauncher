@@ -93,6 +93,7 @@ fn save_wallpaper_to_disk(env: &mut Env, pixels: &[u8], width: u32, height: u32)
 /// Applies a fast, 2-pass box blur to RGBA pixel buffer to achieve a frosted glass effect.
 #[allow(
     clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
     clippy::many_single_char_names
 )]

@@ -1,8 +1,9 @@
 use crate::jni::bridge::{add_new_task_flag, context, start_activity, vm};
 use android_activity::AndroidApp;
-use jni::objects::JValue;
+use jni::objects::{JValue, JValueOwned};
 use jni::{Env, jni_sig, jni_str};
 
+#[allow(clippy::redundant_closure_for_method_calls)]
 pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
     let jvm = vm();
 
@@ -55,13 +56,13 @@ pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
                                 if !insets_obj.is_null() {
                                     if let Ok(t) = env
                                         .get_field(&insets_obj, jni_str!("top"), jni_sig!("I"))
-                                        .and_then(|v| v.i())
+                                        .and_then(JValueOwned::i)
                                     {
                                         top = t;
                                     }
                                     if let Ok(b) = env
                                         .get_field(&insets_obj, jni_str!("bottom"), jni_sig!("I"))
-                                        .and_then(|v| v.i())
+                                        .and_then(JValueOwned::i)
                                     {
                                         bottom = b;
                                     }
@@ -77,7 +78,7 @@ pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
                                         jni_sig!("()I"),
                                         &[],
                                     )
-                                    .and_then(|v| v.i())
+                                    .and_then(JValueOwned::i)
                                 {
                                     top = t;
                                 }
@@ -91,7 +92,7 @@ pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
                                         jni_sig!("()I"),
                                         &[],
                                     )
-                                    .and_then(|v| v.i())
+                                    .and_then(JValueOwned::i)
                                 {
                                     bottom = b;
                                 }
@@ -129,7 +130,7 @@ pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
                                         JValue::Object(&android),
                                     ],
                                 )
-                                .and_then(|v| v.i())
+                                .and_then(JValueOwned::i)
                             {
                                 if id > 0 {
                                     if let Ok(val) = env
@@ -139,7 +140,7 @@ pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
                                             jni_sig!("(I)I"),
                                             &[JValue::Int(id)],
                                         )
-                                        .and_then(|v| v.i())
+                                        .and_then(JValueOwned::i)
                                     {
                                         top = val;
                                     }
@@ -164,7 +165,7 @@ pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
                                         JValue::Object(&android),
                                     ],
                                 )
-                                .and_then(|v| v.i())
+                                .and_then(JValueOwned::i)
                             {
                                 if id > 0 {
                                     if let Ok(val) = env
@@ -174,7 +175,7 @@ pub fn get_safe_area(_app: &AndroidApp) -> Option<(i32, i32)> {
                                             jni_sig!("(I)I"),
                                             &[JValue::Int(id)],
                                         )
-                                        .and_then(|v| v.i())
+                                        .and_then(JValueOwned::i)
                                     {
                                         bottom = val;
                                     }
