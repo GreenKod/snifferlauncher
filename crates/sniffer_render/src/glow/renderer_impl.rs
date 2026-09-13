@@ -52,6 +52,7 @@ impl Renderer for GlowRenderer {
     }
 
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: u32) {
+        self.flush_shapes();
         text::draw_text_impl(self, text, x, y, size, color);
     }
 
@@ -67,9 +68,12 @@ impl Renderer for GlowRenderer {
         }
     }
 
-    fn end_frame(&mut self) {}
+    fn end_frame(&mut self) {
+        self.flush_shapes();
+    }
 
     fn set_clip_rect(&mut self, rect: Rect) {
+        self.flush_shapes();
         unsafe {
             self.gl.enable(glow::SCISSOR_TEST);
             let y = self.resolution.1 - rect.y - rect.height;
@@ -83,6 +87,7 @@ impl Renderer for GlowRenderer {
     }
 
     fn clear_clip_rect(&mut self) {
+        self.flush_shapes();
         unsafe {
             self.gl.disable(glow::SCISSOR_TEST);
         }
@@ -112,6 +117,7 @@ impl Renderer for GlowRenderer {
     }
 
     fn push_transform(&mut self, cx: f32, cy: f32, scale: f32, rotate: f32, tx: f32, ty: f32) {
+        self.flush_shapes();
         let p = self
             .transform_stack
             .last()
@@ -146,6 +152,7 @@ impl Renderer for GlowRenderer {
     }
 
     fn pop_transform(&mut self) {
+        self.flush_shapes();
         if self.transform_stack.len() > 1 {
             self.transform_stack.pop();
         }
@@ -168,6 +175,7 @@ impl Renderer for GlowRenderer {
     }
 
     fn draw_wallpaper(&mut self, width: f32, height: f32) {
+        self.flush_shapes();
         self.draw_wallpaper_impl(width, height);
     }
 
@@ -178,6 +186,7 @@ impl Renderer for GlowRenderer {
         radius: f32,
         object_fit: sniffer_core::style::ObjectFit,
     ) {
+        self.flush_shapes();
         self.draw_image_impl(id, rect, radius, object_fit);
     }
 

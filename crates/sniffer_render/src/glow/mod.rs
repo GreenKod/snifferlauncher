@@ -20,11 +20,8 @@ pub struct GlowRenderer {
     pub(crate) _quad_vertex_buffer: glow::Buffer,
     pub(crate) text_vertex_array: glow::VertexArray,
     pub(crate) text_vertex_buffer: glow::Buffer,
-    #[allow(dead_code)]
     pub(crate) shape_instance_vao: glow::VertexArray,
-    #[allow(dead_code)]
     pub(crate) shape_instance_vbo: glow::Buffer,
-    #[allow(dead_code)]
     pub(crate) shape_batch: batching::QuadBatch,
     pub(crate) shape_program: glow::Program,
     pub(crate) text_program: glow::Program,
@@ -292,7 +289,6 @@ impl GlowRenderer {
     }
 
     #[inline]
-    #[allow(dead_code)]
     pub(crate) unsafe fn ensure_shape_instance_vao(&mut self) {
         if self.current_vao != Some(self.shape_instance_vao) {
             unsafe {
@@ -316,6 +312,7 @@ impl GlowRenderer {
         self.draw_rect_impl(dummy_rect, alpha_zero, 0.0, 1.0, Some(alpha_zero));
         self.draw_rect_impl(dummy_rect, alpha_zero, 10.0, 0.0, None);
         self.draw_rect_gradient_impl(dummy_rect, alpha_zero, alpha_zero, 0.0, 0.0, None);
+        self.flush_shapes();
         self.draw_shadow_impl(dummy_rect, 0.0, 5.0, 10.0, alpha_zero);
         self.draw_circle_impl(0.0, 0.0, 1.0, alpha_zero);
         text::draw_text_impl(self, "W", 0.0, 0.0, 12.0, alpha_zero);
