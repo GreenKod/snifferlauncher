@@ -14,6 +14,9 @@ static IMAGE_REQ_SENDER: OnceLock<Sender<ImageLoadRequest>> = OnceLock::new();
 static IMAGE_RES_RECEIVER: OnceLock<Receiver<ImageLoadResult>> = OnceLock::new();
 static PENDING_REQUESTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
+#[cfg(target_os = "android")]
+static ANDROID_APP: OnceLock<android_activity::AndroidApp> = OnceLock::new();
+
 fn pending_requests() -> &'static Mutex<HashSet<String>> {
     PENDING_REQUESTS.get_or_init(|| Mutex::new(HashSet::new()))
 }
@@ -67,30 +70,32 @@ pub fn decode_image_bytes(id: &str, src: &str, bytes: &[u8]) -> Option<ImageLoad
 }
 
 #[cfg(target_os = "android")]
-fn read_image_data(app: &android_activity::AndroidApp, src: &str) -> Option<Vec<u8>> {
+fn read_image_data(src: &str) -> Option<Vec<u8>> {
     if src.is_empty() || src.contains('\0') {
         sniffer_core::dev_err!("Invalid image path requested: '{src}'");
         return None;
     }
 
-    let asset_path = if src.starts_with(".plugins/") {
-        src.to_string()
-    } else {
-        format!("{}/{}", obfstr::obfstr!(".plugins"), src)
-    };
+    if let Some(app) = ANDROID_APP.get() {
+        let asset_path = if src.starts_with(".plugins/") {
+            src.to_string()
+        } else {
+            format!("{}/{}", obfstr::obfstr!(".plugins"), src)
+        };
 
-    if let Ok(cstr) = std::ffi::CString::new(asset_path) {
-        if let Some(mut asset) = app.asset_manager().open(cstr.as_c_str()) {
-            use std::io::Read;
-            let mut buffer = Vec::new();
-            let mut handle = (&mut asset).take(MAX_IMAGE_FILE_SIZE + 1);
-            if handle.read_to_end(&mut buffer).is_ok()
-                && buffer.len() <= MAX_IMAGE_FILE_SIZE as usize
-            {
-                return Some(buffer);
+        if let Ok(cstr) = std::ffi::CString::new(asset_path) {
+            if let Some(mut asset) = app.asset_manager().open(cstr.as_c_str()) {
+                use std::io::Read;
+                let mut buffer = Vec::new();
+                let mut handle = (&mut asset).take(MAX_IMAGE_FILE_SIZE + 1);
+                if handle.read_to_end(&mut buffer).is_ok()
+                    && buffer.len() <= MAX_IMAGE_FILE_SIZE as usize
+                {
+                    return Some(buffer);
+                }
+                sniffer_core::dev_err!("Image asset exceeded 32 MB limit or read failed: '{src}'");
+                return None;
             }
-            sniffer_core::dev_err!("Image asset exceeded 32 MB limit or read failed: '{src}'");
-            return None;
         }
     }
 
@@ -172,39 +177,14 @@ pub fn poll_async_images(max_count: usize) -> Vec<ImageLoadResult> {
     results
 }
 
-/// Initializes the background image loader worker thread and crossbeam channels on Android.
+/// On Android, registers the `AndroidApp` handle for asset resolution and initializes the worker pool.
 #[cfg(target_os = "android")]
-pub fn init_image_worker_pool(app: &android_activity::AndroidApp) {
-    if IMAGE_REQ_SENDER.get().is_some() {
-        return;
-    }
-
-    let (req_tx, req_rx) = unbounded::<ImageLoadRequest>();
-    let (res_tx, res_rx) = unbounded::<ImageLoadResult>();
-
-    let _ = IMAGE_REQ_SENDER.set(req_tx);
-    let _ = IMAGE_RES_RECEIVER.set(res_rx);
-
-    let app_clone = app.clone();
-    let _ = std::thread::Builder::new()
-        .name("sniffer-image-loader".to_string())
-        .spawn(move || {
-            while let Ok(req) = req_rx.recv() {
-                let _guard = PendingGuard(&req.src);
-                let decode_res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    read_image_data(&app_clone, &req.src)
-                        .and_then(|bytes| decode_image_bytes(&req.id, &req.src, &bytes))
-                }));
-
-                if let Ok(Some(res)) = decode_res {
-                    let _ = res_tx.send(res);
-                }
-            }
-        });
+pub fn set_android_app(app: &android_activity::AndroidApp) {
+    let _ = ANDROID_APP.set(app.clone());
+    init_image_worker_pool();
 }
 
-/// Initializes the background image loader worker thread and crossbeam channels on non-Android platforms.
-#[cfg(not(target_os = "android"))]
+/// Initializes the background image loader worker thread and crossbeam channels.
 pub fn init_image_worker_pool() {
     if IMAGE_REQ_SENDER.get().is_some() {
         return;
