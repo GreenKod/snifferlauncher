@@ -127,6 +127,23 @@ pub fn spawn_render_thread(
                             renderer.load_image(&image_id, &res.pixels, res.width, res.height);
                         }
 
+                        const MAX_TEXTURE_UPLOADS_PER_FRAME: usize = 4;
+                        for res in
+                            crate::image_loader::poll_async_images(MAX_TEXTURE_UPLOADS_PER_FRAME)
+                        {
+                            if res.is_valid() {
+                                renderer.load_image(&res.src, &res.pixels, res.width, res.height);
+                                if !res.id.is_empty() && res.id != res.src {
+                                    renderer.load_image(
+                                        &res.id,
+                                        &res.pixels,
+                                        res.width,
+                                        res.height,
+                                    );
+                                }
+                            }
+                        }
+
                         renderer.begin_frame(width, height);
 
                         if !current_state.shaders_warmed_up {

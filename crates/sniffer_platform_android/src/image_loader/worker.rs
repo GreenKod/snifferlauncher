@@ -91,6 +91,22 @@ pub fn poll_async_image() -> Option<ImageLoadResult> {
     IMAGE_RES_RECEIVER.get().and_then(|rx| rx.try_recv().ok())
 }
 
+/// Polls up to `max_count` completed asynchronous image load results (non-blocking).
+#[must_use]
+pub fn poll_async_images(max_count: usize) -> Vec<ImageLoadResult> {
+    let mut results = Vec::new();
+    if let Some(rx) = IMAGE_RES_RECEIVER.get() {
+        while results.len() < max_count {
+            if let Ok(res) = rx.try_recv() {
+                results.push(res);
+            } else {
+                break;
+            }
+        }
+    }
+    results
+}
+
 /// Initializes the background image loader worker thread and crossbeam channels on Android.
 #[cfg(target_os = "android")]
 pub fn init_image_worker_pool(app: &android_activity::AndroidApp) {
@@ -192,5 +208,28 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(50));
             assert!(poll_async_image().is_none());
         }
+    }
+
+    #[test]
+    fn test_poll_async_images_throttling() {
+        let (tx, rx) = unbounded::<ImageLoadResult>();
+        for i in 0..10 {
+            let res =
+                ImageLoadResult::new(format!("id_{i}"), format!("src_{i}"), vec![0; 16], 2, 2);
+            let _ = tx.send(res);
+        }
+
+        let mut polled = Vec::new();
+        let max_count = 4;
+        while polled.len() < max_count {
+            if let Ok(res) = rx.try_recv() {
+                polled.push(res);
+            } else {
+                break;
+            }
+        }
+        assert_eq!(polled.len(), 4);
+        assert_eq!(polled[0].id, "id_0");
+        assert_eq!(polled[3].id, "id_3");
     }
 }
