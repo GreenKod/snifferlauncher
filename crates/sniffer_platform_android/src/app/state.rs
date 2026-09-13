@@ -161,6 +161,13 @@ impl AppState {
         self.is_idle
     }
 
+    /// Returns the recommended event polling timeout based on current idle state and active animations.
+    #[must_use]
+    pub fn recommended_poll_timeout(&self, has_active_animation: bool) -> std::time::Duration {
+        self.idle_detector
+            .recommended_poll_timeout(has_active_animation)
+    }
+
     #[must_use]
     pub fn get_max_scroll(&self, target_id: Option<u64>) -> f32 {
         target_id

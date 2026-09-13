@@ -13,10 +13,11 @@ pub fn poll_and_handle_events(
     state: &mut AppState,
     root_element: &mut Element,
     render_tx: &Sender<RenderMessage>,
+    poll_timeout: Option<Duration>,
 ) -> bool {
     let mut needs_redraw = false;
 
-    app.poll_events(Some(Duration::from_millis(0)), |event| match event {
+    app.poll_events(poll_timeout, |event| match event {
         PollEvent::Wake => {
             state.mark_interaction();
             needs_redraw = true;
