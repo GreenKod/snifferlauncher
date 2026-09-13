@@ -67,11 +67,11 @@ function getDockContainer(isLandscape) {
         height: px(vh(18.0)),
         background_color: hex("#00000000"),
         flex_direction: "Column",
-        justify_content: "Center",
+        justify_content: "End",
         align_items: "Center",
         padding: {
             top: 0,
-            bottom: vmin(5.0),
+            bottom: vmin(2.2),
             left: vmin(2.0),
             right: vmin(2.0)
         },

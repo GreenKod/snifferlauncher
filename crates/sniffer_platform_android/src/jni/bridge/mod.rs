@@ -180,6 +180,34 @@ pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
         );
         env.exception_clear();
 
+        // Edge-to-edge: window.setDecorFitsSystemWindows(false) (API 30+)
+        let _ = env.call_method(
+            &window,
+            jni_str!("setDecorFitsSystemWindows"),
+            jni_sig!("(Z)V"),
+            &[JValue::Bool(false)],
+        );
+        env.exception_clear();
+
+        // decorView.setSystemUiVisibility(LAYOUT_STABLE | LAYOUT_HIDE_NAVIGATION | LAYOUT_FULLSCREEN)
+        if let Ok(decor_view_val) = env.call_method(
+            &window,
+            jni_str!("getDecorView"),
+            jni_sig!("()Landroid/view/View;"),
+            &[],
+        ) {
+            let decor_view = decor_view_val.l()?;
+            if !decor_view.is_null() {
+                let _ = env.call_method(
+                    &decor_view,
+                    jni_str!("setSystemUiVisibility"),
+                    jni_sig!("(I)V"),
+                    &[JValue::Int(0x0000_0700i32)],
+                );
+                env.exception_clear();
+            }
+        }
+
         // Android 12+ (API 31+): setBlurBehindRadius on WindowManager.LayoutParams
         if let Ok(lp_val) = env.call_method(
             &window,
@@ -194,6 +222,15 @@ pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
                     jni_str!("setBlurBehindRadius"),
                     jni_sig!("(I)V"),
                     &[JValue::Int(60i32)],
+                );
+                env.exception_clear();
+
+                // lp.layoutInDisplayCutoutMode = 1 (LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES)
+                let _ = env.set_field(
+                    &lp,
+                    jni_str!("layoutInDisplayCutoutMode"),
+                    jni_sig!("I"),
+                    JValue::Int(1i32),
                 );
                 env.exception_clear();
 
@@ -222,6 +259,23 @@ pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
             jni_str!("setNavigationBarColor"),
             jni_sig!("(I)V"),
             &[JValue::Int(0i32)],
+        );
+        env.exception_clear();
+
+        // Android 10+ (API 29+): disable navigation bar & status bar contrast scrims
+        let _ = env.call_method(
+            &window,
+            jni_str!("setNavigationBarContrastEnforced"),
+            jni_sig!("(Z)V"),
+            &[JValue::Bool(false)],
+        );
+        env.exception_clear();
+
+        let _ = env.call_method(
+            &window,
+            jni_str!("setStatusBarContrastEnforced"),
+            jni_sig!("(Z)V"),
+            &[JValue::Bool(false)],
         );
         env.exception_clear();
 

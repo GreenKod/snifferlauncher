@@ -80,13 +80,11 @@ pub fn poll_and_handle_events(
                                             f32::from(u16::try_from(win.height()).unwrap_or(1920)),
                                         )
                                     });
-                                let (safe_top, safe_bottom) = state.cached_safe_area;
-                                let content_h = (h - safe_top - safe_bottom).max(1.0);
                                 Arc::new(sniffer_core::calculate_layout(
                                     root_element,
-                                    sniffer_core::Size::new(w, content_h),
+                                    sniffer_core::Size::new(w, h),
                                     0.0,
-                                    safe_top,
+                                    0.0,
                                 ))
                             };
                             crate::input::handle_input_event(

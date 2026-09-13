@@ -247,13 +247,16 @@ pub fn render_devkit_debug_overlays(
     layout_tree: &crate::layout::LayoutNode,
 ) {
     static SHOW_DEBUG_OVERLAYS: std::sync::atomic::AtomicBool =
-        std::sync::atomic::AtomicBool::new(false);
+        std::sync::atomic::AtomicBool::new(true);
     static CHECKED_ENV: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
     if !CHECKED_ENV.load(std::sync::atomic::Ordering::Relaxed) {
-        let enabled = std::env::var("SNIFFER_DEBUG_HITBOXES").is_ok()
-            || std::env::var("SNIFFER_DEBUG_OVERLAYS").is_ok();
-        SHOW_DEBUG_OVERLAYS.store(enabled, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(val) = std::env::var("SNIFFER_DEBUG_HITBOXES")
+            .or_else(|_| std::env::var("SNIFFER_DEBUG_OVERLAYS"))
+        {
+            let disabled = val == "0" || val.eq_ignore_ascii_case("false");
+            SHOW_DEBUG_OVERLAYS.store(!disabled, std::sync::atomic::Ordering::Relaxed);
+        }
         CHECKED_ENV.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 

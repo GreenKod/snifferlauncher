@@ -20,7 +20,7 @@
   "checksums": {
     "../framework/sniffer_ui.js": "fd5c4ad2ce5fc83572670401bf242c068cc10c2b8a316a6016ec615e6386ed1f",
     "services/apps.js": "4ca6b11a0caa8136ec73c512dbb3fdd6dc29874b134ebda88ba6cd2fb00aa67f",
-    "components/dock_bar.js": "2370be3423550a938f59396c02b440c8e352cd33ee05def3a10bf6bdeee32759",
+    "components/dock_bar.js": "dbb223973d6f4525956debc1553d8e18515ec671404b9b473310ba4af60db6a1",
     "main.js": "1ed141c920e43b9db7a57badfc387ab931f534a84db288c3274caa26e0c7da05"
   }
 }
