@@ -123,7 +123,7 @@ impl JsPlugin {
                         plugin_permissions: permissions_clone,
                         granted_permissions,
                         default_settings,
-                        cache_path,
+                        cache_path: cache_path.clone(),
                         pkg_registry,
                     },
                 );
@@ -154,10 +154,12 @@ impl JsPlugin {
                                 &format!("Script eval error: {msg} | {stack}"),
                             );
                         }
-                        let _ = std::fs::write(
-                            format!("/data/user/0/com.greenkod.snifferlauncher/{plugin_id}.js"),
-                            &script_content,
-                        );
+                        if let Some(ref dir) = cache_path {
+                            let _ = std::fs::write(
+                                dir.join(format!("{plugin_id}.js")),
+                                &script_content,
+                            );
+                        }
                         return Err(format!("Script eval error in plugin: {msg}\n{stack}"));
                     }
                     crate::logger::error(&plugin_id, &format!("Script eval error: {e}"));

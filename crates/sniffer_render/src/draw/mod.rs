@@ -16,7 +16,6 @@ use sniffer_core::ui::data_map::DataMap;
 use sniffer_core::ui::style_map::StyleMap;
 
 /// Platform-agnostic traversal to draw the UI elements using the Renderer interface.
-#[allow(clippy::too_many_lines)]
 #[allow(clippy::too_many_arguments)]
 pub fn draw_ui(
     renderer: &mut dyn Renderer,
@@ -29,6 +28,37 @@ pub fn draw_ui(
     alpha_multiplier: f32,
     accumulated_scroll_x: f32,
     accumulated_scroll_y: f32,
+) -> usize {
+    let is_animating = transition_manager.states.values().any(|s| s.is_active);
+    draw_ui_node(
+        renderer,
+        element,
+        layout,
+        metrics,
+        style_map,
+        data_map,
+        transition_manager,
+        alpha_multiplier,
+        accumulated_scroll_x,
+        accumulated_scroll_y,
+        is_animating,
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn draw_ui_node(
+    renderer: &mut dyn Renderer,
+    element: &Element,
+    layout: &LayoutNode,
+    metrics: &ScreenMetrics,
+    style_map: &StyleMap,
+    data_map: &DataMap,
+    transition_manager: &sniffer_core::anim::TransitionManager,
+    alpha_multiplier: f32,
+    accumulated_scroll_x: f32,
+    accumulated_scroll_y: f32,
+    is_animating: bool,
 ) -> usize {
     use sniffer_core::ui::data_map::DataValue;
     use sniffer_core::ui::data_map::DrawCommand;
@@ -72,8 +102,6 @@ pub fn draw_ui(
     let screen_y = rect.y + ty - accumulated_scroll_y;
     let eff_w = rect.width * base_style.transform.scale;
     let eff_h = rect.height * base_style.transform.scale;
-
-    let is_animating = transition_manager.states.values().any(|s| s.is_active);
 
     let margin_x = (screen_w * 3.0).max(2000.0);
     let margin_y = if is_animating { screen_h } else { 200.0_f32 };
@@ -177,6 +205,7 @@ pub fn draw_ui(
         &base_style,
         rect,
         widget_id,
+        is_animating,
     );
 
     if base_style.overflow_hidden {

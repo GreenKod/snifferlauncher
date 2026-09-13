@@ -85,7 +85,7 @@ pub fn update_and_render_state(
     state.virtual_page_manager.virtualize_tree(root_element);
     physics_sync::sync_scroll_physics_from_tree(root_element, &mut state.scroll_physics);
     state.transition_manager.sync_tree(root_element);
-    let _ = state.transition_manager.tick(dt);
+    let is_animating = state.transition_manager.tick(dt) || state.transition_manager.is_animating();
 
     let (density, scaled_density) = state.cached_density;
 
@@ -103,6 +103,7 @@ pub fn update_and_render_state(
         }
     }
 
+    let layout_recalculated = state.layout_dirty || state.cached_layout.is_none();
     let layout_tree = if !state.layout_dirty
         && let Some(ref cached) = state.cached_layout
     {
@@ -127,6 +128,7 @@ pub fn update_and_render_state(
             .unwrap_or(0.0)
     };
 
+    let kinetic_active = !state.kinetic_scrolls.is_empty();
     state.kinetic_scrolls.retain_mut(|k| {
         if k.velocity_x.abs() > 0.5 || k.velocity_y.abs() > 0.5 {
             state.event_bus.push(UiEvent::Scroll(
@@ -144,11 +146,15 @@ pub fn update_and_render_state(
         }
     });
 
+    let mut physics_active = false;
     let vmin_px = width.min(height) / 100.0;
     let phys_ids: Vec<u64> = state.scroll_physics.keys().copied().collect();
     for sv_id in phys_ids {
         if let Some(phys) = state.scroll_physics.get_mut(&sv_id) {
-            let _ = phys.tick(dt);
+            let moved = phys.tick(dt);
+            if moved || phys.is_dragging {
+                physics_active = true;
+            }
 
             if let Some(snap_width) = phys.snap_x {
                 if snap_width > 0.0 {
@@ -184,6 +190,7 @@ pub fn update_and_render_state(
                     if indicator_changed {
                         state.cached_layout = None;
                         state.layout_dirty = true;
+                        physics_active = true;
                     }
                 }
             }
@@ -194,6 +201,7 @@ pub fn update_and_render_state(
         }
     }
 
+    let has_events = !state.event_bus.is_empty();
     state.plugin_registry.tick();
 
     state.plugin_registry.dispatch(
@@ -206,13 +214,25 @@ pub fn update_and_render_state(
     super::actions::process_android_actions(&state.action_queue, app);
 
     let current_warmed_up = shared_render_state.read().unwrap().shaders_warmed_up;
-    *shared_render_state.write().unwrap() = Arc::new(SharedRenderState {
-        root_element: root_element.clone(),
-        layout_tree,
-        metrics,
-        style_map: state.style_map.clone(),
-        data_map: state.data_map.clone(),
-        transition_manager: state.transition_manager.clone(),
-        shaders_warmed_up: current_warmed_up,
-    });
+    let needs_state_update = ui_changed
+        || screen_changed
+        || state.layout_dirty
+        || layout_recalculated
+        || is_animating
+        || kinetic_active
+        || physics_active
+        || has_events
+        || !current_warmed_up;
+
+    if needs_state_update {
+        *shared_render_state.write().unwrap() = Arc::new(SharedRenderState {
+            root_element: root_element.clone(),
+            layout_tree,
+            metrics,
+            style_map: state.style_map.clone(),
+            data_map: state.data_map.clone(),
+            transition_manager: state.transition_manager.clone(),
+            shaders_warmed_up: current_warmed_up,
+        });
+    }
 }

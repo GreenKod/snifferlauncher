@@ -1,4 +1,4 @@
-use super::draw_ui;
+use super::draw_ui_node;
 use sniffer_core::layout::LayoutNode;
 use sniffer_core::render::Renderer;
 use sniffer_core::types::Element;
@@ -39,12 +39,13 @@ pub(crate) fn draw_element_contents(
     base_style: &sniffer_core::style::Style,
     rect: Rect,
     widget_id: Option<u64>,
+    is_animating: bool,
 ) -> usize {
     let mut rendered_children = 0;
     match element {
         Element::Container { children, .. } | Element::SharedView { children, .. } => {
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                rendered_children += draw_ui(
+                rendered_children += draw_ui_node(
                     renderer,
                     child_el,
                     child_lay,
@@ -55,6 +56,7 @@ pub(crate) fn draw_element_contents(
                     final_alpha,
                     accumulated_scroll_x,
                     accumulated_scroll_y,
+                    is_animating,
                 );
             }
         }
@@ -91,7 +93,7 @@ pub(crate) fn draw_element_contents(
 
             renderer.push_transform(0.0, 0.0, 1.0, 0.0, -safe_scroll_x, -safe_scroll_y);
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
-                rendered_children += draw_ui(
+                rendered_children += draw_ui_node(
                     renderer,
                     child_el,
                     child_lay,
@@ -102,6 +104,7 @@ pub(crate) fn draw_element_contents(
                     final_alpha,
                     accumulated_scroll_x + safe_scroll_x,
                     accumulated_scroll_y + safe_scroll_y,
+                    is_animating,
                 );
             }
             renderer.pop_transform();

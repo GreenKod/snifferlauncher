@@ -144,13 +144,11 @@ pub(crate) fn extract_drawable_pixels(
     let mut buf = vec![0i32; pixel_count];
     pixels_array.get_region(env, 0, &mut buf)?;
 
-    let rgba_bytes: Vec<u8> = buf
-        .into_iter()
-        .flat_map(|pixel| {
-            let [alpha, red, green, blue] = pixel.cast_unsigned().to_be_bytes();
-            vec![red, green, blue, alpha]
-        })
-        .collect();
+    let mut rgba_bytes = Vec::with_capacity(pixel_count * 4);
+    for pixel in buf {
+        let [alpha, red, green, blue] = pixel.cast_unsigned().to_be_bytes();
+        rgba_bytes.extend_from_slice(&[red, green, blue, alpha]);
+    }
 
     Ok(rgba_bytes)
 }

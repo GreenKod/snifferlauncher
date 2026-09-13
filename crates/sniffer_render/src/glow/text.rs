@@ -72,6 +72,10 @@ pub(crate) fn draw_text_impl(
     size: f32,
     color: u32,
 ) {
+    if text.is_empty() {
+        return;
+    }
+
     if let Some(mut atlas) = renderer.font_atlas.take() {
         atlas.ensure_glyphs(&renderer.gl, text);
         renderer.font_atlas = Some(atlas);
@@ -79,15 +83,156 @@ pub(crate) fn draw_text_impl(
 
     let mut col = unpack_color(color);
     col[3] *= renderer.global_alpha;
+
+    let Some(t) = renderer.transform_stack.last().copied() else {
+        crate::dev_err!("transform_stack empty in draw_text — missing push_transform");
+        return;
+    };
+
+    let mut normal_quads: Vec<f32> = Vec::with_capacity(text.len() * 24);
+    let mut color_quads: Vec<f32> = Vec::new();
+
+    if let Some(ref atlas) = renderer.font_atlas {
+        let scale = size / atlas.rasterize_size;
+        let mut curr_x = x;
+        let baseline_y = atlas.ascent.mul_add(scale, y);
+
+        let aw = f32::from(u16::try_from(renderer.atlas_width).expect("atlas width fits in u16"));
+        let ah = f32::from(u16::try_from(renderer.atlas_height).expect("atlas height fits in u16"));
+
+        for c in text.chars() {
+            if c == ' ' {
+                curr_x = atlas.space_advance.mul_add(scale, curr_x);
+                continue;
+            }
+
+            let Some(glyph) = atlas.glyphs.get(&c).or_else(|| atlas.glyphs.get(&'?')) else {
+                continue;
+            };
+            if glyph.width == 0 || glyph.height == 0 {
+                curr_x = glyph.advance_width.mul_add(scale, curr_x);
+                continue;
+            }
+
+            let gw =
+                f32::from(u16::try_from(glyph.width).expect("glyph width fits in u16")) * scale;
+            let gh =
+                f32::from(u16::try_from(glyph.height).expect("glyph height fits in u16")) * scale;
+
+            let draw_x = glyph.bearing_x.mul_add(scale, curr_x);
+            let draw_y = glyph.bearing_y.mul_add(-scale, baseline_y);
+
+            let u_min_x =
+                f32::from(u16::try_from(glyph.atlas_x).expect("atlas x fits in u16")) / aw;
+            let u_min_y =
+                f32::from(u16::try_from(glyph.atlas_y).expect("atlas y fits in u16")) / ah;
+            let u_max_x =
+                f32::from(u16::try_from(glyph.atlas_x + glyph.width).expect("atlas x fits in u16"))
+                    / aw;
+            let u_max_y = f32::from(
+                u16::try_from(glyph.atlas_y + glyph.height).expect("atlas y fits in u16"),
+            ) / ah;
+
+            let target = if glyph.is_color {
+                &mut color_quads
+            } else {
+                &mut normal_quads
+            };
+
+            // Triangle 1: (top-left, top-right, bottom-left)
+            // Triangle 2: (top-right, bottom-right, bottom-left)
+            target.extend_from_slice(&[
+                draw_x,
+                draw_y,
+                u_min_x,
+                u_min_y,
+                draw_x + gw,
+                draw_y,
+                u_max_x,
+                u_min_y,
+                draw_x,
+                draw_y + gh,
+                u_min_x,
+                u_max_y,
+                draw_x + gw,
+                draw_y,
+                u_max_x,
+                u_min_y,
+                draw_x + gw,
+                draw_y + gh,
+                u_max_x,
+                u_max_y,
+                draw_x,
+                draw_y + gh,
+                u_min_x,
+                u_max_y,
+            ]);
+
+            curr_x = glyph.advance_width.mul_add(scale, curr_x);
+        }
+    } else {
+        let char_width = size;
+        let char_height = size;
+        let gap = size * 0.1;
+        let mut curr_x = x;
+
+        for c in text.chars() {
+            let ascii_code = c as u32;
+            let idx = if (32..=127).contains(&ascii_code) {
+                f32::from(u16::try_from(ascii_code - 32).expect("ASCII index fits in u16"))
+            } else {
+                95.0
+            };
+
+            let u_min_x = idx / 96.0;
+            let u_max_x = (idx + 1.0) / 96.0;
+            let u_min_y = 0.0;
+            let u_max_y = 1.0;
+
+            normal_quads.extend_from_slice(&[
+                curr_x,
+                y,
+                u_min_x,
+                u_min_y,
+                curr_x + char_width,
+                y,
+                u_max_x,
+                u_min_y,
+                curr_x,
+                y + char_height,
+                u_min_x,
+                u_max_y,
+                curr_x + char_width,
+                y,
+                u_max_x,
+                u_min_y,
+                curr_x + char_width,
+                y + char_height,
+                u_max_x,
+                u_max_y,
+                curr_x,
+                y + char_height,
+                u_min_x,
+                u_max_y,
+            ]);
+
+            curr_x += char_width + gap;
+        }
+    }
+
+    if normal_quads.is_empty() && color_quads.is_empty() {
+        return;
+    }
+
     unsafe {
         renderer.gl.use_program(Some(renderer.text_program));
-        renderer.ensure_quad_vao();
+        renderer.ensure_text_vao();
         renderer.gl.active_texture(glow::TEXTURE0);
         renderer
             .gl
             .bind_texture(glow::TEXTURE_2D, Some(renderer.font_texture));
 
-        let u = renderer.text_uniforms.clone();
+        let u = &renderer.text_uniforms;
 
         renderer.gl.uniform_2_f32(
             u.u_resolution.as_ref(),
@@ -97,116 +242,40 @@ pub(crate) fn draw_text_impl(
         renderer
             .gl
             .uniform_4_f32(u.u_color.as_ref(), col[0], col[1], col[2], col[3]);
+        renderer
+            .gl
+            .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, &t);
 
-        if let Some(ref atlas) = renderer.font_atlas {
-            let scale = size / atlas.rasterize_size;
-            let mut curr_x = x;
-            let baseline_y = atlas.ascent.mul_add(scale, y);
+        renderer
+            .gl
+            .bind_buffer(glow::ARRAY_BUFFER, Some(renderer.text_vertex_buffer));
 
-            let aw =
-                f32::from(u16::try_from(renderer.atlas_width).expect("atlas width fits in u16"));
-            let ah =
-                f32::from(u16::try_from(renderer.atlas_height).expect("atlas height fits in u16"));
-
-            for c in text.chars() {
-                if c == ' ' {
-                    curr_x = atlas.space_advance.mul_add(scale, curr_x);
-                    continue;
-                }
-
-                let Some(glyph) = atlas.glyphs.get(&c).or_else(|| atlas.glyphs.get(&'?')) else {
-                    continue;
-                };
-                if glyph.width == 0 || glyph.height == 0 {
-                    curr_x = glyph.advance_width.mul_add(scale, curr_x);
-                    continue;
-                }
-
-                let is_color_val = i32::from(glyph.is_color);
-                renderer
-                    .gl
-                    .uniform_1_i32(u.u_is_color.as_ref(), is_color_val);
-
-                let gw =
-                    f32::from(u16::try_from(glyph.width).expect("glyph width fits in u16")) * scale;
-                let gh = f32::from(u16::try_from(glyph.height).expect("glyph height fits in u16"))
-                    * scale;
-
-                let draw_x = glyph.bearing_x.mul_add(scale, curr_x);
-                let draw_y = glyph.bearing_y.mul_add(-scale, baseline_y);
-
-                let u_min_x =
-                    f32::from(u16::try_from(glyph.atlas_x).expect("atlas x fits in u16")) / aw;
-                let u_min_y =
-                    f32::from(u16::try_from(glyph.atlas_y).expect("atlas y fits in u16")) / ah;
-                let u_max_x = f32::from(
-                    u16::try_from(glyph.atlas_x + glyph.width).expect("atlas x fits in u16"),
-                ) / aw;
-                let u_max_y = f32::from(
-                    u16::try_from(glyph.atlas_y + glyph.height).expect("atlas y fits in u16"),
-                ) / ah;
-
-                renderer
-                    .gl
-                    .uniform_2_f32(u.u_rect_pos.as_ref(), draw_x, draw_y);
-                renderer.gl.uniform_2_f32(u.u_rect_size.as_ref(), gw, gh);
-                renderer
-                    .gl
-                    .uniform_2_f32(u.u_uv_start.as_ref(), u_min_x, u_min_y);
-                renderer
-                    .gl
-                    .uniform_2_f32(u.u_uv_end.as_ref(), u_max_x, u_max_y);
-
-                let Some(t) = renderer.transform_stack.last() else {
-                    crate::dev_err!(
-                        "transform_stack empty in draw_text (TTF) — missing push_transform"
-                    );
-                    return;
-                };
-                renderer
-                    .gl
-                    .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
-                renderer.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
-                curr_x = glyph.advance_width.mul_add(scale, curr_x);
-            }
-        } else {
+        if !normal_quads.is_empty() {
             renderer.gl.uniform_1_i32(u.u_is_color.as_ref(), 0);
-            let char_width = size;
-            let char_height = size;
-            let gap = size * 0.1;
+            let bytes = std::slice::from_raw_parts(
+                normal_quads.as_ptr().cast::<u8>(),
+                normal_quads.len() * std::mem::size_of::<f32>(),
+            );
+            renderer
+                .gl
+                .buffer_data_u8_slice(glow::ARRAY_BUFFER, bytes, glow::DYNAMIC_DRAW);
+            let vert_count =
+                i32::try_from(normal_quads.len() / 4).expect("vertex count fits in i32");
+            renderer.gl.draw_arrays(glow::TRIANGLES, 0, vert_count);
+        }
 
-            let mut curr_x = x;
-            for c in text.chars() {
-                let ascii_code = c as u32;
-                let idx = if (32..=127).contains(&ascii_code) {
-                    f32::from(u16::try_from(ascii_code - 32).expect("ASCII index fits in u16"))
-                } else {
-                    95.0
-                };
-
-                renderer.gl.uniform_2_f32(u.u_rect_pos.as_ref(), curr_x, y);
-                renderer
-                    .gl
-                    .uniform_2_f32(u.u_rect_size.as_ref(), char_width, char_height);
-                renderer
-                    .gl
-                    .uniform_2_f32(u.u_uv_start.as_ref(), idx / 96.0, 0.0);
-                renderer
-                    .gl
-                    .uniform_2_f32(u.u_uv_end.as_ref(), (idx + 1.0) / 96.0, 1.0);
-
-                let Some(t) = renderer.transform_stack.last() else {
-                    crate::dev_err!(
-                        "transform_stack empty in draw_text (bitmap) — missing push_transform"
-                    );
-                    return;
-                };
-                renderer
-                    .gl
-                    .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
-                renderer.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
-                curr_x += char_width + gap;
-            }
+        if !color_quads.is_empty() {
+            renderer.gl.uniform_1_i32(u.u_is_color.as_ref(), 1);
+            let bytes = std::slice::from_raw_parts(
+                color_quads.as_ptr().cast::<u8>(),
+                color_quads.len() * std::mem::size_of::<f32>(),
+            );
+            renderer
+                .gl
+                .buffer_data_u8_slice(glow::ARRAY_BUFFER, bytes, glow::DYNAMIC_DRAW);
+            let vert_count =
+                i32::try_from(color_quads.len() / 4).expect("vertex count fits in i32");
+            renderer.gl.draw_arrays(glow::TRIANGLES, 0, vert_count);
         }
     }
 }

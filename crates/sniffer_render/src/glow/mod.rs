@@ -18,6 +18,8 @@ pub struct GlowRenderer {
     pub(crate) gl: glow::Context,
     pub(crate) quad_vertex_array: glow::VertexArray,
     pub(crate) _quad_vertex_buffer: glow::Buffer,
+    pub(crate) text_vertex_array: glow::VertexArray,
+    pub(crate) text_vertex_buffer: glow::Buffer,
     pub(crate) shape_program: glow::Program,
     pub(crate) text_program: glow::Program,
     pub(crate) font_texture: glow::Texture,
@@ -71,6 +73,16 @@ impl GlowRenderer {
             gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, quad_bytes, glow::STATIC_DRAW);
             gl.enable_vertex_attrib_array(0);
             gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+
+            let text_vertex_array = gl.create_vertex_array()?;
+            gl.bind_vertex_array(Some(text_vertex_array));
+            let text_vertex_buffer = gl.create_buffer()?;
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(text_vertex_buffer));
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 16, 0);
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, 16, 8);
+            gl.bind_vertex_array(Some(quad_vertex_array));
 
             mod enc {
                 include!(concat!(env!("OUT_DIR"), "/shader_assets.rs"));
@@ -190,6 +202,8 @@ impl GlowRenderer {
                 gl,
                 quad_vertex_array,
                 _quad_vertex_buffer: quad_vertex_buffer,
+                text_vertex_array,
+                text_vertex_buffer,
                 shape_program,
                 text_program,
                 font_texture,
@@ -217,6 +231,16 @@ impl GlowRenderer {
                 self.gl.bind_vertex_array(Some(self.quad_vertex_array));
             }
             self.current_vao = Some(self.quad_vertex_array);
+        }
+    }
+
+    #[inline]
+    pub(crate) unsafe fn ensure_text_vao(&mut self) {
+        if self.current_vao != Some(self.text_vertex_array) {
+            unsafe {
+                self.gl.bind_vertex_array(Some(self.text_vertex_array));
+            }
+            self.current_vao = Some(self.text_vertex_array);
         }
     }
 
