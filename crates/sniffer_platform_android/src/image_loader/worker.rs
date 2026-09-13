@@ -5,6 +5,11 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
+/// Maximum allowable image asset file size (32 MB) to guard against OOM exhaustion.
+const MAX_IMAGE_FILE_SIZE: u64 = 32 * 1024 * 1024;
+/// Maximum dimension in either width or height (8192 px) to protect GPU texture limits.
+const MAX_IMAGE_DIMENSION: u32 = 8192;
+
 static IMAGE_REQ_SENDER: OnceLock<Sender<ImageLoadRequest>> = OnceLock::new();
 static IMAGE_RES_RECEIVER: OnceLock<Receiver<ImageLoadResult>> = OnceLock::new();
 static PENDING_REQUESTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -13,9 +18,27 @@ fn pending_requests() -> &'static Mutex<HashSet<String>> {
     PENDING_REQUESTS.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
+/// RAII guard ensuring a requested path is unconditionally removed from `PENDING_REQUESTS`
+/// even if a panic or early-return occurs during decoding.
+struct PendingGuard<'a>(&'a str);
+
+impl Drop for PendingGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut pending) = pending_requests().lock() {
+            pending.remove(self.0);
+        }
+    }
+}
+
 /// Decodes in-memory image bytes (e.g. PNG, JPEG) into an `ImageLoadResult`.
+/// Guarantees dimension validation and bounds protection against malformed headers.
 #[must_use]
 pub fn decode_image_bytes(id: &str, src: &str, bytes: &[u8]) -> Option<ImageLoadResult> {
+    if bytes.is_empty() || bytes.len() > MAX_IMAGE_FILE_SIZE as usize {
+        sniffer_core::dev_err!("Image '{src}' bytes out of bounds (len: {})", bytes.len());
+        return None;
+    }
+
     let img = match image::load_from_memory(bytes) {
         Ok(img) => img,
         Err(e) => {
@@ -23,8 +46,17 @@ pub fn decode_image_bytes(id: &str, src: &str, bytes: &[u8]) -> Option<ImageLoad
             return None;
         }
     };
+
+    let width = img.width();
+    let height = img.height();
+    if width == 0 || height == 0 || width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION {
+        sniffer_core::dev_err!(
+            "Image '{src}' has invalid or excessive dimensions: {width}x{height} (max: {MAX_IMAGE_DIMENSION})"
+        );
+        return None;
+    }
+
     let rgba = img.to_rgba8();
-    let (width, height) = rgba.dimensions();
     Some(ImageLoadResult::new(
         id,
         src,
@@ -36,6 +68,11 @@ pub fn decode_image_bytes(id: &str, src: &str, bytes: &[u8]) -> Option<ImageLoad
 
 #[cfg(target_os = "android")]
 fn read_image_data(app: &android_activity::AndroidApp, src: &str) -> Option<Vec<u8>> {
+    if src.is_empty() || src.contains('\0') {
+        sniffer_core::dev_err!("Invalid image path requested: '{src}'");
+        return None;
+    }
+
     let asset_path = if src.starts_with(".plugins/") {
         src.to_string()
     } else {
@@ -46,27 +83,55 @@ fn read_image_data(app: &android_activity::AndroidApp, src: &str) -> Option<Vec<
         if let Some(mut asset) = app.asset_manager().open(cstr.as_c_str()) {
             use std::io::Read;
             let mut buffer = Vec::new();
-            if asset.read_to_end(&mut buffer).is_ok() {
+            let mut handle = (&mut asset).take(MAX_IMAGE_FILE_SIZE + 1);
+            if handle.read_to_end(&mut buffer).is_ok()
+                && buffer.len() <= MAX_IMAGE_FILE_SIZE as usize
+            {
                 return Some(buffer);
             }
+            sniffer_core::dev_err!("Image asset exceeded 32 MB limit or read failed: '{src}'");
+            return None;
         }
     }
 
-    std::fs::read(src).ok()
+    if let Ok(metadata) = std::fs::metadata(src) {
+        if metadata.len() <= MAX_IMAGE_FILE_SIZE {
+            return std::fs::read(src).ok();
+        }
+        sniffer_core::dev_err!("File on disk exceeded 32 MB limit: '{src}'");
+    }
+    None
 }
 
 #[cfg(not(target_os = "android"))]
 fn read_image_data(src: &str) -> Option<Vec<u8>> {
-    if let Ok(bytes) = std::fs::read(src) {
-        return Some(bytes);
+    if src.is_empty() || src.contains('\0') {
+        sniffer_core::dev_err!("Invalid image path requested: '{src}'");
+        return None;
     }
+
+    if let Ok(metadata) = std::fs::metadata(src) {
+        if metadata.len() <= MAX_IMAGE_FILE_SIZE {
+            return std::fs::read(src).ok();
+        }
+    }
+
     let fallback_path = format!(".plugins/{src}");
-    std::fs::read(fallback_path).ok()
+    if let Ok(metadata) = std::fs::metadata(&fallback_path) {
+        if metadata.len() <= MAX_IMAGE_FILE_SIZE {
+            return std::fs::read(fallback_path).ok();
+        }
+    }
+    None
 }
 
 /// Submits an asynchronous image loading request to the worker channel.
-/// Returns `true` if the request was scheduled, or `false` if it is already pending or channel is uninitialized.
+/// Returns `true` if the request was scheduled, or `false` if it is already pending, path is invalid, or channel is uninitialized.
 pub fn request_async_image(req: ImageLoadRequest) -> bool {
+    if req.src.is_empty() || req.src.contains('\0') {
+        return false;
+    }
+
     if let Ok(mut pending) = pending_requests().lock() {
         if !pending.insert(req.src.clone()) {
             return false;
@@ -125,13 +190,14 @@ pub fn init_image_worker_pool(app: &android_activity::AndroidApp) {
         .name("sniffer-image-loader".to_string())
         .spawn(move || {
             while let Ok(req) = req_rx.recv() {
-                if let Some(bytes) = read_image_data(&app_clone, &req.src) {
-                    if let Some(res) = decode_image_bytes(&req.id, &req.src, &bytes) {
-                        let _ = res_tx.send(res);
-                    }
-                }
-                if let Ok(mut pending) = pending_requests().lock() {
-                    pending.remove(&req.src);
+                let _guard = PendingGuard(&req.src);
+                let decode_res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    read_image_data(&app_clone, &req.src)
+                        .and_then(|bytes| decode_image_bytes(&req.id, &req.src, &bytes))
+                }));
+
+                if let Ok(Some(res)) = decode_res {
+                    let _ = res_tx.send(res);
                 }
             }
         });
@@ -154,13 +220,14 @@ pub fn init_image_worker_pool() {
         .name("sniffer-image-loader".to_string())
         .spawn(move || {
             while let Ok(req) = req_rx.recv() {
-                if let Some(bytes) = read_image_data(&req.src) {
-                    if let Some(res) = decode_image_bytes(&req.id, &req.src, &bytes) {
-                        let _ = res_tx.send(res);
-                    }
-                }
-                if let Ok(mut pending) = pending_requests().lock() {
-                    pending.remove(&req.src);
+                let _guard = PendingGuard(&req.src);
+                let decode_res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    read_image_data(&req.src)
+                        .and_then(|bytes| decode_image_bytes(&req.id, &req.src, &bytes))
+                }));
+
+                if let Ok(Some(res)) = decode_res {
+                    let _ = res_tx.send(res);
                 }
             }
         });
@@ -197,13 +264,43 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_image_bytes_rejects_empty_buffer() {
+        let res = decode_image_bytes("empty", "empty.png", &[]);
+        assert!(res.is_none());
+    }
+
+    #[test]
+    fn test_request_async_image_rejects_null_bytes_and_empty() {
+        let req_null = ImageLoadRequest::new("id", "path/with/\0null.png");
+        assert!(!request_async_image(req_null));
+
+        let req_empty = ImageLoadRequest::new("id", "");
+        assert!(!request_async_image(req_empty));
+    }
+
+    #[test]
+    fn test_pending_guard_cleans_up_pending_requests() {
+        let path = "pending/test/path.png";
+        {
+            let mut pending = pending_requests().lock().unwrap();
+            pending.insert(path.to_string());
+            assert!(pending.contains(path));
+        }
+
+        {
+            let _guard = PendingGuard(path);
+        }
+
+        let pending = pending_requests().lock().unwrap();
+        assert!(!pending.contains(path));
+    }
+
+    #[test]
     fn test_worker_channel_roundtrip() {
         init_image_worker_pool();
 
         let req = ImageLoadRequest::new("sample", "non_existent_path.png");
         let scheduled = request_async_image(req);
-        // Since the file doesn't exist, it shouldn't produce a decoded image result,
-        // but it should successfully schedule and clear pending status
         if scheduled {
             std::thread::sleep(std::time::Duration::from_millis(50));
             assert!(poll_async_image().is_none());
