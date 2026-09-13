@@ -129,6 +129,7 @@ pub fn register_ipc_bindings<'js>(
             if let Ok(mut q) = bq.lock() {
                 q.push((channel, payload_json));
             }
+            crate::js::host_bridge::wake();
         })
         .unwrap();
     globals

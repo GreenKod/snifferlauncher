@@ -127,6 +127,7 @@ impl PluginRegistry {
         if let Ok(mut q) = self.broadcast_queue.lock() {
             q.push((channel.to_string(), payload_json.to_string()));
         }
+        crate::js::host_bridge::wake();
     }
 
     /// Returns a clone of the shared DataVault.

@@ -21,7 +21,7 @@ pub fn android_main(app: AndroidApp) {
 
     crate::jni::bridge::init_app_list_cache();
     crate::jni::bridge::init_icon_worker_pool();
-    crate::image_loader::set_android_app(&app);
+    crate::set_android_app(&app);
     crate::jni::bridge::set_show_wallpaper_flag(&app);
 
     let mut state = AppState::new(&app);

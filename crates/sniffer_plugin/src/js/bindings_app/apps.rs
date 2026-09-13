@@ -182,6 +182,7 @@ pub fn register_app_launch_bindings<'js>(
 
         if let Ok(mut q) = aq_img.lock() {
             q.push(sniffer_core::types::Action::LoadImage { id, src });
+            super::super::host_bridge::wake();
         }
     })
     .unwrap();
@@ -204,6 +205,7 @@ pub fn register_app_launch_bindings<'js>(
 
         if let Ok(mut q) = aq_focus.lock() {
             q.push(sniffer_core::types::Action::FocusTextInput(id));
+            super::super::host_bridge::wake();
         }
     })
     .unwrap();
@@ -226,6 +228,7 @@ pub fn register_app_launch_bindings<'js>(
 
         if let Ok(mut q) = aq_blur.lock() {
             q.push(sniffer_core::types::Action::BlurTextInput);
+            super::super::host_bridge::wake();
         }
     })
     .unwrap();
