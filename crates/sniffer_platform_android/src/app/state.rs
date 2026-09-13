@@ -168,6 +168,13 @@ impl AppState {
             .recommended_poll_timeout(has_active_animation)
     }
 
+    /// Returns the target frame pacing duration based on current idle state and active animations.
+    #[must_use]
+    pub fn target_frame_duration(&self, has_active_animation: bool) -> std::time::Duration {
+        self.idle_detector
+            .target_frame_duration(has_active_animation)
+    }
+
     #[must_use]
     pub fn get_max_scroll(&self, target_id: Option<u64>) -> f32 {
         target_id
