@@ -106,9 +106,6 @@ pub fn android_main(app: AndroidApp) {
             sniffer_core::types::UI_VERSION.load(std::sync::atomic::Ordering::Relaxed);
         let ui_changed = state.layout_dirty || (current_ui_version != state.last_ui_version);
 
-        let needs_redraw =
-            events::poll_and_handle_events(&app, &mut state, &mut root_element, &render_tx);
-
         let has_active_physics = !state.kinetic_scrolls.is_empty()
             || state.scroll_physics.values().any(|p| {
                 p.is_dragging
@@ -118,11 +115,23 @@ pub fn android_main(app: AndroidApp) {
             });
 
         let has_active_transitions = state.transition_manager.is_animating();
+        let is_dragging = state.active_scrollview_drag.is_some();
+        let has_active_animation = has_active_physics || has_active_transitions || is_dragging;
+
+        let poll_timeout = Some(state.recommended_poll_timeout(has_active_animation));
+
+        let needs_redraw = events::poll_and_handle_events(
+            &app,
+            &mut state,
+            &mut root_element,
+            &render_tx,
+            poll_timeout,
+        );
+
         let is_first_frame = matches!(
             &root_element,
             sniffer_core::types::Element::Container { children, .. } if children.is_empty()
         );
-        let is_dragging = state.active_scrollview_drag.is_some();
         let has_pending_actions = state.action_queue.lock().map_or(false, |q| !q.is_empty());
 
         let should_update = needs_redraw

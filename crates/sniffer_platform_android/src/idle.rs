@@ -3,6 +3,13 @@ use std::time::{Duration, Instant};
 /// Default inactivity duration before transitioning to idle state (500 milliseconds).
 pub const DEFAULT_IDLE_THRESHOLD: Duration = Duration::from_millis(500);
 
+/// Event polling timeout when the application is idle and waiting for user input or events (100 milliseconds).
+pub const IDLE_POLL_TIMEOUT: Duration = Duration::from_millis(100);
+/// Event polling timeout during active animations, dragging, or kinetic physics (0 milliseconds).
+pub const ACTIVE_POLL_TIMEOUT: Duration = Duration::from_millis(0);
+/// Event polling timeout during normal paced rendering without active animations (8 milliseconds).
+pub const PACED_POLL_TIMEOUT: Duration = Duration::from_millis(8);
+
 /// Tracks user interaction timestamps and evaluates whether the application is in an idle state.
 #[derive(Debug, Clone)]
 pub struct IdleDetector {
@@ -85,12 +92,48 @@ impl IdleDetector {
         }
         self.is_idle
     }
+
+    /// Returns the recommended event polling timeout based on current idle state and animations:
+    /// - `ACTIVE_POLL_TIMEOUT` (0ms) when active animations, dragging, or kinetic physics are in progress.
+    /// - `IDLE_POLL_TIMEOUT` (100ms) when the application is in an idle state.
+    /// - `PACED_POLL_TIMEOUT` (8ms) during non-idle pacing without active animations.
+    #[must_use]
+    pub fn recommended_poll_timeout(&self, has_active_animation: bool) -> Duration {
+        if has_active_animation {
+            ACTIVE_POLL_TIMEOUT
+        } else if self.is_idle {
+            IDLE_POLL_TIMEOUT
+        } else {
+            PACED_POLL_TIMEOUT
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::thread::sleep;
+
+    #[test]
+    fn test_recommended_poll_timeout() {
+        let mut detector = IdleDetector::new(Duration::from_millis(15));
+        // Not idle, no active animation -> PACED_POLL_TIMEOUT (8ms)
+        assert_eq!(detector.recommended_poll_timeout(false), PACED_POLL_TIMEOUT);
+
+        // Not idle, has active animation -> ACTIVE_POLL_TIMEOUT (0ms)
+        assert_eq!(detector.recommended_poll_timeout(true), ACTIVE_POLL_TIMEOUT);
+
+        // Transition to idle
+        sleep(Duration::from_millis(25));
+        detector.update(false);
+        assert!(detector.is_idle());
+
+        // Idle, no active animation -> IDLE_POLL_TIMEOUT (100ms)
+        assert_eq!(detector.recommended_poll_timeout(false), IDLE_POLL_TIMEOUT);
+
+        // Idle, but active animation flag passed -> ACTIVE_POLL_TIMEOUT (0ms)
+        assert_eq!(detector.recommended_poll_timeout(true), ACTIVE_POLL_TIMEOUT);
+    }
 
     #[test]
     fn test_idle_detector_initial_state() {
