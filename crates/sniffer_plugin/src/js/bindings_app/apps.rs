@@ -45,7 +45,6 @@ pub fn register_app_launch_bindings<'js>(
         .unwrap();
 
     // host_launch_app
-    let aq_launch = action_queue.clone();
     let plugin_permissions_launch = plugin_permissions_vec.clone();
     let granted_permissions_launch = Arc::clone(&granted_permissions);
     let caller_id_launch = plugin_id.clone();
@@ -67,9 +66,6 @@ pub fn register_app_launch_bindings<'js>(
         if let Err(e) = super::super::host_bridge::launch_app(&caller_id_launch, &package_name) {
             crate::dev_err!("{}: {e}", obfstr!("Direct host_launch_app failed"));
         }
-        if let Ok(mut q) = aq_launch.lock() {
-            q.push(sniffer_core::types::Action::LaunchApp { package_name });
-        }
     })
     .unwrap();
     globals
@@ -77,7 +73,6 @@ pub fn register_app_launch_bindings<'js>(
         .unwrap();
 
     // host_request_default_launcher
-    let aq_req_home = action_queue.clone();
     let caller_id_home = plugin_id.clone();
     let is_master_home = is_master;
     let req_home_func = Function::new(ctx.clone(), move || {
@@ -91,9 +86,6 @@ pub fn register_app_launch_bindings<'js>(
             return;
         }
         let _ = super::super::host_bridge::open_default_home_picker(&caller_id_home);
-        if let Ok(mut q) = aq_req_home.lock() {
-            q.push(sniffer_core::types::Action::RequestDefaultLauncher);
-        }
     })
     .unwrap();
     globals

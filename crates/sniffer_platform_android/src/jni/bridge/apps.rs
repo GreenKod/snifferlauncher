@@ -61,7 +61,7 @@ pub fn init_app_list_cache() {
             let mut changed = true;
             if let Ok(guard) = APP_LIST_CACHE.read() {
                 if let Some(old) = &*guard {
-                    if old.len() == list.len() {
+                    if old == &list {
                         changed = false;
                     }
                 }

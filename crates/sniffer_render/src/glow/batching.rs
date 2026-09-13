@@ -82,7 +82,7 @@ impl GlowRenderer {
             self.gl.use_program(Some(self.shape_program));
             self.ensure_quad_vao();
 
-            let u = self.shape_uniforms.clone();
+            let u = &self.shape_uniforms;
 
             self.gl.uniform_2_f32(
                 u.u_resolution.as_ref(),
@@ -146,7 +146,7 @@ impl GlowRenderer {
             self.gl.use_program(Some(self.shape_program));
             self.ensure_quad_vao();
 
-            let u = self.shape_uniforms.clone();
+            let u = &self.shape_uniforms;
 
             let blur = spread * 1.5;
             let padding = blur * 2.0;
@@ -199,7 +199,7 @@ impl GlowRenderer {
             self.gl.use_program(Some(self.shape_program));
             self.ensure_quad_vao();
 
-            let u = self.shape_uniforms.clone();
+            let u = &self.shape_uniforms;
 
             let rect = Rect {
                 x: cx - radius,

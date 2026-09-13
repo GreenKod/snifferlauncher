@@ -3,7 +3,31 @@ use crate::{dev_err, dev_log};
 use obfstr::obfstr;
 use rquickjs::{Ctx, Function, Object};
 use sniffer_core::types::Element;
-use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
+use std::sync::mpsc::SyncSender;
+use std::sync::{Arc, Mutex, OnceLock};
+
+struct CacheWriteTask {
+    path: PathBuf,
+    bytes: Vec<u8>,
+}
+
+static CACHE_WRITER_TX: OnceLock<SyncSender<CacheWriteTask>> = OnceLock::new();
+
+fn enqueue_cache_write(path: PathBuf, bytes: Vec<u8>) {
+    let tx = CACHE_WRITER_TX.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<CacheWriteTask>(32);
+        let _ = std::thread::Builder::new()
+            .name(obfstr!("sniffer-cache-writer").to_string())
+            .spawn(move || {
+                while let Ok(task) = rx.recv() {
+                    let _ = std::fs::write(task.path, task.bytes);
+                }
+            });
+        tx
+    });
+    let _ = tx.try_send(CacheWriteTask { path, bytes });
+}
 
 pub enum UiMutation {
     SetUi(Element),
@@ -111,9 +135,7 @@ pub fn register_ui_bindings<'js>(
                 if let Some(path) = cache_path.clone()
                     && let Ok(bytes) = postcard::to_allocvec(&parsed)
                 {
-                    std::thread::spawn(move || {
-                        let _ = std::fs::write(path, bytes);
-                    });
+                    enqueue_cache_write(path, bytes);
                 }
             }
             Err(e) => {

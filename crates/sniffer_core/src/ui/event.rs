@@ -36,6 +36,16 @@ impl EventBus {
         Self::default()
     }
 
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.events.borrow().is_empty()
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.events.borrow().len()
+    }
+
     pub fn push(&self, event: UiEvent) {
         self.events.borrow_mut().push(event);
     }
