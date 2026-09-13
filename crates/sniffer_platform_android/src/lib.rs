@@ -1,3 +1,5 @@
+pub mod image_loader;
+
 #[cfg(target_os = "android")]
 pub mod app;
 #[cfg(target_os = "android")]
@@ -6,6 +8,8 @@ pub mod input;
 pub mod jni;
 #[cfg(target_os = "android")]
 pub mod window;
+
+pub use image_loader::{ImageLoadRequest, ImageLoadResult};
 
 #[cfg(target_os = "android")]
 pub use app::android_main;
