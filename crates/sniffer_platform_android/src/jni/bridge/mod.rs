@@ -1,14 +1,16 @@
 pub mod apps;
 pub mod icons;
+pub mod permissions;
+pub mod settings;
 pub mod wallpaper;
 
-pub use apps::{
-    get_application_list, init_app_list_cache, open_default_home_picker, request_permissions,
-};
+pub use apps::{get_application_list, init_app_list_cache};
 pub use icons::{
     get_app_icon_pixels, init_icon_worker_pool, poll_async_app_icon, prefetch_app_icons,
     request_async_app_icon,
 };
+pub use permissions::request_permissions;
+pub use settings::open_default_home_picker;
 pub use wallpaper::{
     get_system_wallpaper_pixels, poll_async_wallpaper, request_system_wallpaper_async,
 };
@@ -169,11 +171,111 @@ pub fn set_show_wallpaper_flag(app: &android_activity::AndroidApp) {
             )?
             .l()?;
 
+        // window.addFlags(FLAG_SHOW_WALLPAPER = 0x00100000 | FLAG_BLUR_BEHIND = 0x00000004)
         let _ = env.call_method(
             &window,
             jni_str!("addFlags"),
             jni_sig!("(I)V"),
-            &[JValue::Int(0x0010_0000i32)], // FLAG_SHOW_WALLPAPER
+            &[JValue::Int(0x0010_0004i32)],
+        );
+        env.exception_clear();
+
+        // Edge-to-edge: window.setDecorFitsSystemWindows(false) (API 30+)
+        let _ = env.call_method(
+            &window,
+            jni_str!("setDecorFitsSystemWindows"),
+            jni_sig!("(Z)V"),
+            &[JValue::Bool(false)],
+        );
+        env.exception_clear();
+
+        // decorView.setSystemUiVisibility(LAYOUT_STABLE | LAYOUT_HIDE_NAVIGATION | LAYOUT_FULLSCREEN)
+        if let Ok(decor_view_val) = env.call_method(
+            &window,
+            jni_str!("getDecorView"),
+            jni_sig!("()Landroid/view/View;"),
+            &[],
+        ) {
+            let decor_view = decor_view_val.l()?;
+            if !decor_view.is_null() {
+                let _ = env.call_method(
+                    &decor_view,
+                    jni_str!("setSystemUiVisibility"),
+                    jni_sig!("(I)V"),
+                    &[JValue::Int(0x0000_0700i32)],
+                );
+                env.exception_clear();
+            }
+        }
+
+        // Android 12+ (API 31+): setBlurBehindRadius on WindowManager.LayoutParams
+        if let Ok(lp_val) = env.call_method(
+            &window,
+            jni_str!("getAttributes"),
+            jni_sig!("()Landroid/view/WindowManager$LayoutParams;"),
+            &[],
+        ) {
+            let lp = lp_val.l()?;
+            if !lp.is_null() {
+                let _ = env.call_method(
+                    &lp,
+                    jni_str!("setBlurBehindRadius"),
+                    jni_sig!("(I)V"),
+                    &[JValue::Int(60i32)],
+                );
+                env.exception_clear();
+
+                // lp.layoutInDisplayCutoutMode = 1 (LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES)
+                let _ = env.set_field(
+                    &lp,
+                    jni_str!("layoutInDisplayCutoutMode"),
+                    jni_sig!("I"),
+                    JValue::Int(1i32),
+                );
+                env.exception_clear();
+
+                let _ = env.call_method(
+                    &window,
+                    jni_str!("setAttributes"),
+                    jni_sig!("(Landroid/view/WindowManager$LayoutParams;)V"),
+                    &[JValue::Object(&lp)],
+                );
+                env.exception_clear();
+            }
+        }
+
+        // window.setStatusBarColor(0)
+        let _ = env.call_method(
+            &window,
+            jni_str!("setStatusBarColor"),
+            jni_sig!("(I)V"),
+            &[JValue::Int(0i32)],
+        );
+        env.exception_clear();
+
+        // window.setNavigationBarColor(0)
+        let _ = env.call_method(
+            &window,
+            jni_str!("setNavigationBarColor"),
+            jni_sig!("(I)V"),
+            &[JValue::Int(0i32)],
+        );
+        env.exception_clear();
+
+        // Android 10+ (API 29+): disable navigation bar & status bar contrast scrims
+        let _ = env.call_method(
+            &window,
+            jni_str!("setNavigationBarContrastEnforced"),
+            jni_sig!("(Z)V"),
+            &[JValue::Bool(false)],
+        );
+        env.exception_clear();
+
+        let _ = env.call_method(
+            &window,
+            jni_str!("setStatusBarContrastEnforced"),
+            jni_sig!("(Z)V"),
+            &[JValue::Bool(false)],
         );
         env.exception_clear();
 

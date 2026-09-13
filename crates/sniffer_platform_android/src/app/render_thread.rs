@@ -136,6 +136,20 @@ pub fn spawn_render_thread(
                         let width = current_state.metrics.physical_width;
                         let height = current_state.metrics.physical_height;
 
+                        if width > 0.0
+                            && height > 0.0
+                            && !renderer.has_image("__system_wallpaper__")
+                        {
+                            crate::jni::bridge::request_system_wallpaper_async(
+                                width as u32,
+                                height as u32,
+                            );
+                        }
+
+                        while let Some(res) = crate::jni::bridge::poll_async_wallpaper() {
+                            renderer.load_wallpaper(&res.pixels, res.width, res.height);
+                        }
+
                         while let Some(res) = crate::jni::bridge::poll_async_app_icon() {
                             let image_id =
                                 format!("{}{}", obfstr!("app-icon://"), res.package_name);
@@ -154,6 +168,7 @@ pub fn spawn_render_thread(
                         }
 
                         renderer.clear(0x0000_0000);
+                        renderer.draw_wallpaper(width, height);
 
                         #[allow(unused_variables)]
                         let rendered_nodes = draw_ui(

@@ -73,10 +73,10 @@ function Root() {
         flex_direction: isLandscape ? "Row" : "Column",
         justify_content: "Start",
         align_items: "Stretch",
-        opacity: isBottomFloor ? 0.2 : 1.0,
+        opacity: isBottomFloor ? 0.0 : 1.0,
         transform: {
-            scale: 1.0,
-            translate_y: 0.0,
+            scale: isBottomFloor ? 0.96 : 1.0,
+            translate_y: isBottomFloor ? -16.0 : 0.0,
         },
         transition: {
             duration: 0.32,
@@ -258,6 +258,17 @@ globalThis.onEvent = function (eventJsonString) {
             state.isSearchFocused = true;
             if (typeof focusInput === "function") {
                 focusInput("drawer_search_input");
+            }
+            return "[]";
+        }
+
+        // Toggle DevKit HUD expansion
+        if (idStr.indexOf("devkit_") === 0) {
+            if (typeof callApi === "function") {
+                try {
+                    callApi("devkit_hud.toggle");
+                    SnifferUI.forceUpdate();
+                } catch (e) {}
             }
             return "[]";
         }

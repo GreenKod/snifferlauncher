@@ -3,6 +3,7 @@ pub mod bindings_pkg;
 pub mod bindings_ui;
 pub mod bindings_vault;
 pub mod engine;
+pub mod events;
 pub mod host_bridge;
 pub mod permission_manager;
 pub mod plugin;
