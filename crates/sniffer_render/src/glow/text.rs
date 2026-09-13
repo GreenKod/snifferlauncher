@@ -87,7 +87,7 @@ pub(crate) fn draw_text_impl(
             .gl
             .bind_texture(glow::TEXTURE_2D, Some(renderer.font_texture));
 
-        let u = renderer.text_uniforms.clone();
+        let u = &renderer.text_uniforms;
 
         renderer.gl.uniform_2_f32(
             u.u_resolution.as_ref(),

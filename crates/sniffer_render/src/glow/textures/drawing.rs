@@ -296,7 +296,7 @@ impl GlowRenderer {
                 self.gl.active_texture(glow::TEXTURE0);
                 self.gl.bind_texture(glow::TEXTURE_2D, Some(tex));
 
-                let u = self.image_uniforms.clone();
+                let u = &self.image_uniforms;
 
                 self.gl.uniform_2_f32(
                     u.u_resolution.as_ref(),
