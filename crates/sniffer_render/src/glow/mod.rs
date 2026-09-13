@@ -169,6 +169,7 @@ impl GlowRenderer {
                 u_color_bottom: gl.get_uniform_location(shape_program, "u_color_bottom"),
                 u_shape_size: gl.get_uniform_location(shape_program, "u_shape_size"),
                 u_transform: gl.get_uniform_location(shape_program, "u_transform"),
+                u_instanced: gl.get_uniform_location(shape_program, "u_instanced"),
             };
 
             let image_uniforms = ImageUniforms {

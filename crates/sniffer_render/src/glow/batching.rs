@@ -3,20 +3,20 @@ use glow::HasContext;
 use sniffer_core::math::Rect;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct QuadInstanceData {
     pub rect_pos: [f32; 2],
     pub rect_size: [f32; 2],
     pub color: [f32; 4],
-    pub radius: f32,
-    pub border_width: f32,
     pub border_color: [f32; 4],
-    pub is_circle: f32,
-    pub is_shadow: f32,
-    pub shadow_blur: f32,
-    pub is_gradient: f32,
     pub color_bottom: [f32; 4],
     pub shape_size: [f32; 2],
+    pub is_circle: f32,
+    pub is_shadow: f32,
+    pub radius: f32,
+    pub border_width: f32,
+    pub shadow_blur: f32,
+    pub is_gradient: f32,
 }
 
 pub struct QuadBatch {
@@ -232,5 +232,44 @@ impl GlowRenderer {
                 .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_quad_instance_data_layout() {
+        assert_eq!(std::mem::size_of::<QuadInstanceData>(), 96);
+        assert_eq!(std::mem::align_of::<QuadInstanceData>(), 4);
+
+        let data = QuadInstanceData::default();
+        let base = &raw const data as usize;
+
+        // Verify that 6 attribute blocks (each vec4 = 16 bytes) align perfectly:
+        // 1. a_bounds: rect_pos (8B) + rect_size (8B) = 16B at offset 0
+        assert_eq!(&raw const data.rect_pos as usize - base, 0);
+        assert_eq!(&raw const data.rect_size as usize - base, 8);
+
+        // 2. a_color: color (16B) at offset 16
+        assert_eq!(&raw const data.color as usize - base, 16);
+
+        // 3. a_border_color: border_color (16B) at offset 32
+        assert_eq!(&raw const data.border_color as usize - base, 32);
+
+        // 4. a_color_bottom: color_bottom (16B) at offset 48
+        assert_eq!(&raw const data.color_bottom as usize - base, 48);
+
+        // 5. a_shape_info: shape_size (8B) + is_circle (4B) + is_shadow (4B) = 16B at offset 64
+        assert_eq!(&raw const data.shape_size as usize - base, 64);
+        assert_eq!(&raw const data.is_circle as usize - base, 72);
+        assert_eq!(&raw const data.is_shadow as usize - base, 76);
+
+        // 6. a_params: radius (4B) + border_width (4B) + shadow_blur (4B) + is_gradient (4B) = 16B at offset 80
+        assert_eq!(&raw const data.radius as usize - base, 80);
+        assert_eq!(&raw const data.border_width as usize - base, 84);
+        assert_eq!(&raw const data.shadow_blur as usize - base, 88);
+        assert_eq!(&raw const data.is_gradient as usize - base, 92);
     }
 }
