@@ -81,11 +81,6 @@ pub fn android_main(app: AndroidApp) {
         let dt = frame_start.duration_since(last_frame_time).as_secs_f32();
         last_frame_time = frame_start;
 
-        state.plugin_registry.tick();
-        if let Ok(mut reg) = state.pkg_registry.write() {
-            reg.tick_all(dt);
-        }
-
         if crate::jni::bridge::apps::take_app_list_updated() {
             if let Ok(apps) = crate::jni::get_application_list() {
                 let _ = state
@@ -142,6 +137,17 @@ pub fn android_main(app: AndroidApp) {
 
         let has_active_work = should_update || is_dragging || has_pending_actions;
         state.update_idle_state(has_active_work);
+
+        let has_active_event = has_active_work || !state.event_bus.is_empty();
+        if state.should_tick(state.last_tick_time, has_active_event) {
+            let tick_dt = state.last_tick_time.elapsed().as_secs_f32();
+            state.last_tick_time = std::time::Instant::now();
+
+            state.plugin_registry.tick();
+            if let Ok(mut reg) = state.pkg_registry.write() {
+                reg.tick_all(tick_dt);
+            }
+        }
 
         if should_update {
             frame::update_and_render_state(

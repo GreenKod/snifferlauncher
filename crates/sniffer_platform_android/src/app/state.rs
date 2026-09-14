@@ -49,6 +49,7 @@ pub struct AppState {
     pub profiler: Arc<Mutex<sniffer_core::profiler::FrameProfiler>>,
     pub idle_detector: crate::idle::IdleDetector,
     pub last_interaction_time: std::time::Instant,
+    pub last_tick_time: std::time::Instant,
 }
 
 impl AppState {
@@ -126,6 +127,7 @@ impl AppState {
             profiler,
             idle_detector,
             last_interaction_time,
+            last_tick_time: std::time::Instant::now(),
         }
     }
 
@@ -177,6 +179,19 @@ impl AppState {
     pub fn target_frame_duration(&self, has_active_animation: bool) -> std::time::Duration {
         self.idle_detector
             .target_frame_duration(has_active_animation)
+    }
+
+    /// Evaluates whether periodic plugin and package registry ticks should execute.
+    #[must_use]
+    pub fn should_tick(&self, last_tick_time: std::time::Instant, has_active_event: bool) -> bool {
+        self.idle_detector
+            .should_tick(last_tick_time, has_active_event)
+    }
+
+    /// Returns the configured idle tick interval duration.
+    #[must_use]
+    pub fn idle_tick_interval(&self) -> std::time::Duration {
+        self.idle_detector.idle_tick_interval()
     }
 
     #[must_use]
