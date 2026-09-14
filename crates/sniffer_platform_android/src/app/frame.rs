@@ -202,7 +202,6 @@ pub fn update_and_render_state(
     }
 
     let has_events = !state.event_bus.is_empty();
-    state.plugin_registry.tick();
 
     state.plugin_registry.dispatch(
         &state.event_bus,
