@@ -34,6 +34,7 @@ pub struct HostApiConfig {
     pub default_settings: serde_json::Value,
     pub cache_path: Option<std::path::PathBuf>,
     pub pkg_registry: Option<Arc<RwLock<sniffer_pkg::PackageRegistry>>>,
+    pub has_active_timers: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// Inject all host-provided global functions into a QuickJS context.
@@ -52,6 +53,7 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         default_settings,
         cache_path,
         pkg_registry,
+        has_active_timers: _has_active_timers,
     } = cfg;
 
     let globals = ctx.globals();

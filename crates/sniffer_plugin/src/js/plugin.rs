@@ -38,6 +38,7 @@ pub struct JsPlugin {
     pub(crate) msg_tx: Sender<PluginMsg>,
     pub(crate) ui_tree: Arc<Mutex<Option<Element>>>,
     pub(crate) subscriptions: Vec<WidgetId>,
+    pub(crate) has_active_timers: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[allow(clippy::non_send_fields_in_send_ty)]
@@ -65,6 +66,8 @@ impl JsPlugin {
         let (msg_tx, msg_rx) = unbounded::<PluginMsg>();
         let ui_tree = Arc::new(Mutex::new(config.cached_ui));
         let ui_tree_worker = ui_tree.clone();
+        let has_active_timers = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let has_active_timers_worker = Arc::clone(&has_active_timers);
 
         let initial_granted: Vec<String> = if config.is_master {
             config.permissions.clone()
@@ -125,6 +128,7 @@ impl JsPlugin {
                         default_settings,
                         cache_path: cache_path.clone(),
                         pkg_registry,
+                        has_active_timers: has_active_timers_worker,
                     },
                 );
 
@@ -322,7 +326,21 @@ impl JsPlugin {
             msg_tx,
             ui_tree,
             subscriptions: vec![],
+            has_active_timers,
         })
+    }
+
+    /// Returns `true` if this plugin currently has active registered timers.
+    #[must_use]
+    pub fn has_active_timers(&self) -> bool {
+        self.has_active_timers
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Sets whether this plugin currently has active registered timers.
+    pub fn set_has_active_timers(&self, active: bool) {
+        self.has_active_timers
+            .store(active, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -352,6 +370,11 @@ impl UiPlugin for JsPlugin {
         let _ = self.msg_tx.send(PluginMsg::Tick);
     }
 
+    fn has_active_timers(&self) -> bool {
+        self.has_active_timers
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     fn on_broadcast(&self, channel: &str, payload_json: &str) {
         let _ = self.msg_tx.send(PluginMsg::Broadcast {
             channel: channel.to_string(),
@@ -369,5 +392,34 @@ impl UiPlugin for JsPlugin {
 
     fn on_unload(&self) {
         let _ = self.msg_tx.send(PluginMsg::Unload);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_js_plugin_has_active_timers_flag() {
+        let plugin = JsPlugin {
+            msg_tx: unbounded().0,
+            ui_tree: Arc::new(Mutex::new(None)),
+            subscriptions: vec![],
+            has_active_timers: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        };
+
+        // Default state is false
+        assert!(!plugin.has_active_timers());
+        assert!(!UiPlugin::has_active_timers(&plugin));
+
+        // When updated to true
+        plugin.set_has_active_timers(true);
+        assert!(plugin.has_active_timers());
+        assert!(UiPlugin::has_active_timers(&plugin));
+
+        // When updated back to false
+        plugin.set_has_active_timers(false);
+        assert!(!plugin.has_active_timers());
+        assert!(!UiPlugin::has_active_timers(&plugin));
     }
 }
