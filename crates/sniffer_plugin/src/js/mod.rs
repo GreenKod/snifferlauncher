@@ -17,7 +17,7 @@ use sniffer_core::types::Element;
 use sniffer_core::vault::DataVault;
 use std::sync::{Arc, Mutex, RwLock};
 
-pub use plugin::{JsPlugin, JsPluginConfig, PluginMsg};
+pub use plugin::{IPC_PREAMBLE, JsPlugin, JsPluginConfig, PluginMsg};
 
 /// Configuration bundle passed to `register_host_api`.
 pub struct HostApiConfig {
@@ -53,10 +53,19 @@ pub fn register_host_api(ctx: &rquickjs::Ctx, cfg: HostApiConfig) {
         default_settings,
         cache_path,
         pkg_registry,
-        has_active_timers: _has_active_timers,
+        has_active_timers,
     } = cfg;
 
     let globals = ctx.globals();
+
+    let hat = Arc::clone(&has_active_timers);
+    let set_active_timers_func = Function::new(ctx.clone(), move |active: bool| {
+        hat.store(active, std::sync::atomic::Ordering::Relaxed);
+    })
+    .unwrap();
+    globals
+        .set(obfstr!("host_set_active_timers"), set_active_timers_func)
+        .unwrap();
 
     // host_get_default_settings
     let default_settings_json =
