@@ -38,6 +38,7 @@ pub struct JsPlugin {
     pub(crate) msg_tx: Sender<PluginMsg>,
     pub(crate) ui_tree: Arc<Mutex<Option<Element>>>,
     pub(crate) subscriptions: Vec<WidgetId>,
+    pub(crate) has_active_timers: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[allow(clippy::non_send_fields_in_send_ty)]
@@ -65,6 +66,8 @@ impl JsPlugin {
         let (msg_tx, msg_rx) = unbounded::<PluginMsg>();
         let ui_tree = Arc::new(Mutex::new(config.cached_ui));
         let ui_tree_worker = ui_tree.clone();
+        let has_active_timers = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let has_active_timers_worker = Arc::clone(&has_active_timers);
 
         let initial_granted: Vec<String> = if config.is_master {
             config.permissions.clone()
@@ -125,6 +128,7 @@ impl JsPlugin {
                         default_settings,
                         cache_path: cache_path.clone(),
                         pkg_registry,
+                        has_active_timers: has_active_timers_worker,
                     },
                 );
 
@@ -174,6 +178,15 @@ impl JsPlugin {
                 return;
             }
 
+            // Cache _onTimerTick function reference to avoid string hash table lookup on every tick.
+            let timer_tick_fn: Option<rquickjs::Persistent<rquickjs::Function<'static>>> = context
+                .with(|ctx| {
+                    ctx.globals()
+                        .get::<_, rquickjs::Function>("_onTimerTick")
+                        .ok()
+                        .map(|f| rquickjs::Persistent::save(&ctx, f))
+                });
+
             let mut gc_count = 0u32;
             let mut is_suspended = false;
             while let Ok(msg) = msg_rx.recv() {
@@ -218,27 +231,28 @@ impl JsPlugin {
                                 gc_count = 0;
                                 runtime.run_gc();
                             }
-                            let _guard = DeadlineGuard::arm(&deadline_ms);
-                            context.with(|ctx| {
-                                if let Ok(handler) =
-                                    ctx.globals().get::<_, rquickjs::Function>("_onTimerTick")
-                                    && let Err(e) = handler.call::<_, ()>(())
-                                {
-                                    let caught = ctx.catch();
-                                    let exc = caught.as_exception();
-                                    let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
-                                    if msg.to_lowercase().contains("interrupted") {
-                                        crate::logger::error(
-                                            &plugin_id,
-                                            "Security Watchdog: _onTimerTick exceeded 500ms deadline and was interrupted.",
-                                        );
-                                    } else if !msg.is_empty() {
-                                        crate::logger::error(&plugin_id, &format!("_onTimerTick error: {msg}"));
-                                    } else {
-                                        crate::logger::error(&plugin_id, &format!("_onTimerTick error: {e}"));
+                            if let Some(ref timer_fn) = timer_tick_fn {
+                                let _guard = DeadlineGuard::arm(&deadline_ms);
+                                context.with(|ctx| {
+                                    if let Ok(handler) = timer_fn.clone().restore(&ctx) {
+                                        if let Err(e) = handler.call::<_, ()>(()) {
+                                            let caught = ctx.catch();
+                                            let exc = caught.as_exception();
+                                            let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
+                                            if msg.to_lowercase().contains("interrupted") {
+                                                crate::logger::error(
+                                                    &plugin_id,
+                                                    "Security Watchdog: _onTimerTick exceeded 500ms deadline and was interrupted.",
+                                                );
+                                            } else if !msg.is_empty() {
+                                                crate::logger::error(&plugin_id, &format!("_onTimerTick error: {msg}"));
+                                            } else {
+                                                crate::logger::error(&plugin_id, &format!("_onTimerTick error: {e}"));
+                                            }
+                                        }
                                     }
-                                }
-                            });
+                                });
+                            }
                         }
                     }
                     PluginMsg::Broadcast { channel, payload } => {
@@ -322,7 +336,21 @@ impl JsPlugin {
             msg_tx,
             ui_tree,
             subscriptions: vec![],
+            has_active_timers,
         })
+    }
+
+    /// Returns `true` if this plugin currently has active registered timers.
+    #[must_use]
+    pub fn has_active_timers(&self) -> bool {
+        self.has_active_timers
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Sets whether this plugin currently has active registered timers.
+    pub fn set_has_active_timers(&self, active: bool) {
+        self.has_active_timers
+            .store(active, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -349,7 +377,17 @@ impl UiPlugin for JsPlugin {
     }
 
     fn on_tick(&self) {
-        let _ = self.msg_tx.send(PluginMsg::Tick);
+        if self
+            .has_active_timers
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let _ = self.msg_tx.send(PluginMsg::Tick);
+        }
+    }
+
+    fn has_active_timers(&self) -> bool {
+        self.has_active_timers
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     fn on_broadcast(&self, channel: &str, payload_json: &str) {
@@ -369,5 +407,41 @@ impl UiPlugin for JsPlugin {
 
     fn on_unload(&self) {
         let _ = self.msg_tx.send(PluginMsg::Unload);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_js_plugin_has_active_timers_flag() {
+        let (tx, rx) = unbounded();
+        let plugin = JsPlugin {
+            msg_tx: tx,
+            ui_tree: Arc::new(Mutex::new(None)),
+            subscriptions: vec![],
+            has_active_timers: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        };
+
+        // Default state is false -> on_tick should NOT send any message
+        assert!(!plugin.has_active_timers());
+        assert!(!UiPlugin::has_active_timers(&plugin));
+        plugin.on_tick();
+        assert!(rx.try_recv().is_err());
+
+        // When updated to true -> on_tick sends PluginMsg::Tick
+        plugin.set_has_active_timers(true);
+        assert!(plugin.has_active_timers());
+        assert!(UiPlugin::has_active_timers(&plugin));
+        plugin.on_tick();
+        assert!(matches!(rx.try_recv(), Ok(PluginMsg::Tick)));
+
+        // When updated back to false -> on_tick does not send
+        plugin.set_has_active_timers(false);
+        assert!(!plugin.has_active_timers());
+        assert!(!UiPlugin::has_active_timers(&plugin));
+        plugin.on_tick();
+        assert!(rx.try_recv().is_err());
     }
 }
