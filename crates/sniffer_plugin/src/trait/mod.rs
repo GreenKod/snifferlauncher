@@ -42,6 +42,12 @@ pub trait UiPlugin: Send + Sync {
     /// Useful for periodic tasks, animations, or garbage collection.
     fn on_tick(&self) {}
 
+    /// Returns `true` if this plugin currently has active timers registered.
+    /// Used by the host registry to avoid sending unnecessary tick messages.
+    fn has_active_timers(&self) -> bool {
+        true
+    }
+
     /// Called when another plugin broadcasts a message to all plugins via `broadcastEvent`.
     ///
     /// # Arguments
