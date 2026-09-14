@@ -148,10 +148,12 @@ impl PluginRegistry {
         None
     }
 
-    /// Trigger the periodic tick for all registered plugins.
+    /// Trigger the periodic tick for registered plugins that have active timers.
     pub fn tick(&self) {
         for plugin in &self.plugins {
-            plugin.on_tick();
+            if plugin.has_active_timers() {
+                plugin.on_tick();
+            }
         }
     }
 
