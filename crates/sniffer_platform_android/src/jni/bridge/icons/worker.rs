@@ -65,6 +65,7 @@ pub fn init_icon_worker_pool() {
                                 width,
                                 height,
                             });
+                            crate::wake_app();
                         }
                         Ok::<(), JniError>(())
                     });
