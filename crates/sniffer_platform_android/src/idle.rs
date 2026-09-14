@@ -17,6 +17,9 @@ pub const ACTIVE_FRAME_DURATION: Duration = Duration::from_millis(8);
 /// Target frame pacing duration during standard active UI interaction (16 milliseconds, ~60 FPS).
 pub const STANDARD_FRAME_DURATION: Duration = Duration::from_millis(16);
 
+/// Interval for periodic package and plugin registry ticks when the application is idle (250 milliseconds).
+pub const IDLE_TICK_INTERVAL: Duration = Duration::from_millis(250);
+
 /// Tracks user interaction timestamps and evaluates whether the application is in an idle state.
 #[derive(Debug, Clone)]
 pub struct IdleDetector {
@@ -26,6 +29,8 @@ pub struct IdleDetector {
     last_interaction_time: Instant,
     /// Inactivity threshold duration required to enter the idle state.
     idle_threshold: Duration,
+    /// Throttle interval for periodic registry ticks during idle state.
+    idle_tick_interval: Duration,
 }
 
 impl Default for IdleDetector {
@@ -42,6 +47,7 @@ impl IdleDetector {
             is_idle: false,
             last_interaction_time: Instant::now(),
             idle_threshold,
+            idle_tick_interval: IDLE_TICK_INTERVAL,
         }
     }
 
@@ -127,6 +133,31 @@ impl IdleDetector {
             IDLE_FRAME_DURATION
         } else {
             STANDARD_FRAME_DURATION
+        }
+    }
+
+    /// Returns the configured idle tick interval duration.
+    #[must_use]
+    pub fn idle_tick_interval(&self) -> Duration {
+        self.idle_tick_interval
+    }
+
+    /// Updates the configured idle tick interval duration.
+    pub fn set_idle_tick_interval(&mut self, interval: Duration) {
+        self.idle_tick_interval = interval;
+    }
+
+    /// Evaluates whether periodic plugin and package registry ticks should execute:
+    /// - When the application is active (`!is_idle`), always returns `true` (running at full frame rate).
+    /// - When the application is idle:
+    ///   - If `has_active_event` is `true` (an event, action, animation, or state change occurred), returns `true`.
+    ///   - Otherwise, throttles execution to the reduced `idle_tick_interval` (default 250ms).
+    #[must_use]
+    pub fn should_tick(&self, last_tick_time: Instant, has_active_event: bool) -> bool {
+        if !self.is_idle || has_active_event {
+            true
+        } else {
+            last_tick_time.elapsed() >= self.idle_tick_interval
         }
     }
 }
@@ -234,5 +265,48 @@ mod tests {
         let mut detector = IdleDetector::default();
         detector.set_idle_threshold(Duration::from_millis(200));
         assert_eq!(detector.idle_threshold(), Duration::from_millis(200));
+    }
+
+    #[test]
+    fn test_should_tick_in_active_mode() {
+        let detector = IdleDetector::default();
+        assert!(!detector.is_idle());
+
+        let last_tick = Instant::now();
+        // Active mode: always ticks regardless of elapsed time or active event flag
+        assert!(detector.should_tick(last_tick, false));
+        assert!(detector.should_tick(last_tick, true));
+    }
+
+    #[test]
+    fn test_should_tick_in_idle_mode_with_active_event() {
+        let mut detector = IdleDetector::new(Duration::from_millis(15));
+        sleep(Duration::from_millis(25));
+        detector.update(false);
+        assert!(detector.is_idle());
+
+        let last_tick = Instant::now();
+        // Idle mode with active event: must tick immediately even if 0ms elapsed
+        assert!(detector.should_tick(last_tick, true));
+    }
+
+    #[test]
+    fn test_should_tick_in_idle_mode_throttled() {
+        let mut detector = IdleDetector::new(Duration::from_millis(15));
+        detector.set_idle_tick_interval(Duration::from_millis(30));
+        assert_eq!(detector.idle_tick_interval(), Duration::from_millis(30));
+
+        sleep(Duration::from_millis(25));
+        detector.update(false);
+        assert!(detector.is_idle());
+
+        let last_tick = Instant::now();
+        // Less than idle_tick_interval (30ms) elapsed, no active event -> false
+        assert!(!detector.should_tick(last_tick, false));
+
+        // Sleep past idle_tick_interval
+        sleep(Duration::from_millis(35));
+        // More than idle_tick_interval elapsed -> true
+        assert!(detector.should_tick(last_tick, false));
     }
 }
