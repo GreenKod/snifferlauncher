@@ -367,7 +367,12 @@ impl UiPlugin for JsPlugin {
     }
 
     fn on_tick(&self) {
-        let _ = self.msg_tx.send(PluginMsg::Tick);
+        if self
+            .has_active_timers
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let _ = self.msg_tx.send(PluginMsg::Tick);
+        }
     }
 
     fn has_active_timers(&self) -> bool {
@@ -401,25 +406,32 @@ mod tests {
 
     #[test]
     fn test_js_plugin_has_active_timers_flag() {
+        let (tx, rx) = unbounded();
         let plugin = JsPlugin {
-            msg_tx: unbounded().0,
+            msg_tx: tx,
             ui_tree: Arc::new(Mutex::new(None)),
             subscriptions: vec![],
             has_active_timers: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
 
-        // Default state is false
+        // Default state is false -> on_tick should NOT send any message
         assert!(!plugin.has_active_timers());
         assert!(!UiPlugin::has_active_timers(&plugin));
+        plugin.on_tick();
+        assert!(rx.try_recv().is_err());
 
-        // When updated to true
+        // When updated to true -> on_tick sends PluginMsg::Tick
         plugin.set_has_active_timers(true);
         assert!(plugin.has_active_timers());
         assert!(UiPlugin::has_active_timers(&plugin));
+        plugin.on_tick();
+        assert!(matches!(rx.try_recv(), Ok(PluginMsg::Tick)));
 
-        // When updated back to false
+        // When updated back to false -> on_tick does not send
         plugin.set_has_active_timers(false);
         assert!(!plugin.has_active_timers());
         assert!(!UiPlugin::has_active_timers(&plugin));
+        plugin.on_tick();
+        assert!(rx.try_recv().is_err());
     }
 }
