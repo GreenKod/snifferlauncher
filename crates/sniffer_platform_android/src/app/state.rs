@@ -15,6 +15,7 @@ pub struct KineticScroll {
     pub velocity_y: f32,
 }
 
+#[allow(clippy::struct_excessive_bools)]
 pub struct AppState {
     pub running: bool,
     pub touch_start_pos: Point,
@@ -46,6 +47,9 @@ pub struct AppState {
     pub virtual_page_manager: sniffer_core::virtualization::VirtualPageManager,
     pub total_touch_drag_distance: f32,
     pub profiler: Arc<Mutex<sniffer_core::profiler::FrameProfiler>>,
+    pub idle_detector: crate::idle::IdleDetector,
+    pub last_interaction_time: std::time::Instant,
+    pub last_tick_time: std::time::Instant,
 }
 
 impl AppState {
@@ -87,6 +91,9 @@ impl AppState {
             &action_queue,
         );
 
+        let idle_detector = crate::idle::IdleDetector::default();
+        let last_interaction_time = idle_detector.last_interaction_time();
+
         Self {
             running: true,
             touch_start_pos: Point::zero(),
@@ -118,6 +125,9 @@ impl AppState {
             virtual_page_manager: sniffer_core::virtualization::VirtualPageManager::new(),
             total_touch_drag_distance: 0.0,
             profiler,
+            idle_detector,
+            last_interaction_time,
+            last_tick_time: std::time::Instant::now(),
         }
     }
 
@@ -130,6 +140,58 @@ impl AppState {
         self.cached_layout = None;
         self.layout_dirty = true;
         self.memory_pressure_pending = false;
+    }
+
+    /// Marks user or system activity, resetting the idle state and updating the interaction timestamp.
+    pub fn mark_interaction(&mut self) {
+        self.idle_detector.mark_interaction();
+        self.last_interaction_time = self.idle_detector.last_interaction_time();
+    }
+
+    /// Returns the duration elapsed since the last recorded interaction or activity.
+    #[must_use]
+    pub fn time_since_last_interaction(&self) -> std::time::Duration {
+        self.idle_detector.time_since_last_interaction()
+    }
+
+    /// Returns `true` if the application has been determined to be idle.
+    #[must_use]
+    pub fn is_idle(&self) -> bool {
+        self.idle_detector.is_idle()
+    }
+
+    /// Evaluates and updates the idle state based on whether active work is currently underway.
+    pub fn update_idle_state(&mut self, has_active_work: bool) -> bool {
+        let is_idle = self.idle_detector.update(has_active_work);
+        self.last_interaction_time = self.idle_detector.last_interaction_time();
+        is_idle
+    }
+
+    /// Returns the recommended event polling timeout based on current idle state and active animations.
+    #[must_use]
+    pub fn recommended_poll_timeout(&self, has_active_animation: bool) -> std::time::Duration {
+        self.idle_detector
+            .recommended_poll_timeout(has_active_animation)
+    }
+
+    /// Returns the target frame pacing duration based on current idle state and active animations.
+    #[must_use]
+    pub fn target_frame_duration(&self, has_active_animation: bool) -> std::time::Duration {
+        self.idle_detector
+            .target_frame_duration(has_active_animation)
+    }
+
+    /// Evaluates whether periodic plugin and package registry ticks should execute.
+    #[must_use]
+    pub fn should_tick(&self, last_tick_time: std::time::Instant, has_active_event: bool) -> bool {
+        self.idle_detector
+            .should_tick(last_tick_time, has_active_event)
+    }
+
+    /// Returns the configured idle tick interval duration.
+    #[must_use]
+    pub fn idle_tick_interval(&self) -> std::time::Duration {
+        self.idle_detector.idle_tick_interval()
     }
 
     #[must_use]

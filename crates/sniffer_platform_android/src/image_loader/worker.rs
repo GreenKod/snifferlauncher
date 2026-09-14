@@ -208,6 +208,7 @@ pub fn init_image_worker_pool() {
 
                 if let Ok(Some(res)) = decode_res {
                     let _ = res_tx.send(res);
+                    crate::wake_app();
                 }
             }
         });

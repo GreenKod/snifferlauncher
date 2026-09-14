@@ -13,7 +13,6 @@ pub use state::{AppState, KineticScroll};
 use android_activity::AndroidApp;
 use sniffer_core::ScreenMetrics;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
 
 #[allow(clippy::pedantic, clippy::too_many_lines)]
 pub fn android_main(app: AndroidApp) {
@@ -22,7 +21,7 @@ pub fn android_main(app: AndroidApp) {
 
     crate::jni::bridge::init_app_list_cache();
     crate::jni::bridge::init_icon_worker_pool();
-    crate::image_loader::set_android_app(&app);
+    crate::set_android_app(&app);
     crate::jni::bridge::set_show_wallpaper_flag(&app);
 
     let mut state = AppState::new(&app);
@@ -82,11 +81,6 @@ pub fn android_main(app: AndroidApp) {
         let dt = frame_start.duration_since(last_frame_time).as_secs_f32();
         last_frame_time = frame_start;
 
-        state.plugin_registry.tick();
-        if let Ok(mut reg) = state.pkg_registry.write() {
-            reg.tick_all(dt);
-        }
-
         if crate::jni::bridge::apps::take_app_list_updated() {
             if let Ok(apps) = crate::jni::get_application_list() {
                 let _ = state
@@ -106,9 +100,6 @@ pub fn android_main(app: AndroidApp) {
             sniffer_core::types::UI_VERSION.load(std::sync::atomic::Ordering::Relaxed);
         let ui_changed = state.layout_dirty || (current_ui_version != state.last_ui_version);
 
-        let needs_redraw =
-            events::poll_and_handle_events(&app, &mut state, &mut root_element, &render_tx);
-
         let has_active_physics = !state.kinetic_scrolls.is_empty()
             || state.scroll_physics.values().any(|p| {
                 p.is_dragging
@@ -118,10 +109,24 @@ pub fn android_main(app: AndroidApp) {
             });
 
         let has_active_transitions = state.transition_manager.is_animating();
+        let is_dragging = state.active_scrollview_drag.is_some();
+        let has_active_animation = has_active_physics || has_active_transitions || is_dragging;
+
+        let poll_timeout = Some(state.recommended_poll_timeout(has_active_animation));
+
+        let needs_redraw = events::poll_and_handle_events(
+            &app,
+            &mut state,
+            &mut root_element,
+            &render_tx,
+            poll_timeout,
+        );
+
         let is_first_frame = matches!(
             &root_element,
             sniffer_core::types::Element::Container { children, .. } if children.is_empty()
         );
+        let has_pending_actions = state.action_queue.lock().is_ok_and(|q| !q.is_empty());
 
         let should_update = needs_redraw
             || ui_changed
@@ -129,6 +134,20 @@ pub fn android_main(app: AndroidApp) {
             || has_active_transitions
             || is_first_frame
             || state.cached_layout.is_none();
+
+        let has_active_work = should_update || is_dragging || has_pending_actions;
+        state.update_idle_state(has_active_work);
+
+        let has_active_event = has_active_work || !state.event_bus.is_empty();
+        if state.should_tick(state.last_tick_time, has_active_event) {
+            let tick_dt = state.last_tick_time.elapsed().as_secs_f32();
+            state.last_tick_time = std::time::Instant::now();
+
+            state.plugin_registry.tick();
+            if let Ok(mut reg) = state.pkg_registry.write() {
+                reg.tick_all(tick_dt);
+            }
+        }
 
         if should_update {
             frame::update_and_render_state(
@@ -142,15 +161,18 @@ pub fn android_main(app: AndroidApp) {
             );
         }
 
-        let elapsed = frame_start.elapsed();
-        let target_frame_duration = if has_active_physics
-            || has_active_transitions
+        let has_active_animation_after = !state.kinetic_scrolls.is_empty()
+            || state.transition_manager.is_animating()
             || state.active_scrollview_drag.is_some()
-        {
-            Duration::from_millis(8)
-        } else {
-            Duration::from_millis(16)
-        };
+            || state.scroll_physics.values().any(|p| {
+                p.is_dragging
+                    || p.snap_target_x.is_some()
+                    || p.vel_x.abs() > 0.5
+                    || p.vel_y.abs() > 0.5
+            });
+
+        let elapsed = frame_start.elapsed();
+        let target_frame_duration = state.target_frame_duration(has_active_animation_after);
 
         if elapsed < target_frame_duration {
             std::thread::sleep(target_frame_duration - elapsed);

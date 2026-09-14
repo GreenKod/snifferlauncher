@@ -77,6 +77,7 @@ pub fn init_app_list_cache() {
                 }
                 APP_LIST_UPDATED.store(true, Ordering::Release);
                 sniffer_core::types::UI_VERSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                crate::wake_app();
             }
         }
     });

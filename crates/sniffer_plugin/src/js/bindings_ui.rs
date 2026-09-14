@@ -97,6 +97,7 @@ impl MutationBuffer {
                 }
             }
             sniffer_core::types::UI_VERSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            crate::js::host_bridge::wake();
         }
     }
 }

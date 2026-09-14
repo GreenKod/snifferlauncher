@@ -18,6 +18,8 @@ pub trait HostPlatformBridge: Send + Sync {
     ) -> Result<Vec<String>, String> {
         Ok(Vec::new())
     }
+    /// Reactively wakes up the platform event loop from idle / sleep.
+    fn wake(&self) {}
 }
 
 static HOST_BRIDGE: RwLock<Option<Box<dyn HostPlatformBridge>>> = RwLock::new(None);
@@ -62,4 +64,44 @@ pub fn request_permissions(caller_id: &str, perms: &[String]) -> Result<Vec<Stri
         }
     }
     Ok(Vec::new())
+}
+
+/// Dispatches a reactive wake request to the platform host bridge.
+pub fn wake() {
+    if let Ok(lock) = HOST_BRIDGE.read() {
+        if let Some(bridge) = lock.as_ref() {
+            bridge.wake();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct TestHostBridge {
+        wake_count: Arc<AtomicUsize>,
+    }
+
+    impl HostPlatformBridge for TestHostBridge {
+        fn wake(&self) {
+            self.wake_count.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn test_host_bridge_wake_dispatch() {
+        let wake_count = Arc::new(AtomicUsize::new(0));
+        set_host_bridge(Box::new(TestHostBridge {
+            wake_count: Arc::clone(&wake_count),
+        }));
+
+        assert_eq!(wake_count.load(Ordering::SeqCst), 0);
+        wake();
+        assert_eq!(wake_count.load(Ordering::SeqCst), 1);
+        wake();
+        assert_eq!(wake_count.load(Ordering::SeqCst), 2);
+    }
 }
