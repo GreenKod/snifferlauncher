@@ -15,6 +15,23 @@ fn test_quickjs_basic_evaluation() {
 }
 
 #[test]
+fn test_persistent_function() {
+    use rquickjs::{Function, Persistent};
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+    let p_fn = ctx.with(|c| {
+        c.eval::<(), _>("function foo() { return 42; }").unwrap();
+        let f: Function = c.globals().get("foo").unwrap();
+        Persistent::save(&c, f)
+    });
+    ctx.with(|c| {
+        let f = p_fn.clone().restore(&c).unwrap();
+        let val: i32 = f.call(()).unwrap();
+        assert_eq!(val, 42);
+    });
+}
+
+#[test]
 fn test_quickjs_json_ast_generation() {
     let rt = Runtime::new().unwrap();
     let ctx = Context::full(&rt).unwrap();
@@ -87,4 +104,48 @@ fn test_timer_bindings_toggle_has_active_timers() {
         c.eval::<(), _>(format!("clearTimeout({t2})")).unwrap();
         assert!(!active_timers.load(Ordering::SeqCst));
     });
+}
+
+#[test]
+fn test_persistent_on_timer_tick_caching() {
+    use rquickjs::{Function, Persistent};
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let (persistent_tick, fired) = ctx.with(|c| {
+        let fired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let fired_clone = fired.clone();
+        c.globals()
+            .set(
+                "host_set_active_timers",
+                Function::new(c.clone(), |_active: bool| {}).unwrap(),
+            )
+            .unwrap();
+        c.globals()
+            .set(
+                "mark_fired",
+                Function::new(c.clone(), move || {
+                    fired_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        c.eval::<(), _>(sniffer_plugin::js::IPC_PREAMBLE).unwrap();
+        c.eval::<(), _>("setTimeout(() => { mark_fired(); }, 0);")
+            .unwrap();
+
+        let tick_fn: Function = c.globals().get("_onTimerTick").unwrap();
+        (Persistent::save(&c, tick_fn), fired)
+    });
+
+    assert!(!fired.load(std::sync::atomic::Ordering::SeqCst));
+
+    // Simulate worker thread tick loop: invoke persistent without lookup
+    ctx.with(|c| {
+        let handler = persistent_tick.clone().restore(&c).unwrap();
+        handler.call::<_, ()>(()).unwrap();
+    });
+
+    assert!(fired.load(std::sync::atomic::Ordering::SeqCst));
 }

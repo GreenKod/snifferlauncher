@@ -178,6 +178,15 @@ impl JsPlugin {
                 return;
             }
 
+            // Cache _onTimerTick function reference to avoid string hash table lookup on every tick.
+            let timer_tick_fn: Option<rquickjs::Persistent<rquickjs::Function<'static>>> = context
+                .with(|ctx| {
+                    ctx.globals()
+                        .get::<_, rquickjs::Function>("_onTimerTick")
+                        .ok()
+                        .map(|f| rquickjs::Persistent::save(&ctx, f))
+                });
+
             let mut gc_count = 0u32;
             let mut is_suspended = false;
             while let Ok(msg) = msg_rx.recv() {
@@ -222,27 +231,28 @@ impl JsPlugin {
                                 gc_count = 0;
                                 runtime.run_gc();
                             }
-                            let _guard = DeadlineGuard::arm(&deadline_ms);
-                            context.with(|ctx| {
-                                if let Ok(handler) =
-                                    ctx.globals().get::<_, rquickjs::Function>("_onTimerTick")
-                                    && let Err(e) = handler.call::<_, ()>(())
-                                {
-                                    let caught = ctx.catch();
-                                    let exc = caught.as_exception();
-                                    let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
-                                    if msg.to_lowercase().contains("interrupted") {
-                                        crate::logger::error(
-                                            &plugin_id,
-                                            "Security Watchdog: _onTimerTick exceeded 500ms deadline and was interrupted.",
-                                        );
-                                    } else if !msg.is_empty() {
-                                        crate::logger::error(&plugin_id, &format!("_onTimerTick error: {msg}"));
-                                    } else {
-                                        crate::logger::error(&plugin_id, &format!("_onTimerTick error: {e}"));
+                            if let Some(ref timer_fn) = timer_tick_fn {
+                                let _guard = DeadlineGuard::arm(&deadline_ms);
+                                context.with(|ctx| {
+                                    if let Ok(handler) = timer_fn.clone().restore(&ctx) {
+                                        if let Err(e) = handler.call::<_, ()>(()) {
+                                            let caught = ctx.catch();
+                                            let exc = caught.as_exception();
+                                            let msg = exc.as_ref().and_then(|x| x.message()).unwrap_or_default();
+                                            if msg.to_lowercase().contains("interrupted") {
+                                                crate::logger::error(
+                                                    &plugin_id,
+                                                    "Security Watchdog: _onTimerTick exceeded 500ms deadline and was interrupted.",
+                                                );
+                                            } else if !msg.is_empty() {
+                                                crate::logger::error(&plugin_id, &format!("_onTimerTick error: {msg}"));
+                                            } else {
+                                                crate::logger::error(&plugin_id, &format!("_onTimerTick error: {e}"));
+                                            }
+                                        }
                                     }
-                                }
-                            });
+                                });
+                            }
                         }
                     }
                     PluginMsg::Broadcast { channel, payload } => {
