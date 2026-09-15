@@ -69,8 +69,9 @@ interface AppInfo {
 
 interface SnifferUIFramework {
     start(renderFn: () => UIElement, initialState?: any): void;
+    getState?(): any;
     setState(patch: any): void;
-    forceUpdate(): void;
+    forceUpdate(force?: boolean): void;
 }
 
 interface UIEventData {
