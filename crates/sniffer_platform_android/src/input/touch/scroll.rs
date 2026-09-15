@@ -102,6 +102,7 @@ pub fn handle_touch_move_or_down(
         }
     }
 
+    #[cfg(feature = "devkit")]
     let mut target_name = "None".to_string();
 
     // Hover management:
@@ -112,6 +113,7 @@ pub fn handle_touch_move_or_down(
         if let Some(prev) = state.hovered_btn.take() {
             state.event_bus.push(UiEvent::HoverEnd(prev));
         }
+        #[cfg(feature = "devkit")]
         if let Some(sv_id) = state.active_scrollview_drag {
             target_name = format!("sv_{sv_id:x}");
         }
@@ -123,6 +125,7 @@ pub fn handle_touch_move_or_down(
             });
         state.hovered_btn = hovered_data.map(|(id, _)| id);
 
+        #[cfg(feature = "devkit")]
         if let Some((btn, _)) = hovered_data {
             target_name = format!("btn_{btn:x}");
         }
@@ -156,26 +159,29 @@ pub fn handle_touch_move_or_down(
         }
     }
 
-    let pointer_count = motion_event.pointers().count();
-    let gesture_name = match motion_event.action() {
-        MotionAction::Down | MotionAction::PointerDown => "DOWN",
-        MotionAction::Move => {
-            if pointer_count > 1 {
-                "MULTI_TOUCH / PINCH"
-            } else {
-                "DRAG / PAN"
+    #[cfg(feature = "devkit")]
+    {
+        let pointer_count = motion_event.pointers().count();
+        let gesture_name = match motion_event.action() {
+            MotionAction::Down | MotionAction::PointerDown => "DOWN",
+            MotionAction::Move => {
+                if pointer_count > 1 {
+                    "MULTI_TOUCH / PINCH"
+                } else {
+                    "DRAG / PAN"
+                }
             }
+            _ => "UNKNOWN",
         }
-        _ => "UNKNOWN",
-    }
-    .to_string();
+        .to_string();
 
-    if let Ok(mut prof) = state.profiler.lock() {
-        prof.touch_telemetry.active_pointers = pointer_count;
-        prof.touch_telemetry.gesture = gesture_name;
-        prof.touch_telemetry.target_element = target_name;
-        prof.touch_telemetry.touch_x = point.x;
-        prof.touch_telemetry.touch_y = point.y;
+        if let Ok(mut prof) = state.profiler.lock() {
+            prof.touch_telemetry.active_pointers = pointer_count;
+            prof.touch_telemetry.gesture = gesture_name;
+            prof.touch_telemetry.target_element = target_name;
+            prof.touch_telemetry.touch_x = point.x;
+            prof.touch_telemetry.touch_y = point.y;
+        }
     }
 
     InputStatus::Handled
