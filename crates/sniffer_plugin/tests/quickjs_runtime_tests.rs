@@ -149,3 +149,103 @@ fn test_persistent_on_timer_tick_caching() {
 
     assert!(fired.load(std::sync::atomic::Ordering::SeqCst));
 }
+
+#[test]
+fn test_sniffer_ui_commit_shallow_dirty_check() {
+    use rquickjs::Function;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let commit_count = Arc::new(AtomicUsize::new(0));
+    let commit_count_clone = commit_count.clone();
+
+    let framework_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.plugins/framework/sniffer_ui.js");
+    let framework_code =
+        std::fs::read_to_string(&framework_path).expect("Failed to read sniffer_ui.js");
+
+    ctx.with(|c| {
+        // Register mock host_set_ui
+        c.globals()
+            .set(
+                "host_set_ui",
+                Function::new(c.clone(), move |_json: String| {
+                    commit_count_clone.fetch_add(1, Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        // Eval framework
+        c.eval::<(), _>(framework_code.as_bytes()).unwrap();
+
+        // 1. Initial start should trigger exactly 1 commit
+        let test_script = r#"
+            let state = { count: 0, text: "hello" };
+            function render() {
+                return { type: "Label", text: state.text + " " + state.count };
+            }
+            SnifferUI.start(render, state);
+        "#;
+        c.eval::<(), _>(test_script).unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            1,
+            "Initial start must commit UI"
+        );
+
+        // 2. forceUpdate() with identical state should NOT call host_set_ui
+        c.eval::<(), _>("SnifferUI.forceUpdate();").unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            1,
+            "Redundant forceUpdate must skip commit"
+        );
+
+        // 3. setState with identical values should NOT call host_set_ui
+        c.eval::<(), _>("SnifferUI.setState({ count: 0 });")
+            .unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            1,
+            "setState with same value must skip commit"
+        );
+
+        // 4. setState with changed values SHOULD trigger commit
+        c.eval::<(), _>("SnifferUI.setState({ count: 1 });")
+            .unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            2,
+            "setState with new value must commit"
+        );
+
+        // 5. In-place state property mutation followed by forceUpdate() SHOULD trigger commit
+        c.eval::<(), _>("state.count = 2; SnifferUI.forceUpdate();")
+            .unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            3,
+            "In-place mutation followed by forceUpdate must commit"
+        );
+
+        // 6. Another forceUpdate() without mutating anything should skip
+        c.eval::<(), _>("SnifferUI.forceUpdate();").unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            3,
+            "Second forceUpdate without mutation must skip"
+        );
+
+        // 7. Explicit forceUpdate(true) should bypass state check and force commit
+        c.eval::<(), _>("SnifferUI.forceUpdate(true);").unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            4,
+            "forceUpdate(true) must bypass dirty check"
+        );
+    });
+}
