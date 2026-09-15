@@ -2,6 +2,7 @@
 //!
 //! Active under `#[cfg(feature = "devkit")]`.
 
+#[cfg(feature = "devkit")]
 use std::collections::VecDeque;
 use std::time::Instant;
 
@@ -14,6 +15,7 @@ pub struct TouchTelemetry {
     pub touch_y: f32,
 }
 
+#[cfg(feature = "devkit")]
 pub struct FrameProfiler {
     frame_times: VecDeque<f32>,
     cpu_times: VecDeque<f32>,
@@ -25,6 +27,7 @@ pub struct FrameProfiler {
     pub total_entities: usize,
 }
 
+#[cfg(feature = "devkit")]
 impl FrameProfiler {
     #[must_use]
     pub fn new(max_history: usize) -> Self {
@@ -110,12 +113,78 @@ impl FrameProfiler {
     }
 }
 
+#[cfg(feature = "devkit")]
 impl Default for FrameProfiler {
     fn default() -> Self {
         Self::new(30)
     }
 }
 
+#[cfg(not(feature = "devkit"))]
+#[derive(Clone, Debug, Default)]
+pub struct FrameProfiler {
+    pub touch_telemetry: TouchTelemetry,
+    pub rendered_entities: usize,
+    pub total_entities: usize,
+}
+
+#[cfg(not(feature = "devkit"))]
+impl FrameProfiler {
+    #[inline]
+    #[must_use]
+    pub fn new(_max_history: usize) -> Self {
+        Self {
+            touch_telemetry: TouchTelemetry::default(),
+            rendered_entities: 0,
+            total_entities: 0,
+        }
+    }
+
+    #[inline]
+    pub fn record_entities(&mut self, _rendered: usize, _total: usize) {}
+
+    #[inline]
+    pub fn record_frame(
+        &mut self,
+        _frame_start: Instant,
+        _render_start: Instant,
+        _draw_end: Instant,
+        _swap_end: Instant,
+    ) {
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn average_frame_time_ms(&self) -> f32 {
+        0.0
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn avg_cpu_ms(&self) -> f32 {
+        0.0
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn avg_gpu_ms(&self) -> f32 {
+        0.0
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn avg_swap_ms(&self) -> f32 {
+        0.0
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn current_fps(&self) -> f32 {
+        0.0
+    }
+}
+
+#[cfg(feature = "devkit")]
 pub fn count_elements(element: &crate::types::Element) -> usize {
     match element {
         crate::types::Element::Container { children, .. }
@@ -129,6 +198,13 @@ pub fn count_elements(element: &crate::types::Element) -> usize {
         }
         _ => 1,
     }
+}
+
+#[cfg(not(feature = "devkit"))]
+#[inline]
+#[must_use]
+pub fn count_elements(_element: &crate::types::Element) -> usize {
+    0
 }
 
 #[cfg(feature = "devkit")]
