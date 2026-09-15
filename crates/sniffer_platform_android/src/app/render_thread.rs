@@ -13,7 +13,7 @@ pub fn spawn_render_thread(
     _app: AndroidApp,
     shared_render_state: Arc<RwLock<Arc<SharedRenderState>>>,
     action_queue: Arc<Mutex<Vec<Action>>>,
-    profiler: Arc<Mutex<sniffer_core::profiler::FrameProfiler>>,
+    #[allow(unused_variables)] profiler: Arc<Mutex<sniffer_core::profiler::FrameProfiler>>,
     pkg_registry: Arc<RwLock<PackageRegistry>>,
     render_rx: crossbeam_channel::Receiver<RenderMessage>,
 ) -> std::thread::JoinHandle<()> {
@@ -101,6 +101,7 @@ pub fn spawn_render_thread(
                             }
                         }
 
+                        #[cfg(feature = "devkit")]
                         let render_start = std::time::Instant::now();
                         let current_state = shared_render_state.read().unwrap().clone();
 
@@ -191,11 +192,14 @@ pub fn spawn_render_thread(
                         }
 
                         renderer.end_frame();
+                        #[cfg(feature = "devkit")]
                         let draw_end = std::time::Instant::now();
 
                         egl.swap_buffers();
+                        #[cfg(feature = "devkit")]
                         let swap_end = std::time::Instant::now();
 
+                        #[cfg(feature = "devkit")]
                         if let Ok(mut prof) = profiler.lock() {
                             let total_nodes =
                                 sniffer_core::profiler::count_elements(&current_state.root_element);
