@@ -9,7 +9,7 @@ use sniffer_render::draw::{
 
 #[allow(clippy::too_many_lines)]
 pub fn handle_touch_release(
-    motion_event: &MotionEvent,
+    #[allow(unused_variables)] motion_event: &MotionEvent,
     state: &mut crate::app::AppState,
     root_element: &sniffer_core::types::Element,
     layout_tree: &sniffer_core::layout::LayoutNode,
@@ -116,21 +116,24 @@ pub fn handle_touch_release(
     let tap_dist = (point.x - state.touch_start_pos.x).hypot(point.y - state.touch_start_pos.y);
     let is_static_tap = tap_dist < tap_threshold;
 
-    let pointer_count = motion_event.pointers().count();
-    let gesture_name = if is_static_tap {
-        "TAP (Release)".to_string()
-    } else {
-        "SWIPE (Release)".to_string()
-    };
-    let target_name =
-        hovered_data.map_or_else(|| "None".to_string(), |(btn, _)| format!("btn_{btn:x}"));
+    #[cfg(feature = "devkit")]
+    {
+        let pointer_count = motion_event.pointers().count();
+        let gesture_name = if is_static_tap {
+            "TAP (Release)".to_string()
+        } else {
+            "SWIPE (Release)".to_string()
+        };
+        let target_name =
+            hovered_data.map_or_else(|| "None".to_string(), |(btn, _)| format!("btn_{btn:x}"));
 
-    if let Ok(mut prof) = state.profiler.lock() {
-        prof.touch_telemetry.active_pointers = pointer_count;
-        prof.touch_telemetry.gesture = gesture_name;
-        prof.touch_telemetry.target_element = target_name;
-        prof.touch_telemetry.touch_x = point.x;
-        prof.touch_telemetry.touch_y = point.y;
+        if let Ok(mut prof) = state.profiler.lock() {
+            prof.touch_telemetry.active_pointers = pointer_count;
+            prof.touch_telemetry.gesture = gesture_name;
+            prof.touch_telemetry.target_element = target_name;
+            prof.touch_telemetry.touch_x = point.x;
+            prof.touch_telemetry.touch_y = point.y;
+        }
     }
 
     if is_static_tap {
