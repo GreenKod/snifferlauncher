@@ -367,3 +367,88 @@ fn test_host_set_ui_fast_permission_gated() {
         "ui_tree must remain None when plugin.permission.UI is not granted"
     );
 }
+
+#[test]
+fn test_host_set_ui_fast_direct_deserialization_bypasses_json_stringify() {
+    use sniffer_core::types::Element;
+    use std::sync::{Arc, Mutex};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let ui_tree = Arc::new(Mutex::new(None));
+    let perms = vec!["plugin.permission.UI".to_string()];
+    let granted = Arc::new(Mutex::new(perms.clone()));
+
+    ctx.with(|c| {
+        sniffer_plugin::js::bindings_ui::register_ui_bindings(
+            &c,
+            &c.globals(),
+            ui_tree.clone(),
+            &perms,
+            granted,
+            None,
+        );
+
+        // Sabotage JSON.stringify in JS global scope to ensure it is never invoked
+        c.eval::<(), _>(
+            r#"
+            JSON.stringify = function() {
+                throw new Error("JSON.stringify should NOT be called in fast path!");
+            };
+        "#,
+        )
+        .unwrap();
+
+        // Pass direct JS object AST to host_set_ui_fast
+        let script = r#"
+            host_set_ui_fast({
+                Container: {
+                    id: "bypass_stringify_root",
+                    style: {
+                        opacity: 0.85
+                    },
+                    children: [
+                        {
+                            Label: {
+                                id: "nested_child_label",
+                                text: "Directly Deserialized via rquickjs_serde",
+                                style: {
+                                    text_size: 20.0
+                                }
+                            }
+                        }
+                    ]
+                }
+            });
+        "#;
+        c.eval::<(), _>(script).unwrap();
+    });
+
+    let tree = ui_tree.lock().unwrap().clone();
+    assert!(
+        tree.is_some(),
+        "ui_tree must be populated even when JSON.stringify is completely disabled"
+    );
+    if let Some(Element::Container {
+        id,
+        style,
+        children,
+        ..
+    }) = tree
+    {
+        assert_eq!(id, Some("bypass_stringify_root".to_string()));
+        assert_eq!(style.opacity, 0.85);
+        assert_eq!(children.len(), 1);
+        if let Element::Label { id, text, style } = &children[0] {
+            assert_eq!(id, &Some("nested_child_label".to_string()));
+            assert_eq!(text, "Directly Deserialized via rquickjs_serde");
+            assert_eq!(style.text_size, 20.0);
+        } else {
+            panic!("Expected Label child");
+        }
+    } else {
+        panic!("Expected Container element");
+    }
+}
+

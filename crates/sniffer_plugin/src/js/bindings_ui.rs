@@ -165,7 +165,7 @@ pub fn register_ui_bindings<'js>(
     .unwrap();
     globals.set(obfstr!("host_set_ui"), set_ui_func).unwrap();
 
-    // host_set_ui_fast (Stage 6.2 alternative binder accepting Value / Object directly)
+    // host_set_ui_fast (Stage 6.3 direct serde deserializer bypassing JSON.stringify)
     let apply_ui_fast = Arc::clone(&apply_element);
     let plugin_permissions_ui_fast = plugin_permissions.to_vec();
     let granted_permissions_ui_fast = granted_permissions.clone();
@@ -178,65 +178,49 @@ pub fn register_ui_bindings<'js>(
             return;
         }
 
-        let json_str = if let Some(s) = val.as_string() {
+        // Fast path 1: If caller passed a JSON string (backward compatibility fallback)
+        if let Some(s) = val.as_string() {
             match s.to_string() {
-                Ok(s) => s,
+                Ok(json_str) => match serde_json::from_str::<Element>(&json_str) {
+                    Ok(parsed) => {
+                        apply_ui_fast(parsed);
+                    }
+                    Err(e) => {
+                        dev_err!(
+                            "{}: {e}",
+                            obfstr!("JS Error: Failed to parse host_set_ui_fast JSON string")
+                        );
+                    }
+                },
                 Err(e) => {
                     dev_err!(
                         "{}: {e}",
                         obfstr!("JS Error: Failed to extract host_set_ui_fast string")
                     );
-                    return;
                 }
             }
-        } else {
-            match ctx.json_stringify(val) {
-                Ok(Some(js_str)) => match js_str.to_string() {
-                    Ok(s) => s,
-                    Err(e) => {
-                        dev_err!(
-                            "{}: {e}",
-                            obfstr!("JS Error: Failed to convert host_set_ui_fast string")
-                        );
-                        return;
-                    }
-                },
-                Ok(None) => {
-                    dev_err!(
-                        "{}",
-                        obfstr!(
-                            "JS Error: host_set_ui_fast received undefined or unstringifiable value"
-                        )
-                    );
-                    return;
-                }
-                Err(e) => {
-                    dev_err!(
-                        "{}: {e}",
-                        obfstr!("JS Error: Failed to json_stringify in host_set_ui_fast")
-                    );
-                    return;
-                }
-            }
-        };
+            return;
+        }
 
-        match serde_json::from_str::<Element>(&json_str) {
+        // Fast path 2: Direct deserialization from QuickJS Value AST using rquickjs_serde (Stage 6.3)
+        // Completely bypasses JSON.stringify and intermediate heap string allocations
+        match rquickjs_serde::from_value::<Element>(val.clone()) {
             Ok(parsed) => {
                 apply_ui_fast(parsed);
             }
-            Err(e) => {
-                let col = e.column();
-                let start = col.saturating_sub(50);
-                let end = (col + 50).min(json_str.len());
-                let snippet = if start < json_str.len() {
-                    &json_str[start..end]
+            Err(serde_err) => {
+                // Fallback: If direct serde deserialization encountered an edge case, fallback to ctx.json_stringify
+                if let Ok(Some(js_str)) = ctx.json_stringify(val)
+                    && let Ok(json_str) = js_str.to_string()
+                    && let Ok(parsed) = serde_json::from_str::<Element>(&json_str)
+                {
+                    apply_ui_fast(parsed);
                 } else {
-                    ""
-                };
-                dev_err!(
-                    "{}: {e} (around col {col}: '{snippet}')",
-                    obfstr!("JS Error: Failed to parse host_set_ui_fast JSON")
-                );
+                    dev_err!(
+                        "{}: {serde_err}",
+                        obfstr!("JS Error: Failed to deserialize host_set_ui_fast value")
+                    );
+                }
             }
         }
     })
@@ -380,7 +364,9 @@ pub fn register_ui_bindings<'js>(
 
     // host_send_binary_event
     let send_binary_event_func = Function::new(ctx.clone(), |buffer: rquickjs::ArrayBuffer<'_>| {
-        if let Some(bytes) = buffer.as_bytes() {
+        // SAFETY: Synchronous access to ArrayBuffer within single-threaded QuickJS execution.
+        let bytes_opt = unsafe { buffer.as_bytes() };
+        if let Some(bytes) = bytes_opt {
             if let Ok(state) = postcard::from_bytes::<sniffer_core::types::AppState>(bytes) {
                 dev_log!(
                     "{}: {state:?}",
