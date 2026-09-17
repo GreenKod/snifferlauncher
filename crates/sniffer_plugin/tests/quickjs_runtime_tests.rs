@@ -149,3 +149,565 @@ fn test_persistent_on_timer_tick_caching() {
 
     assert!(fired.load(std::sync::atomic::Ordering::SeqCst));
 }
+
+#[test]
+fn test_sniffer_ui_commit_shallow_dirty_check() {
+    use rquickjs::Function;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let commit_count = Arc::new(AtomicUsize::new(0));
+    let commit_count_clone = commit_count.clone();
+
+    let framework_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.plugins/framework/sniffer_ui.js");
+    let framework_code =
+        std::fs::read_to_string(&framework_path).expect("Failed to read sniffer_ui.js");
+
+    ctx.with(|c| {
+        // Register mock host_set_ui
+        c.globals()
+            .set(
+                "host_set_ui",
+                Function::new(c.clone(), move |_json: String| {
+                    commit_count_clone.fetch_add(1, Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        // Eval framework
+        c.eval::<(), _>(framework_code.as_bytes()).unwrap();
+
+        // 1. Initial start should trigger exactly 1 commit
+        let test_script = r#"
+            let state = { count: 0, text: "hello" };
+            function render() {
+                return { type: "Label", text: state.text + " " + state.count };
+            }
+            SnifferUI.start(render, state);
+        "#;
+        c.eval::<(), _>(test_script).unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            1,
+            "Initial start must commit UI"
+        );
+
+        // 2. forceUpdate() with identical state should NOT call host_set_ui
+        c.eval::<(), _>("SnifferUI.forceUpdate();").unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            1,
+            "Redundant forceUpdate must skip commit"
+        );
+
+        // 3. setState with identical values should NOT call host_set_ui
+        c.eval::<(), _>("SnifferUI.setState({ count: 0 });")
+            .unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            1,
+            "setState with same value must skip commit"
+        );
+
+        // 4. setState with changed values SHOULD trigger commit
+        c.eval::<(), _>("SnifferUI.setState({ count: 1 });")
+            .unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            2,
+            "setState with new value must commit"
+        );
+
+        // 5. In-place state property mutation followed by forceUpdate() SHOULD trigger commit
+        c.eval::<(), _>("state.count = 2; SnifferUI.forceUpdate();")
+            .unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            3,
+            "In-place mutation followed by forceUpdate must commit"
+        );
+
+        // 6. Another forceUpdate() without mutating anything should skip
+        c.eval::<(), _>("SnifferUI.forceUpdate();").unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            3,
+            "Second forceUpdate without mutation must skip"
+        );
+
+        // 7. Explicit forceUpdate(true) should bypass state check and force commit
+        c.eval::<(), _>("SnifferUI.forceUpdate(true);").unwrap();
+        assert_eq!(
+            commit_count.load(Ordering::SeqCst),
+            4,
+            "forceUpdate(true) must bypass dirty check"
+        );
+    });
+}
+
+#[test]
+fn test_host_set_ui_fast_object_and_string_binding() {
+    use sniffer_core::types::Element;
+    use std::sync::{Arc, Mutex};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let ui_tree = Arc::new(Mutex::new(None));
+    let perms = vec!["plugin.permission.UI".to_string()];
+    let granted = Arc::new(Mutex::new(perms.clone()));
+
+    ctx.with(|c| {
+        sniffer_plugin::js::bindings_ui::register_ui_bindings(
+            &c,
+            &c.globals(),
+            ui_tree.clone(),
+            &perms,
+            granted,
+            None,
+        );
+
+        // 1. Pass raw JS Object directly without JSON.stringify
+        let script = r#"
+            host_set_ui_fast({
+                Container: {
+                    id: "fast_container",
+                    style: {},
+                    children: [
+                        { Label: { id: null, text: "Direct Object AST", style: {} } }
+                    ]
+                }
+            });
+        "#;
+        c.eval::<(), _>(script).unwrap();
+    });
+
+    let tree = ui_tree.lock().unwrap().clone();
+    assert!(
+        tree.is_some(),
+        "ui_tree should be populated by host_set_ui_fast"
+    );
+    if let Some(Element::Container { id, children, .. }) = tree {
+        assert_eq!(id, Some("fast_container".to_string()));
+        assert_eq!(children.len(), 1);
+        if let Element::Label { text, .. } = &children[0] {
+            assert_eq!(text, "Direct Object AST");
+        } else {
+            panic!("Expected Label child");
+        }
+    } else {
+        panic!("Expected Container element");
+    }
+
+    // 2. Pass JSON String for backward compatibility
+    ctx.with(|c| {
+        let script = r#"
+            host_set_ui_fast(JSON.stringify({
+                Label: {
+                    id: "string_label",
+                    text: "String fallback",
+                    style: {}
+                }
+            }));
+        "#;
+        c.eval::<(), _>(script).unwrap();
+    });
+
+    let tree2 = ui_tree.lock().unwrap().clone();
+    assert!(tree2.is_some());
+    if let Some(Element::Label { id, text, .. }) = tree2 {
+        assert_eq!(id, Some("string_label".to_string()));
+        assert_eq!(text, "String fallback");
+    } else {
+        panic!("Expected Label element");
+    }
+}
+
+#[test]
+fn test_host_set_ui_fast_permission_gated() {
+    use std::sync::{Arc, Mutex};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let ui_tree = Arc::new(Mutex::new(None));
+    // No UI permission granted
+    let perms: Vec<String> = vec![];
+    let granted = Arc::new(Mutex::new(vec![]));
+
+    ctx.with(|c| {
+        sniffer_plugin::js::bindings_ui::register_ui_bindings(
+            &c,
+            &c.globals(),
+            ui_tree.clone(),
+            &perms,
+            granted,
+            None,
+        );
+
+        let script = r#"
+            host_set_ui_fast({
+                Container: {
+                    id: "unauthorized_container",
+                    style: {},
+                    children: []
+                }
+            });
+        "#;
+        c.eval::<(), _>(script).unwrap();
+    });
+
+    assert!(
+        ui_tree.lock().unwrap().is_none(),
+        "ui_tree must remain None when plugin.permission.UI is not granted"
+    );
+}
+
+#[test]
+fn test_host_set_ui_fast_direct_deserialization_bypasses_json_stringify() {
+    use sniffer_core::types::Element;
+    use std::sync::{Arc, Mutex};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let ui_tree = Arc::new(Mutex::new(None));
+    let perms = vec!["plugin.permission.UI".to_string()];
+    let granted = Arc::new(Mutex::new(perms.clone()));
+
+    ctx.with(|c| {
+        sniffer_plugin::js::bindings_ui::register_ui_bindings(
+            &c,
+            &c.globals(),
+            ui_tree.clone(),
+            &perms,
+            granted,
+            None,
+        );
+
+        // Sabotage JSON.stringify in JS global scope to ensure it is never invoked
+        c.eval::<(), _>(
+            r#"
+            JSON.stringify = function() {
+                throw new Error("JSON.stringify should NOT be called in fast path!");
+            };
+        "#,
+        )
+        .unwrap();
+
+        // Pass direct JS object AST to host_set_ui_fast
+        let script = r#"
+            host_set_ui_fast({
+                Container: {
+                    id: "bypass_stringify_root",
+                    style: {
+                        opacity: 0.85
+                    },
+                    children: [
+                        {
+                            Label: {
+                                id: "nested_child_label",
+                                text: "Directly Deserialized via rquickjs_serde",
+                                style: {
+                                    text_size: 20.0
+                                }
+                            }
+                        }
+                    ]
+                }
+            });
+        "#;
+        c.eval::<(), _>(script).unwrap();
+    });
+
+    let tree = ui_tree.lock().unwrap().clone();
+    assert!(
+        tree.is_some(),
+        "ui_tree must be populated even when JSON.stringify is completely disabled"
+    );
+    if let Some(Element::Container {
+        id,
+        style,
+        children,
+        ..
+    }) = tree
+    {
+        assert_eq!(id, Some("bypass_stringify_root".to_string()));
+        assert_eq!(style.opacity, 0.85);
+        assert_eq!(children.len(), 1);
+        if let Element::Label { id, text, style } = &children[0] {
+            assert_eq!(id, &Some("nested_child_label".to_string()));
+            assert_eq!(text, "Directly Deserialized via rquickjs_serde");
+            assert_eq!(style.text_size, 20.0);
+        } else {
+            panic!("Expected Label child");
+        }
+    } else {
+        panic!("Expected Container element");
+    }
+}
+
+#[test]
+fn test_sniffer_ui_framework_routes_to_host_set_ui_fast_when_available() {
+    use rquickjs::Function;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let legacy_call_count = Arc::new(AtomicUsize::new(0));
+    let fast_call_count = Arc::new(AtomicUsize::new(0));
+
+    let legacy_clone = legacy_call_count.clone();
+    let fast_clone = fast_call_count.clone();
+
+    let framework_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.plugins/framework/sniffer_ui.js");
+    let framework_code =
+        std::fs::read_to_string(&framework_path).expect("Failed to read sniffer_ui.js");
+
+    ctx.with(|c| {
+        // Register mock host_set_ui (legacy)
+        c.globals()
+            .set(
+                "host_set_ui",
+                Function::new(c.clone(), move |_json: String| {
+                    legacy_clone.fetch_add(1, Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        // Register mock host_set_ui_fast (fast path)
+        c.globals()
+            .set(
+                "host_set_ui_fast",
+                Function::new(c.clone(), move |_val: rquickjs::Value| {
+                    fast_clone.fetch_add(1, Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        // Eval framework
+        c.eval::<(), _>(framework_code.as_bytes()).unwrap();
+
+        // Start SnifferUI
+        let test_script = r#"
+            SnifferUI.start(function() {
+                return { Container: { id: "test_root", style: {}, children: [] } };
+            }, {});
+        "#;
+        c.eval::<(), _>(test_script).unwrap();
+
+        // Verify that host_set_ui_fast was called, and legacy host_set_ui was completely bypassed
+        assert_eq!(
+            fast_call_count.load(Ordering::SeqCst),
+            1,
+            "host_set_ui_fast must be called"
+        );
+        assert_eq!(
+            legacy_call_count.load(Ordering::SeqCst),
+            0,
+            "legacy host_set_ui must NOT be called"
+        );
+
+        // Mutate state and force update
+        c.eval::<(), _>("SnifferUI.setState({ updated: true });")
+            .unwrap();
+        assert_eq!(fast_call_count.load(Ordering::SeqCst), 2);
+        assert_eq!(legacy_call_count.load(Ordering::SeqCst), 0);
+    });
+}
+
+#[test]
+fn test_sniffer_ui_core_js_routes_to_host_set_ui_fast() {
+    use rquickjs::Function;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let legacy_call_count = Arc::new(AtomicUsize::new(0));
+    let fast_call_count = Arc::new(AtomicUsize::new(0));
+
+    let legacy_clone = legacy_call_count.clone();
+    let fast_clone = fast_call_count.clone();
+
+    let core_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.plugins/framework/core.js");
+    let core_code = std::fs::read_to_string(&core_path).expect("Failed to read core.js");
+
+    ctx.with(|c| {
+        c.globals()
+            .set(
+                "host_set_ui",
+                Function::new(c.clone(), move |_json: String| {
+                    legacy_clone.fetch_add(1, Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        c.globals()
+            .set(
+                "host_set_ui_fast",
+                Function::new(c.clone(), move |_val: rquickjs::Value| {
+                    fast_clone.fetch_add(1, Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        c.eval::<(), _>(core_code.as_bytes()).unwrap();
+
+        let test_script = r#"
+            SnifferUI.start(function() {
+                return { Container: { id: "core_root", style: {}, children: [] } };
+            }, {});
+        "#;
+        c.eval::<(), _>(test_script).unwrap();
+
+        assert_eq!(fast_call_count.load(Ordering::SeqCst), 1);
+        assert_eq!(legacy_call_count.load(Ordering::SeqCst), 0);
+    });
+}
+
+#[test]
+fn test_large_ui_tree_100_plus_elements_gc_and_memory_benchmark() {
+    use sniffer_core::types::Element;
+    use std::sync::{Arc, Mutex};
+    use std::time::Instant;
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let ui_tree = Arc::new(Mutex::new(None));
+    let perms = vec!["plugin.permission.UI".to_string()];
+    let granted = Arc::new(Mutex::new(perms.clone()));
+
+    ctx.with(|c| {
+        sniffer_plugin::js::bindings_ui::register_ui_bindings(
+            &c,
+            &c.globals(),
+            ui_tree.clone(),
+            &perms,
+            granted,
+            None,
+        );
+
+        // Define a generator script that creates a 120-item UI tree (typical app drawer / dock)
+        let build_tree_script = r#"
+            function generateLargeTree(count) {
+                const children = [];
+                for (let i = 0; i < count; i++) {
+                    children.push({
+                        Container: {
+                            id: "app_card_" + i,
+                            style: {
+                                opacity: 1.0,
+                                flex_direction: "Column"
+                            },
+                            children: [
+                                {
+                                    Label: {
+                                        id: "app_title_" + i,
+                                        text: "Application " + i,
+                                        style: {
+                                            text_size: 14.0
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    });
+                }
+                return {
+                    Container: {
+                        id: "app_drawer_root",
+                        style: {
+                            flex_direction: "Column"
+                        },
+                        children: children
+                    }
+                };
+            }
+            globalThis.generateLargeTree = generateLargeTree;
+        "#;
+        c.eval::<(), _>(build_tree_script).unwrap();
+
+        // Warm up / evaluate a 120-element tree
+        c.eval::<(), _>("var sampleTree = generateLargeTree(120);")
+            .unwrap();
+
+        // Benchmark 1: Legacy serialization path (JSON.stringify in JS -> string -> serde_json)
+        let start_legacy = Instant::now();
+        for _ in 0..30 {
+            c.eval::<(), _>("host_set_ui(JSON.stringify(sampleTree));")
+                .unwrap();
+        }
+        let duration_legacy = start_legacy.elapsed();
+
+        // Run GC after legacy runs
+        let gc_start_legacy = Instant::now();
+        c.run_gc();
+        let gc_duration_legacy = gc_start_legacy.elapsed();
+
+        // Benchmark 2: Fast path (Direct QuickJS Value AST -> rquickjs_serde::from_value)
+        let start_fast = Instant::now();
+        for _ in 0..30 {
+            c.eval::<(), _>("host_set_ui_fast(sampleTree);").unwrap();
+        }
+        let duration_fast = start_fast.elapsed();
+
+        // Run GC after fast runs
+        let gc_start_fast = Instant::now();
+        c.run_gc();
+        let gc_duration_fast = gc_start_fast.elapsed();
+
+        println!(
+            "\n=================================================================\n\
+             Stage 6.5 Benchmark (120 UI Elements x 30 iterations):\n\
+             - Legacy (JSON.stringify + serde_json): {duration_legacy:?} (GC: {gc_duration_legacy:?})\n\
+             - Fast (Direct rquickjs_serde):        {duration_fast:?} (GC: {gc_duration_fast:?})\n\
+             ================================================================="
+        );
+
+        // Verify that the tree produced in Rust by the fast path contains all 120 children
+        let tree_guard = ui_tree.lock().unwrap();
+        let tree = tree_guard.as_ref().expect("ui_tree must be populated");
+        if let Element::Container { id, children, .. } = tree {
+            assert_eq!(id, &Some("app_drawer_root".to_string()));
+            assert_eq!(
+                children.len(),
+                120,
+                "Must contain exactly 120 elements in root container"
+            );
+            if let Element::Container {
+                id: card_id,
+                children: card_children,
+                ..
+            } = &children[50]
+            {
+                assert_eq!(card_id, &Some("app_card_50".to_string()));
+                assert_eq!(card_children.len(), 1);
+                if let Element::Label { text, .. } = &card_children[0] {
+                    assert_eq!(text, "Application 50");
+                } else {
+                    panic!("Expected Label child in card 50");
+                }
+            } else {
+                panic!("Expected Container child for app 50");
+            }
+        } else {
+            panic!("Expected root Container");
+        }
+    });
+}

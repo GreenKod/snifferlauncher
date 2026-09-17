@@ -1,7 +1,7 @@
 use crate::js::permission_manager::permission_granted;
 use crate::{dev_err, dev_log};
 use obfstr::obfstr;
-use rquickjs::{Ctx, Function, Object};
+use rquickjs::{Ctx, Function, Object, Value};
 use sniffer_core::types::Element;
 use std::path::PathBuf;
 use std::sync::mpsc::SyncSender;
@@ -113,9 +113,24 @@ pub fn register_ui_bindings<'js>(
 ) {
     let mutation_buffer = Arc::new(MutationBuffer::default());
 
-    // host_set_ui
+    // Shared UI mutation committer
     let mut_set_ui = mutation_buffer.clone();
     let tree_set_ui = ui_tree.clone();
+    let cache_path_apply = cache_path;
+    let apply_element = Arc::new(move |parsed: Element| {
+        if let Ok(mut lock) = mut_set_ui.mutations.lock() {
+            lock.push(UiMutation::SetUi(parsed.clone()));
+        }
+        mut_set_ui.flush(&tree_set_ui);
+        if let Some(path) = cache_path_apply.clone()
+            && let Ok(bytes) = postcard::to_allocvec(&parsed)
+        {
+            enqueue_cache_write(path, bytes);
+        }
+    });
+
+    // host_set_ui (legacy JSON string binder)
+    let apply_ui = Arc::clone(&apply_element);
     let plugin_permissions_ui = plugin_permissions.to_vec();
     let granted_permissions_ui = granted_permissions.clone();
     let set_ui_func = Function::new(ctx.clone(), move |json_str: String| {
@@ -129,15 +144,7 @@ pub fn register_ui_bindings<'js>(
 
         match serde_json::from_str::<Element>(&json_str) {
             Ok(parsed) => {
-                if let Ok(mut lock) = mut_set_ui.mutations.lock() {
-                    lock.push(UiMutation::SetUi(parsed.clone()));
-                }
-                mut_set_ui.flush(&tree_set_ui);
-                if let Some(path) = cache_path.clone()
-                    && let Ok(bytes) = postcard::to_allocvec(&parsed)
-                {
-                    enqueue_cache_write(path, bytes);
-                }
+                apply_ui(parsed);
             }
             Err(e) => {
                 let col = e.column();
@@ -157,6 +164,70 @@ pub fn register_ui_bindings<'js>(
     })
     .unwrap();
     globals.set(obfstr!("host_set_ui"), set_ui_func).unwrap();
+
+    // host_set_ui_fast (Stage 6.3 direct serde deserializer bypassing JSON.stringify)
+    let apply_ui_fast = Arc::clone(&apply_element);
+    let plugin_permissions_ui_fast = plugin_permissions.to_vec();
+    let granted_permissions_ui_fast = granted_permissions.clone();
+    let set_ui_fast_func = Function::new(ctx.clone(), move |ctx: Ctx<'js>, val: Value<'js>| {
+        if !permission_granted(
+            obfstr!("plugin.permission.UI"),
+            &plugin_permissions_ui_fast,
+            &granted_permissions_ui_fast,
+        ) {
+            return;
+        }
+
+        // Fast path 1: If caller passed a JSON string (backward compatibility fallback)
+        if let Some(s) = val.as_string() {
+            match s.to_string() {
+                Ok(json_str) => match serde_json::from_str::<Element>(&json_str) {
+                    Ok(parsed) => {
+                        apply_ui_fast(parsed);
+                    }
+                    Err(e) => {
+                        dev_err!(
+                            "{}: {e}",
+                            obfstr!("JS Error: Failed to parse host_set_ui_fast JSON string")
+                        );
+                    }
+                },
+                Err(e) => {
+                    dev_err!(
+                        "{}: {e}",
+                        obfstr!("JS Error: Failed to extract host_set_ui_fast string")
+                    );
+                }
+            }
+            return;
+        }
+
+        // Fast path 2: Direct deserialization from QuickJS Value AST using rquickjs_serde (Stage 6.3)
+        // Completely bypasses JSON.stringify and intermediate heap string allocations
+        match rquickjs_serde::from_value::<Element>(val.clone()) {
+            Ok(parsed) => {
+                apply_ui_fast(parsed);
+            }
+            Err(serde_err) => {
+                // Fallback: If direct serde deserialization encountered an edge case, fallback to ctx.json_stringify
+                if let Ok(Some(js_str)) = ctx.json_stringify(val)
+                    && let Ok(json_str) = js_str.to_string()
+                    && let Ok(parsed) = serde_json::from_str::<Element>(&json_str)
+                {
+                    apply_ui_fast(parsed);
+                } else {
+                    dev_err!(
+                        "{}: {serde_err}",
+                        obfstr!("JS Error: Failed to deserialize host_set_ui_fast value")
+                    );
+                }
+            }
+        }
+    })
+    .unwrap();
+    globals
+        .set(obfstr!("host_set_ui_fast"), set_ui_fast_func)
+        .unwrap();
 
     // host_update_style
     let mut_update_style = mutation_buffer.clone();
@@ -293,7 +364,9 @@ pub fn register_ui_bindings<'js>(
 
     // host_send_binary_event
     let send_binary_event_func = Function::new(ctx.clone(), |buffer: rquickjs::ArrayBuffer<'_>| {
-        if let Some(bytes) = buffer.as_bytes() {
+        // SAFETY: Synchronous access to ArrayBuffer within single-threaded QuickJS execution.
+        let bytes_opt = unsafe { buffer.as_bytes() };
+        if let Some(bytes) = bytes_opt {
             if let Ok(state) = postcard::from_bytes::<sniffer_core::types::AppState>(bytes) {
                 dev_log!(
                     "{}: {state:?}",

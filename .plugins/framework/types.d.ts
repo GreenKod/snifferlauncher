@@ -69,8 +69,9 @@ interface AppInfo {
 
 interface SnifferUIFramework {
     start(renderFn: () => UIElement, initialState?: any): void;
+    getState?(): any;
     setState(patch: any): void;
-    forceUpdate(): void;
+    forceUpdate(force?: boolean): void;
 }
 
 interface UIEventData {
@@ -123,6 +124,7 @@ declare var defaultSettings: Record<string, any>;
 // -----------------------------------------------------------------------------
 
 declare function host_set_ui(jsonStr: string): void;
+declare function host_set_ui_fast(elementOrJson: UIElement | string | any): void;
 declare function host_update_style(id: string, property: string, value: string): void;
 declare function host_set_text(id: string, text: string): void;
 declare function host_insert_child(parentId: string, childJson: string): void;
