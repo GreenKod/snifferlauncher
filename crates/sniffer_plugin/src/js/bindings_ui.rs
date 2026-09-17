@@ -116,7 +116,7 @@ pub fn register_ui_bindings<'js>(
     // Shared UI mutation committer
     let mut_set_ui = mutation_buffer.clone();
     let tree_set_ui = ui_tree.clone();
-    let cache_path_apply = cache_path.clone();
+    let cache_path_apply = cache_path;
     let apply_element = Arc::new(move |parsed: Element| {
         if let Ok(mut lock) = mut_set_ui.mutations.lock() {
             lock.push(UiMutation::SetUi(parsed.clone()));
