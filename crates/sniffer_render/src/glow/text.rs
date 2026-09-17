@@ -89,8 +89,7 @@ pub(crate) fn draw_text_impl(
         return;
     };
 
-    let mut normal_quads: Vec<f32> = Vec::with_capacity(text.len() * 24);
-    let mut color_quads: Vec<f32> = Vec::new();
+    renderer.text_batch.clear();
 
     if let Some(ref atlas) = renderer.font_atlas {
         let scale = size / atlas.rasterize_size;
@@ -134,9 +133,9 @@ pub(crate) fn draw_text_impl(
             ) / ah;
 
             let target = if glyph.is_color {
-                &mut color_quads
+                &mut renderer.text_batch.color_vertices
             } else {
-                &mut normal_quads
+                &mut renderer.text_batch.normal_vertices
             };
 
             // Triangle 1: (top-left, top-right, bottom-left)
@@ -189,7 +188,7 @@ pub(crate) fn draw_text_impl(
             let u_min_y = 0.0;
             let u_max_y = 1.0;
 
-            normal_quads.extend_from_slice(&[
+            renderer.text_batch.normal_vertices.extend_from_slice(&[
                 curr_x,
                 y,
                 u_min_x,
@@ -220,7 +219,7 @@ pub(crate) fn draw_text_impl(
         }
     }
 
-    if normal_quads.is_empty() && color_quads.is_empty() {
+    if renderer.text_batch.is_empty() {
         return;
     }
 
@@ -250,32 +249,30 @@ pub(crate) fn draw_text_impl(
             .gl
             .bind_buffer(glow::ARRAY_BUFFER, Some(renderer.text_vertex_buffer));
 
-        if !normal_quads.is_empty() {
+        if !renderer.text_batch.normal_vertices.is_empty() {
             renderer.gl.uniform_1_i32(u.u_is_color.as_ref(), 0);
-            let bytes = std::slice::from_raw_parts(
-                normal_quads.as_ptr().cast::<u8>(),
-                normal_quads.len() * std::mem::size_of::<f32>(),
+            renderer.gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                renderer.text_batch.as_normal_bytes(),
+                glow::DYNAMIC_DRAW,
             );
-            renderer
-                .gl
-                .buffer_data_u8_slice(glow::ARRAY_BUFFER, bytes, glow::DYNAMIC_DRAW);
-            let vert_count =
-                i32::try_from(normal_quads.len() / 4).expect("vertex count fits in i32");
+            let vert_count = i32::try_from(renderer.text_batch.normal_vertices.len() / 4)
+                .expect("vertex count fits in i32");
             renderer.gl.draw_arrays(glow::TRIANGLES, 0, vert_count);
         }
 
-        if !color_quads.is_empty() {
+        if !renderer.text_batch.color_vertices.is_empty() {
             renderer.gl.uniform_1_i32(u.u_is_color.as_ref(), 1);
-            let bytes = std::slice::from_raw_parts(
-                color_quads.as_ptr().cast::<u8>(),
-                color_quads.len() * std::mem::size_of::<f32>(),
+            renderer.gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                renderer.text_batch.as_color_bytes(),
+                glow::DYNAMIC_DRAW,
             );
-            renderer
-                .gl
-                .buffer_data_u8_slice(glow::ARRAY_BUFFER, bytes, glow::DYNAMIC_DRAW);
-            let vert_count =
-                i32::try_from(color_quads.len() / 4).expect("vertex count fits in i32");
+            let vert_count = i32::try_from(renderer.text_batch.color_vertices.len() / 4)
+                .expect("vertex count fits in i32");
             renderer.gl.draw_arrays(glow::TRIANGLES, 0, vert_count);
         }
     }
+
+    renderer.text_batch.clear();
 }
