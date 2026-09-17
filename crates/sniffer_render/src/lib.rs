@@ -8,6 +8,7 @@ pub use draw::{
     find_hovered_button_with_scroll, is_aabb_visible,
 };
 pub use glow::GlowRenderer;
+pub use glow::batching::{QuadBatch, TextBatch};
 pub use glow::textures::MemoryTrimLevel;
 pub use sniffer_core::render::Renderer;
 pub use sniffer_core::{dev_err, dev_log};
