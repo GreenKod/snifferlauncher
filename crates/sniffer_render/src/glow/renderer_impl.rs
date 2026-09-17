@@ -21,6 +21,7 @@ impl Renderer for GlowRenderer {
         border_width: f32,
         border_color: Option<u32>,
     ) {
+        self.flush_text();
         self.draw_rect_impl(rect, color, radius, border_width, border_color);
     }
 
@@ -33,6 +34,7 @@ impl Renderer for GlowRenderer {
         border_width: f32,
         border_color: Option<u32>,
     ) {
+        self.flush_text();
         self.draw_rect_gradient_impl(
             rect,
             color_top,
@@ -44,10 +46,12 @@ impl Renderer for GlowRenderer {
     }
 
     fn draw_shadow(&mut self, rect: Rect, radius: f32, offset_y: f32, spread: f32, color: u32) {
+        self.flush_text();
         self.draw_shadow_impl(rect, radius, offset_y, spread, color);
     }
 
     fn draw_circle(&mut self, cx: f32, cy: f32, radius: f32, color: u32) {
+        self.flush_text();
         self.draw_circle_impl(cx, cy, radius, color);
     }
 
@@ -70,6 +74,7 @@ impl Renderer for GlowRenderer {
 
     fn end_frame(&mut self) {
         self.flush_shapes();
+        self.flush_text();
         unsafe {
             self.ensure_quad_vao();
         }
@@ -77,10 +82,12 @@ impl Renderer for GlowRenderer {
 
     fn flush(&mut self) {
         self.flush_shapes();
+        self.flush_text();
     }
 
     fn set_clip_rect(&mut self, rect: Rect) {
         self.flush_shapes();
+        self.flush_text();
         unsafe {
             self.gl.enable(glow::SCISSOR_TEST);
             let y = self.resolution.1 - rect.y - rect.height;
@@ -95,6 +102,7 @@ impl Renderer for GlowRenderer {
 
     fn clear_clip_rect(&mut self) {
         self.flush_shapes();
+        self.flush_text();
         unsafe {
             self.gl.disable(glow::SCISSOR_TEST);
         }
@@ -125,6 +133,7 @@ impl Renderer for GlowRenderer {
 
     fn push_transform(&mut self, cx: f32, cy: f32, scale: f32, rotate: f32, tx: f32, ty: f32) {
         self.flush_shapes();
+        self.flush_text();
         let p = self
             .transform_stack
             .last()
@@ -160,12 +169,15 @@ impl Renderer for GlowRenderer {
 
     fn pop_transform(&mut self) {
         self.flush_shapes();
+        self.flush_text();
         if self.transform_stack.len() > 1 {
             self.transform_stack.pop();
         }
     }
 
     fn set_global_alpha(&mut self, alpha: f32) {
+        self.flush_shapes();
+        self.flush_text();
         self.global_alpha = alpha;
     }
 
@@ -183,6 +195,7 @@ impl Renderer for GlowRenderer {
 
     fn draw_wallpaper(&mut self, width: f32, height: f32) {
         self.flush_shapes();
+        self.flush_text();
         self.draw_wallpaper_impl(width, height);
     }
 
@@ -194,6 +207,7 @@ impl Renderer for GlowRenderer {
         object_fit: sniffer_core::style::ObjectFit,
     ) {
         self.flush_shapes();
+        self.flush_text();
         self.draw_image_impl(id, rect, radius, object_fit);
     }
 

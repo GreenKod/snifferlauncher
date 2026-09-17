@@ -97,6 +97,8 @@ pub struct TextBatch {
     pub normal_vertices: Vec<f32>,
     pub color_vertices: Vec<f32>,
     pub max_capacity: usize,
+    pub current_color: Option<[f32; 4]>,
+    pub current_transform: Option<[f32; 9]>,
 }
 
 impl TextBatch {
@@ -109,6 +111,8 @@ impl TextBatch {
             normal_vertices: Vec::with_capacity(Self::INITIAL_CAPACITY.min(max_capacity)),
             color_vertices: Vec::new(),
             max_capacity,
+            current_color: None,
+            current_transform: None,
         }
     }
 
@@ -134,6 +138,8 @@ impl TextBatch {
     pub fn clear(&mut self) {
         self.normal_vertices.clear();
         self.color_vertices.clear();
+        self.current_color = None;
+        self.current_transform = None;
     }
 
     #[inline]
