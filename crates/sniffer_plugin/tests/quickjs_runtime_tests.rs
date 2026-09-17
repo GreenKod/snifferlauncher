@@ -541,8 +541,8 @@ fn test_sniffer_ui_core_js_routes_to_host_set_ui_fast() {
     let legacy_clone = legacy_call_count.clone();
     let fast_clone = fast_call_count.clone();
 
-    let core_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../.plugins/framework/core.js");
+    let core_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.plugins/framework/core.js");
     let core_code = std::fs::read_to_string(&core_path).expect("Failed to read core.js");
 
     ctx.with(|c| {
@@ -644,12 +644,14 @@ fn test_large_ui_tree_100_plus_elements_gc_and_memory_benchmark() {
         c.eval::<(), _>(build_tree_script).unwrap();
 
         // Warm up / evaluate a 120-element tree
-        c.eval::<(), _>("var sampleTree = generateLargeTree(120);").unwrap();
+        c.eval::<(), _>("var sampleTree = generateLargeTree(120);")
+            .unwrap();
 
         // Benchmark 1: Legacy serialization path (JSON.stringify in JS -> string -> serde_json)
         let start_legacy = Instant::now();
         for _ in 0..30 {
-            c.eval::<(), _>("host_set_ui(JSON.stringify(sampleTree));").unwrap();
+            c.eval::<(), _>("host_set_ui(JSON.stringify(sampleTree));")
+                .unwrap();
         }
         let duration_legacy = start_legacy.elapsed();
 
@@ -676,10 +678,7 @@ fn test_large_ui_tree_100_plus_elements_gc_and_memory_benchmark() {
              - Legacy (JSON.stringify + serde_json): {:?} (GC: {:?})\n\
              - Fast (Direct rquickjs_serde):        {:?} (GC: {:?})\n\
              =================================================================",
-            duration_legacy,
-            gc_duration_legacy,
-            duration_fast,
-            gc_duration_fast,
+            duration_legacy, gc_duration_legacy, duration_fast, gc_duration_fast,
         );
 
         // Verify that the tree produced in Rust by the fast path contains all 120 children
@@ -687,8 +686,17 @@ fn test_large_ui_tree_100_plus_elements_gc_and_memory_benchmark() {
         let tree = tree_guard.as_ref().expect("ui_tree must be populated");
         if let Element::Container { id, children, .. } = tree {
             assert_eq!(id, &Some("app_drawer_root".to_string()));
-            assert_eq!(children.len(), 120, "Must contain exactly 120 elements in root container");
-            if let Element::Container { id: card_id, children: card_children, .. } = &children[50] {
+            assert_eq!(
+                children.len(),
+                120,
+                "Must contain exactly 120 elements in root container"
+            );
+            if let Element::Container {
+                id: card_id,
+                children: card_children,
+                ..
+            } = &children[50]
+            {
                 assert_eq!(card_id, &Some("app_card_50".to_string()));
                 assert_eq!(card_children.len(), 1);
                 if let Element::Label { text, .. } = &card_children[0] {
@@ -704,4 +712,3 @@ fn test_large_ui_tree_100_plus_elements_gc_and_memory_benchmark() {
         }
     });
 }
-
