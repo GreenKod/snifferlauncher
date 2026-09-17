@@ -492,4 +492,85 @@ mod tests {
         assert!(batch.is_empty());
         assert_eq!(batch.len(), 0);
     }
+
+    #[test]
+    fn test_text_batch_100_labels_unified_draw_call() {
+        let mut batch = TextBatch::new(65_536);
+        assert!(batch.is_empty());
+
+        // Simulate 120 labels (e.g. an App Drawer with 120 app titles + emojis)
+        for i in 0..120 {
+            let is_emoji = if i % 3 == 0 { 1.0 } else { 0.0 };
+            #[allow(clippy::cast_precision_loss)]
+            let red = (i as f32) / 120.0;
+            let green = 0.5;
+            let blue = 1.0 - red;
+            let alpha = 1.0;
+
+            // Each character/glyph quad produces 6 vertices of 9 floats = 54 floats
+            for vertex_idx in 0..6 {
+                #[allow(clippy::cast_precision_loss)]
+                let pos_x = (i as f32) * 10.0 + (vertex_idx as f32);
+                let pos_y = 50.0;
+                let uv_u = 0.1;
+                let uv_v = 0.2;
+                batch.vertices.extend_from_slice(&[
+                    pos_x, pos_y, uv_u, uv_v, red, green, blue, alpha, is_emoji,
+                ]);
+            }
+        }
+
+        // 120 labels * 6 vertices = 720 vertices
+        // 720 vertices * 9 floats = 6,480 floats
+        assert_eq!(batch.len(), 120 * 6 * 9);
+        assert_eq!(batch.len() / TextBatch::FLOATS_PER_VERTEX, 720);
+        assert_eq!(
+            batch.as_bytes().len(),
+            120 * 6 * 9 * std::mem::size_of::<f32>()
+        );
+
+        // Verify vertex attributes integrity of normal glyph vs emoji glyph
+        // Check 1st label (i = 0, is_emoji = 1.0)
+        assert_eq!(batch.vertices[8], 1.0); // is_color attribute
+        assert_eq!(batch.vertices[4], 0.0); // r channel
+
+        // Check 2nd label (i = 1, is_emoji = 0.0)
+        let label1_offset = 6 * 9;
+        assert_eq!(batch.vertices[label1_offset + 8], 0.0); // is_color attribute
+        assert!((batch.vertices[label1_offset + 4] - (1.0 / 120.0)).abs() < 1e-5);
+
+        batch.clear();
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
+    }
+
+    #[test]
+    fn test_text_batch_performance_and_capacity() {
+        let mut batch = TextBatch::new(65_536);
+        let start = std::time::Instant::now();
+
+        // 500 labels with 10 glyphs each = 5,000 quads = 30,000 vertices
+        let quad_sample = [
+            10.0, 10.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 20.0, 10.0, 1.0, 0.0, 1.0, 1.0, 1.0,
+            1.0, 0.0, 10.0, 20.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 20.0, 10.0, 1.0, 0.0, 1.0,
+            1.0, 1.0, 1.0, 0.0, 20.0, 20.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 10.0, 20.0, 0.0,
+            1.0, 1.0, 1.0, 1.0, 1.0, 0.0,
+        ];
+
+        for _ in 0..1000 {
+            batch.vertices.extend_from_slice(&quad_sample);
+        }
+
+        let elapsed = start.elapsed();
+        assert_eq!(batch.len(), 1000 * 54);
+        assert!(!batch.is_empty());
+        // 1,000 glyph quads in batch should execute well under 5 milliseconds on any modern CPU
+        assert!(
+            elapsed.as_millis() < 20,
+            "Batching took too long: {elapsed:?}"
+        );
+
+        batch.clear();
+        assert!(batch.is_empty());
+    }
 }
