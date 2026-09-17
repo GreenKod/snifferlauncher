@@ -451,3 +451,257 @@ fn test_host_set_ui_fast_direct_deserialization_bypasses_json_stringify() {
         panic!("Expected Container element");
     }
 }
+
+#[test]
+fn test_sniffer_ui_framework_routes_to_host_set_ui_fast_when_available() {
+    use rquickjs::Function;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let legacy_call_count = Arc::new(AtomicUsize::new(0));
+    let fast_call_count = Arc::new(AtomicUsize::new(0));
+
+    let legacy_clone = legacy_call_count.clone();
+    let fast_clone = fast_call_count.clone();
+
+    let framework_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.plugins/framework/sniffer_ui.js");
+    let framework_code =
+        std::fs::read_to_string(&framework_path).expect("Failed to read sniffer_ui.js");
+
+    ctx.with(|c| {
+        // Register mock host_set_ui (legacy)
+        c.globals()
+            .set(
+                "host_set_ui",
+                Function::new(c.clone(), move |_json: String| {
+                    legacy_clone.fetch_add(1, Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        // Register mock host_set_ui_fast (fast path)
+        c.globals()
+            .set(
+                "host_set_ui_fast",
+                Function::new(c.clone(), move |_val: rquickjs::Value| {
+                    fast_clone.fetch_add(1, Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        // Eval framework
+        c.eval::<(), _>(framework_code.as_bytes()).unwrap();
+
+        // Start SnifferUI
+        let test_script = r#"
+            SnifferUI.start(function() {
+                return { Container: { id: "test_root", style: {}, children: [] } };
+            }, {});
+        "#;
+        c.eval::<(), _>(test_script).unwrap();
+
+        // Verify that host_set_ui_fast was called, and legacy host_set_ui was completely bypassed
+        assert_eq!(
+            fast_call_count.load(Ordering::SeqCst),
+            1,
+            "host_set_ui_fast must be called"
+        );
+        assert_eq!(
+            legacy_call_count.load(Ordering::SeqCst),
+            0,
+            "legacy host_set_ui must NOT be called"
+        );
+
+        // Mutate state and force update
+        c.eval::<(), _>("SnifferUI.setState({ updated: true });")
+            .unwrap();
+        assert_eq!(fast_call_count.load(Ordering::SeqCst), 2);
+        assert_eq!(legacy_call_count.load(Ordering::SeqCst), 0);
+    });
+}
+
+#[test]
+fn test_sniffer_ui_core_js_routes_to_host_set_ui_fast() {
+    use rquickjs::Function;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let legacy_call_count = Arc::new(AtomicUsize::new(0));
+    let fast_call_count = Arc::new(AtomicUsize::new(0));
+
+    let legacy_clone = legacy_call_count.clone();
+    let fast_clone = fast_call_count.clone();
+
+    let core_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.plugins/framework/core.js");
+    let core_code = std::fs::read_to_string(&core_path).expect("Failed to read core.js");
+
+    ctx.with(|c| {
+        c.globals()
+            .set(
+                "host_set_ui",
+                Function::new(c.clone(), move |_json: String| {
+                    legacy_clone.fetch_add(1, Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        c.globals()
+            .set(
+                "host_set_ui_fast",
+                Function::new(c.clone(), move |_val: rquickjs::Value| {
+                    fast_clone.fetch_add(1, Ordering::SeqCst);
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        c.eval::<(), _>(core_code.as_bytes()).unwrap();
+
+        let test_script = r#"
+            SnifferUI.start(function() {
+                return { Container: { id: "core_root", style: {}, children: [] } };
+            }, {});
+        "#;
+        c.eval::<(), _>(test_script).unwrap();
+
+        assert_eq!(fast_call_count.load(Ordering::SeqCst), 1);
+        assert_eq!(legacy_call_count.load(Ordering::SeqCst), 0);
+    });
+}
+
+#[test]
+fn test_large_ui_tree_100_plus_elements_gc_and_memory_benchmark() {
+    use sniffer_core::types::Element;
+    use std::sync::{Arc, Mutex};
+    use std::time::Instant;
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let ui_tree = Arc::new(Mutex::new(None));
+    let perms = vec!["plugin.permission.UI".to_string()];
+    let granted = Arc::new(Mutex::new(perms.clone()));
+
+    ctx.with(|c| {
+        sniffer_plugin::js::bindings_ui::register_ui_bindings(
+            &c,
+            &c.globals(),
+            ui_tree.clone(),
+            &perms,
+            granted,
+            None,
+        );
+
+        // Define a generator script that creates a 120-item UI tree (typical app drawer / dock)
+        let build_tree_script = r#"
+            function generateLargeTree(count) {
+                const children = [];
+                for (let i = 0; i < count; i++) {
+                    children.push({
+                        Container: {
+                            id: "app_card_" + i,
+                            style: {
+                                opacity: 1.0,
+                                flex_direction: "Column"
+                            },
+                            children: [
+                                {
+                                    Label: {
+                                        id: "app_title_" + i,
+                                        text: "Application " + i,
+                                        style: {
+                                            text_size: 14.0
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    });
+                }
+                return {
+                    Container: {
+                        id: "app_drawer_root",
+                        style: {
+                            flex_direction: "Column"
+                        },
+                        children: children
+                    }
+                };
+            }
+            globalThis.generateLargeTree = generateLargeTree;
+        "#;
+        c.eval::<(), _>(build_tree_script).unwrap();
+
+        // Warm up / evaluate a 120-element tree
+        c.eval::<(), _>("var sampleTree = generateLargeTree(120);").unwrap();
+
+        // Benchmark 1: Legacy serialization path (JSON.stringify in JS -> string -> serde_json)
+        let start_legacy = Instant::now();
+        for _ in 0..30 {
+            c.eval::<(), _>("host_set_ui(JSON.stringify(sampleTree));").unwrap();
+        }
+        let duration_legacy = start_legacy.elapsed();
+
+        // Run GC after legacy runs
+        let gc_start_legacy = Instant::now();
+        c.run_gc();
+        let gc_duration_legacy = gc_start_legacy.elapsed();
+
+        // Benchmark 2: Fast path (Direct QuickJS Value AST -> rquickjs_serde::from_value)
+        let start_fast = Instant::now();
+        for _ in 0..30 {
+            c.eval::<(), _>("host_set_ui_fast(sampleTree);").unwrap();
+        }
+        let duration_fast = start_fast.elapsed();
+
+        // Run GC after fast runs
+        let gc_start_fast = Instant::now();
+        c.run_gc();
+        let gc_duration_fast = gc_start_fast.elapsed();
+
+        println!(
+            "\n=================================================================\n\
+             Stage 6.5 Benchmark (120 UI Elements x 30 iterations):\n\
+             - Legacy (JSON.stringify + serde_json): {:?} (GC: {:?})\n\
+             - Fast (Direct rquickjs_serde):        {:?} (GC: {:?})\n\
+             =================================================================",
+            duration_legacy,
+            gc_duration_legacy,
+            duration_fast,
+            gc_duration_fast,
+        );
+
+        // Verify that the tree produced in Rust by the fast path contains all 120 children
+        let tree_guard = ui_tree.lock().unwrap();
+        let tree = tree_guard.as_ref().expect("ui_tree must be populated");
+        if let Element::Container { id, children, .. } = tree {
+            assert_eq!(id, &Some("app_drawer_root".to_string()));
+            assert_eq!(children.len(), 120, "Must contain exactly 120 elements in root container");
+            if let Element::Container { id: card_id, children: card_children, .. } = &children[50] {
+                assert_eq!(card_id, &Some("app_card_50".to_string()));
+                assert_eq!(card_children.len(), 1);
+                if let Element::Label { text, .. } = &card_children[0] {
+                    assert_eq!(text, "Application 50");
+                } else {
+                    panic!("Expected Label child in card 50");
+                }
+            } else {
+                panic!("Expected Container child for app 50");
+            }
+        } else {
+            panic!("Expected root Container");
+        }
+    });
+}
+
