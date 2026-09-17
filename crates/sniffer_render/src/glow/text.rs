@@ -89,7 +89,18 @@ pub(crate) fn draw_text_impl(
         return;
     };
 
-    renderer.text_batch.clear();
+    let state_changed = renderer.text_batch.current_color.is_some_and(|c| c != col)
+        || renderer
+            .text_batch
+            .current_transform
+            .is_some_and(|mat| mat != t);
+
+    if state_changed || renderer.text_batch.is_full() {
+        renderer.flush_text();
+    }
+
+    renderer.text_batch.current_color = Some(col);
+    renderer.text_batch.current_transform = Some(t);
 
     if let Some(ref atlas) = renderer.font_atlas {
         let scale = size / atlas.rasterize_size;
@@ -218,61 +229,65 @@ pub(crate) fn draw_text_impl(
             curr_x += char_width + gap;
         }
     }
+}
 
-    if renderer.text_batch.is_empty() {
-        return;
-    }
-
-    unsafe {
-        renderer.gl.use_program(Some(renderer.text_program));
-        renderer.ensure_text_vao();
-        renderer.gl.active_texture(glow::TEXTURE0);
-        renderer
-            .gl
-            .bind_texture(glow::TEXTURE_2D, Some(renderer.font_texture));
-
-        let u = &renderer.text_uniforms;
-
-        renderer.gl.uniform_2_f32(
-            u.u_resolution.as_ref(),
-            renderer.resolution.0,
-            renderer.resolution.1,
-        );
-        renderer
-            .gl
-            .uniform_4_f32(u.u_color.as_ref(), col[0], col[1], col[2], col[3]);
-        renderer
-            .gl
-            .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, &t);
-
-        renderer
-            .gl
-            .bind_buffer(glow::ARRAY_BUFFER, Some(renderer.text_vertex_buffer));
-
-        if !renderer.text_batch.normal_vertices.is_empty() {
-            renderer.gl.uniform_1_i32(u.u_is_color.as_ref(), 0);
-            renderer.gl.buffer_data_u8_slice(
-                glow::ARRAY_BUFFER,
-                renderer.text_batch.as_normal_bytes(),
-                glow::DYNAMIC_DRAW,
-            );
-            let vert_count = i32::try_from(renderer.text_batch.normal_vertices.len() / 4)
-                .expect("vertex count fits in i32");
-            renderer.gl.draw_arrays(glow::TRIANGLES, 0, vert_count);
+impl GlowRenderer {
+    pub fn flush_text(&mut self) {
+        if self.text_batch.is_empty() {
+            return;
         }
 
-        if !renderer.text_batch.color_vertices.is_empty() {
-            renderer.gl.uniform_1_i32(u.u_is_color.as_ref(), 1);
-            renderer.gl.buffer_data_u8_slice(
-                glow::ARRAY_BUFFER,
-                renderer.text_batch.as_color_bytes(),
-                glow::DYNAMIC_DRAW,
-            );
-            let vert_count = i32::try_from(renderer.text_batch.color_vertices.len() / 4)
-                .expect("vertex count fits in i32");
-            renderer.gl.draw_arrays(glow::TRIANGLES, 0, vert_count);
-        }
-    }
+        unsafe {
+            self.gl.use_program(Some(self.text_program));
+            self.ensure_text_instance_vao();
+            self.gl.active_texture(glow::TEXTURE0);
+            self.gl
+                .bind_texture(glow::TEXTURE_2D, Some(self.font_texture));
 
-    renderer.text_batch.clear();
+            let u = &self.text_uniforms;
+
+            self.gl.uniform_2_f32(
+                u.u_resolution.as_ref(),
+                self.resolution.0,
+                self.resolution.1,
+            );
+            if let Some(col) = self.text_batch.current_color {
+                self.gl
+                    .uniform_4_f32(u.u_color.as_ref(), col[0], col[1], col[2], col[3]);
+            }
+            if let Some(t) = self.text_batch.current_transform {
+                self.gl
+                    .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, &t);
+            }
+
+            self.gl
+                .bind_buffer(glow::ARRAY_BUFFER, Some(self.text_instance_vbo));
+
+            if !self.text_batch.normal_vertices.is_empty() {
+                self.gl.uniform_1_i32(u.u_is_color.as_ref(), 0);
+                self.gl.buffer_data_u8_slice(
+                    glow::ARRAY_BUFFER,
+                    self.text_batch.as_normal_bytes(),
+                    glow::DYNAMIC_DRAW,
+                );
+                let vert_count = i32::try_from(self.text_batch.normal_vertices.len() / 4)
+                    .expect("vertex count fits in i32");
+                self.gl.draw_arrays(glow::TRIANGLES, 0, vert_count);
+            }
+
+            if !self.text_batch.color_vertices.is_empty() {
+                self.gl.uniform_1_i32(u.u_is_color.as_ref(), 1);
+                self.gl.buffer_data_u8_slice(
+                    glow::ARRAY_BUFFER,
+                    self.text_batch.as_color_bytes(),
+                    glow::DYNAMIC_DRAW,
+                );
+                let vert_count = i32::try_from(self.text_batch.color_vertices.len() / 4)
+                    .expect("vertex count fits in i32");
+                self.gl.draw_arrays(glow::TRIANGLES, 0, vert_count);
+            }
+        }
+
+        self.text_batch.clear();
+    }
 }

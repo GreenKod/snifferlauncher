@@ -18,13 +18,8 @@ pub struct GlowRenderer {
     pub(crate) gl: glow::Context,
     pub(crate) quad_vertex_array: glow::VertexArray,
     pub(crate) _quad_vertex_buffer: glow::Buffer,
-    pub(crate) text_vertex_array: glow::VertexArray,
-    pub(crate) text_vertex_buffer: glow::Buffer,
-    #[allow(dead_code)]
     pub(crate) text_instance_vao: glow::VertexArray,
-    #[allow(dead_code)]
     pub(crate) text_instance_vbo: glow::Buffer,
-    #[allow(dead_code)]
     pub(crate) text_batch: batching::TextBatch,
     pub(crate) shape_instance_vao: glow::VertexArray,
     pub(crate) shape_instance_vbo: glow::Buffer,
@@ -249,8 +244,6 @@ impl GlowRenderer {
                 gl,
                 quad_vertex_array,
                 _quad_vertex_buffer: quad_vertex_buffer,
-                text_vertex_array,
-                text_vertex_buffer,
                 text_instance_vao: text_vertex_array,
                 text_instance_vbo: text_vertex_buffer,
                 text_batch: batching::TextBatch::default(),
@@ -288,17 +281,6 @@ impl GlowRenderer {
     }
 
     #[inline]
-    pub(crate) unsafe fn ensure_text_vao(&mut self) {
-        if self.current_vao != Some(self.text_vertex_array) {
-            unsafe {
-                self.gl.bind_vertex_array(Some(self.text_vertex_array));
-            }
-            self.current_vao = Some(self.text_vertex_array);
-        }
-    }
-
-    #[inline]
-    #[allow(dead_code)]
     pub(crate) unsafe fn ensure_text_instance_vao(&mut self) {
         if self.current_vao != Some(self.text_instance_vao) {
             unsafe {
@@ -336,6 +318,7 @@ impl GlowRenderer {
         self.draw_shadow_impl(dummy_rect, 0.0, 5.0, 10.0, alpha_zero);
         self.draw_circle_impl(0.0, 0.0, 1.0, alpha_zero);
         text::draw_text_impl(self, "W", 0.0, 0.0, 12.0, alpha_zero);
+        self.flush_text();
 
         unsafe {
             self.gl.enable(glow::SCISSOR_TEST);
