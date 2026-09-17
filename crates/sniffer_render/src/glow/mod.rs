@@ -82,10 +82,16 @@ impl GlowRenderer {
             gl.bind_vertex_array(Some(text_vertex_array));
             let text_vertex_buffer = gl.create_buffer()?;
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(text_vertex_buffer));
+            let text_stride =
+                i32::try_from(9 * std::mem::size_of::<f32>()).expect("text stride fits in i32");
             gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 16, 0);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, text_stride, 0);
             gl.enable_vertex_attrib_array(1);
-            gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, 16, 8);
+            gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, text_stride, 8);
+            gl.enable_vertex_attrib_array(2);
+            gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, text_stride, 16);
+            gl.enable_vertex_attrib_array(3);
+            gl.vertex_attrib_pointer_f32(3, 1, glow::FLOAT, false, text_stride, 32);
 
             let shape_instance_vao = gl.create_vertex_array()?;
             gl.bind_vertex_array(Some(shape_instance_vao));

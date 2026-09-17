@@ -94,24 +94,21 @@ impl Default for QuadBatch {
 }
 
 pub struct TextBatch {
-    pub normal_vertices: Vec<f32>,
-    pub color_vertices: Vec<f32>,
+    pub vertices: Vec<f32>,
     pub max_capacity: usize,
-    pub current_color: Option<[f32; 4]>,
     pub current_transform: Option<[f32; 9]>,
 }
 
 impl TextBatch {
     pub const DEFAULT_MAX_CAPACITY: usize = 65_536;
     pub const INITIAL_CAPACITY: usize = 2_048;
+    pub const FLOATS_PER_VERTEX: usize = 9;
 
     #[must_use]
     pub fn new(max_capacity: usize) -> Self {
         Self {
-            normal_vertices: Vec::with_capacity(Self::INITIAL_CAPACITY.min(max_capacity)),
-            color_vertices: Vec::new(),
+            vertices: Vec::with_capacity(Self::INITIAL_CAPACITY.min(max_capacity)),
             max_capacity,
-            current_color: None,
             current_transform: None,
         }
     }
@@ -119,13 +116,13 @@ impl TextBatch {
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.normal_vertices.is_empty() && self.color_vertices.is_empty()
+        self.vertices.is_empty()
     }
 
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.normal_vertices.len() + self.color_vertices.len()
+        self.vertices.len()
     }
 
     #[inline]
@@ -136,30 +133,17 @@ impl TextBatch {
 
     #[inline]
     pub fn clear(&mut self) {
-        self.normal_vertices.clear();
-        self.color_vertices.clear();
-        self.current_color = None;
+        self.vertices.clear();
         self.current_transform = None;
     }
 
     #[inline]
     #[must_use]
-    pub fn as_normal_bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             std::slice::from_raw_parts(
-                self.normal_vertices.as_ptr().cast::<u8>(),
-                self.normal_vertices.len() * std::mem::size_of::<f32>(),
-            )
-        }
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn as_color_bytes(&self) -> &[u8] {
-        unsafe {
-            std::slice::from_raw_parts(
-                self.color_vertices.as_ptr().cast::<u8>(),
-                self.color_vertices.len() * std::mem::size_of::<f32>(),
+                self.vertices.as_ptr().cast::<u8>(),
+                self.vertices.len() * std::mem::size_of::<f32>(),
             )
         }
     }
@@ -498,16 +482,11 @@ mod tests {
         assert_eq!(batch.len(), 0);
 
         batch
-            .normal_vertices
-            .extend_from_slice(&[1.0, 2.0, 3.0, 4.0]);
-        batch.color_vertices.extend_from_slice(&[5.0, 6.0]);
+            .vertices
+            .extend_from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
         assert!(!batch.is_empty());
-        assert_eq!(batch.len(), 6);
-        assert_eq!(
-            batch.as_normal_bytes().len(),
-            4 * std::mem::size_of::<f32>()
-        );
-        assert_eq!(batch.as_color_bytes().len(), 2 * std::mem::size_of::<f32>());
+        assert_eq!(batch.len(), 9);
+        assert_eq!(batch.as_bytes().len(), 9 * std::mem::size_of::<f32>());
 
         batch.clear();
         assert!(batch.is_empty());
