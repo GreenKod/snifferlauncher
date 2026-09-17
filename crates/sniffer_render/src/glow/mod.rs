@@ -20,6 +20,12 @@ pub struct GlowRenderer {
     pub(crate) _quad_vertex_buffer: glow::Buffer,
     pub(crate) text_vertex_array: glow::VertexArray,
     pub(crate) text_vertex_buffer: glow::Buffer,
+    #[allow(dead_code)]
+    pub(crate) text_instance_vao: glow::VertexArray,
+    #[allow(dead_code)]
+    pub(crate) text_instance_vbo: glow::Buffer,
+    #[allow(dead_code)]
+    pub(crate) text_batch: batching::TextBatch,
     pub(crate) shape_instance_vao: glow::VertexArray,
     pub(crate) shape_instance_vbo: glow::Buffer,
     pub(crate) shape_batch: batching::QuadBatch,
@@ -245,6 +251,9 @@ impl GlowRenderer {
                 _quad_vertex_buffer: quad_vertex_buffer,
                 text_vertex_array,
                 text_vertex_buffer,
+                text_instance_vao: text_vertex_array,
+                text_instance_vbo: text_vertex_buffer,
+                text_batch: batching::TextBatch::default(),
                 shape_instance_vao,
                 shape_instance_vbo,
                 shape_batch: batching::QuadBatch::default(),
@@ -285,6 +294,17 @@ impl GlowRenderer {
                 self.gl.bind_vertex_array(Some(self.text_vertex_array));
             }
             self.current_vao = Some(self.text_vertex_array);
+        }
+    }
+
+    #[inline]
+    #[allow(dead_code)]
+    pub(crate) unsafe fn ensure_text_instance_vao(&mut self) {
+        if self.current_vao != Some(self.text_instance_vao) {
+            unsafe {
+                self.gl.bind_vertex_array(Some(self.text_instance_vao));
+            }
+            self.current_vao = Some(self.text_instance_vao);
         }
     }
 
