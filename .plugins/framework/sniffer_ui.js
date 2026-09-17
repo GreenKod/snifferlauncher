@@ -49,6 +49,14 @@ const SnifferUI = (function () {
         }
 
         const ui = _renderFn(_state);
+
+        if (typeof host_set_ui_fast === "function") {
+            _lastState = currentSnapshot;
+            _lastJson = null;
+            host_set_ui_fast(ui);
+            return;
+        }
+
         const json = JSON.stringify(ui);
 
         if (!force && json === _lastJson) {
