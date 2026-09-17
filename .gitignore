@@ -66,3 +66,6 @@ scratch/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# --- Project Planning & Local Documentation ---
+docs/
