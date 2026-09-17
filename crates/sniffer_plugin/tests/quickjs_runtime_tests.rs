@@ -675,10 +675,9 @@ fn test_large_ui_tree_100_plus_elements_gc_and_memory_benchmark() {
         println!(
             "\n=================================================================\n\
              Stage 6.5 Benchmark (120 UI Elements x 30 iterations):\n\
-             - Legacy (JSON.stringify + serde_json): {:?} (GC: {:?})\n\
-             - Fast (Direct rquickjs_serde):        {:?} (GC: {:?})\n\
-             =================================================================",
-            duration_legacy, gc_duration_legacy, duration_fast, gc_duration_fast,
+             - Legacy (JSON.stringify + serde_json): {duration_legacy:?} (GC: {gc_duration_legacy:?})\n\
+             - Fast (Direct rquickjs_serde):        {duration_fast:?} (GC: {gc_duration_fast:?})\n\
+             ================================================================="
         );
 
         // Verify that the tree produced in Rust by the fast path contains all 120 children
