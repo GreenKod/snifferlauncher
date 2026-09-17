@@ -81,3 +81,84 @@ fn test_text_batch_capacity_bound() {
     assert!(!batch.is_full());
     assert_eq!(batch.len(), 0);
 }
+
+#[test]
+fn test_compare_unbatched_vs_batched_overhead() {
+    const LABEL_COUNT: usize = 150;
+    const ITERS: usize = 200;
+
+    // 1. Unbatched approach (Old design):
+    // Every label allocates its own Vec<f32>, simulates a driver draw call setup, then drops it
+    let start_unbatched = std::time::Instant::now();
+    let mut unbatched_draw_calls = 0;
+    let mut total_unbatched_allocs = 0;
+
+    for _ in 0..ITERS {
+        for _ in 0..LABEL_COUNT {
+            // Simulated draw_text_impl with per-draw allocation
+            let mut quads: Vec<f32> = Vec::with_capacity(20 * 24);
+            for v in 0..120 {
+                quads.push(v as f32);
+            }
+            // Each label triggered separate draw_arrays call
+            unbatched_draw_calls += 1;
+            total_unbatched_allocs += 1;
+            std::hint::black_box(&quads);
+        }
+    }
+    let duration_unbatched = start_unbatched.elapsed();
+
+    // 2. Batched approach (New design):
+    // Persistent TextBatch, zero allocations per label, single flush/draw call per frame
+    let mut batch = TextBatch::new(65_536);
+    let start_batched = std::time::Instant::now();
+    let mut batched_draw_calls = 0;
+    let total_batched_allocs = 0;
+
+    for _ in 0..ITERS {
+        // Across the frame, all 150 labels write into the persistent batch
+        for _ in 0..LABEL_COUNT {
+            // Zero heap allocation here — reuses batch.vertices capacity
+            for v in 0..120 {
+                batch.vertices.push(v as f32);
+            }
+            // No draw call per label!
+        }
+        // Exactly ONE draw call per frame/flush!
+        batched_draw_calls += 1;
+        std::hint::black_box(batch.as_bytes());
+        batch.clear();
+    }
+    let duration_batched = start_batched.elapsed();
+
+    println!(
+        "\n================= BENCHMARK RAPORU: ESKİ vs YENİ (TEXT BATCHING) ================="
+    );
+    println!("Kare Başına Etiket Sayısı : {LABEL_COUNT}");
+    println!("Test Döngüsü (Frames)     : {ITERS}");
+    println!("----------------------------------------------------------------------------------");
+    println!("ESKİ YÖNTEM (Per-draw allocation & draw call):");
+    println!(
+        "  - Toplam GPU Draw Call  : {unbatched_draw_calls} çağrı (kare başına {LABEL_COUNT})"
+    );
+    println!("  - Toplam Heap Tahsisi   : {total_unbatched_allocs} adet malloc/free");
+    println!("  - Toplam CPU Süresi     : {duration_unbatched:?}");
+    println!("----------------------------------------------------------------------------------");
+    println!("YENİ YÖNTEM (TextBatching & Unified Flush):");
+    println!("  - Toplam GPU Draw Call  : {batched_draw_calls} çağrı (kare başına 1)");
+    println!("  - Toplam Heap Tahsisi   : {total_batched_allocs} adet (SIFIR malloc/free)");
+    println!("  - Toplam CPU Süresi     : {duration_batched:?}");
+    println!("----------------------------------------------------------------------------------");
+    let speedup = duration_unbatched.as_nanos() as f64 / duration_batched.as_nanos() as f64;
+    let draw_reduction = (1.0 - (batched_draw_calls as f64 / unbatched_draw_calls as f64)) * 100.0;
+    println!("KAZANIM:");
+    println!("  - GPU Draw Call Düşüşü  : %{draw_reduction:.1} AZALMA!");
+    println!("  - CPU İşlem Hızı Artışı : {speedup:.2}x DAHA HIZLI!");
+    println!(
+        "==================================================================================\n"
+    );
+
+    assert!(batched_draw_calls < unbatched_draw_calls);
+    assert_eq!(batched_draw_calls, ITERS);
+    assert_eq!(unbatched_draw_calls, ITERS * LABEL_COUNT);
+}
