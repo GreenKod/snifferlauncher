@@ -1,7 +1,7 @@
 use crate::js::permission_manager::permission_granted;
 use crate::{dev_err, dev_log};
 use obfstr::obfstr;
-use rquickjs::{Ctx, Function, Object};
+use rquickjs::{Ctx, Function, Object, Value};
 use sniffer_core::types::Element;
 use std::path::PathBuf;
 use std::sync::mpsc::SyncSender;
@@ -113,9 +113,24 @@ pub fn register_ui_bindings<'js>(
 ) {
     let mutation_buffer = Arc::new(MutationBuffer::default());
 
-    // host_set_ui
+    // Shared UI mutation committer
     let mut_set_ui = mutation_buffer.clone();
     let tree_set_ui = ui_tree.clone();
+    let cache_path_apply = cache_path.clone();
+    let apply_element = Arc::new(move |parsed: Element| {
+        if let Ok(mut lock) = mut_set_ui.mutations.lock() {
+            lock.push(UiMutation::SetUi(parsed.clone()));
+        }
+        mut_set_ui.flush(&tree_set_ui);
+        if let Some(path) = cache_path_apply.clone()
+            && let Ok(bytes) = postcard::to_allocvec(&parsed)
+        {
+            enqueue_cache_write(path, bytes);
+        }
+    });
+
+    // host_set_ui (legacy JSON string binder)
+    let apply_ui = Arc::clone(&apply_element);
     let plugin_permissions_ui = plugin_permissions.to_vec();
     let granted_permissions_ui = granted_permissions.clone();
     let set_ui_func = Function::new(ctx.clone(), move |json_str: String| {
@@ -129,15 +144,7 @@ pub fn register_ui_bindings<'js>(
 
         match serde_json::from_str::<Element>(&json_str) {
             Ok(parsed) => {
-                if let Ok(mut lock) = mut_set_ui.mutations.lock() {
-                    lock.push(UiMutation::SetUi(parsed.clone()));
-                }
-                mut_set_ui.flush(&tree_set_ui);
-                if let Some(path) = cache_path.clone()
-                    && let Ok(bytes) = postcard::to_allocvec(&parsed)
-                {
-                    enqueue_cache_write(path, bytes);
-                }
+                apply_ui(parsed);
             }
             Err(e) => {
                 let col = e.column();
@@ -157,6 +164,87 @@ pub fn register_ui_bindings<'js>(
     })
     .unwrap();
     globals.set(obfstr!("host_set_ui"), set_ui_func).unwrap();
+
+    // host_set_ui_fast (Stage 6.2 alternative binder accepting Value / Object directly)
+    let apply_ui_fast = Arc::clone(&apply_element);
+    let plugin_permissions_ui_fast = plugin_permissions.to_vec();
+    let granted_permissions_ui_fast = granted_permissions.clone();
+    let set_ui_fast_func = Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>, val: Value<'js>| {
+            if !permission_granted(
+                obfstr!("plugin.permission.UI"),
+                &plugin_permissions_ui_fast,
+                &granted_permissions_ui_fast,
+            ) {
+                return;
+            }
+
+            let json_str = if let Some(s) = val.as_string() {
+                match s.to_string() {
+                    Ok(s) => s,
+                    Err(e) => {
+                        dev_err!(
+                            "{}: {e}",
+                            obfstr!("JS Error: Failed to extract host_set_ui_fast string")
+                        );
+                        return;
+                    }
+                }
+            } else {
+                match ctx.json_stringify(val) {
+                    Ok(Some(js_str)) => match js_str.to_string() {
+                        Ok(s) => s,
+                        Err(e) => {
+                            dev_err!(
+                                "{}: {e}",
+                                obfstr!("JS Error: Failed to convert host_set_ui_fast string")
+                            );
+                            return;
+                        }
+                    },
+                    Ok(None) => {
+                        dev_err!(
+                            "{}",
+                            obfstr!("JS Error: host_set_ui_fast received undefined or unstringifiable value")
+                        );
+                        return;
+                    }
+                    Err(e) => {
+                        dev_err!(
+                            "{}: {e}",
+                            obfstr!("JS Error: Failed to json_stringify in host_set_ui_fast")
+                        );
+                        return;
+                    }
+                }
+            };
+
+            match serde_json::from_str::<Element>(&json_str) {
+                Ok(parsed) => {
+                    apply_ui_fast(parsed);
+                }
+                Err(e) => {
+                    let col = e.column();
+                    let start = col.saturating_sub(50);
+                    let end = (col + 50).min(json_str.len());
+                    let snippet = if start < json_str.len() {
+                        &json_str[start..end]
+                    } else {
+                        ""
+                    };
+                    dev_err!(
+                        "{}: {e} (around col {col}: '{snippet}')",
+                        obfstr!("JS Error: Failed to parse host_set_ui_fast JSON")
+                    );
+                }
+            }
+        },
+    )
+    .unwrap();
+    globals
+        .set(obfstr!("host_set_ui_fast"), set_ui_fast_func)
+        .unwrap();
 
     // host_update_style
     let mut_update_style = mutation_buffer.clone();

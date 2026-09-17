@@ -249,3 +249,122 @@ fn test_sniffer_ui_commit_shallow_dirty_check() {
         );
     });
 }
+
+#[test]
+fn test_host_set_ui_fast_object_and_string_binding() {
+    use sniffer_core::types::Element;
+    use std::sync::{Arc, Mutex};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let ui_tree = Arc::new(Mutex::new(None));
+    let perms = vec!["plugin.permission.UI".to_string()];
+    let granted = Arc::new(Mutex::new(perms.clone()));
+
+    ctx.with(|c| {
+        sniffer_plugin::js::bindings_ui::register_ui_bindings(
+            &c,
+            &c.globals(),
+            ui_tree.clone(),
+            &perms,
+            granted,
+            None,
+        );
+
+        // 1. Pass raw JS Object directly without JSON.stringify
+        let script = r#"
+            host_set_ui_fast({
+                Container: {
+                    id: "fast_container",
+                    style: {},
+                    children: [
+                        { Label: { id: null, text: "Direct Object AST", style: {} } }
+                    ]
+                }
+            });
+        "#;
+        c.eval::<(), _>(script).unwrap();
+    });
+
+    let tree = ui_tree.lock().unwrap().clone();
+    assert!(
+        tree.is_some(),
+        "ui_tree should be populated by host_set_ui_fast"
+    );
+    if let Some(Element::Container { id, children, .. }) = tree {
+        assert_eq!(id, Some("fast_container".to_string()));
+        assert_eq!(children.len(), 1);
+        if let Element::Label { text, .. } = &children[0] {
+            assert_eq!(text, "Direct Object AST");
+        } else {
+            panic!("Expected Label child");
+        }
+    } else {
+        panic!("Expected Container element");
+    }
+
+    // 2. Pass JSON String for backward compatibility
+    ctx.with(|c| {
+        let script = r#"
+            host_set_ui_fast(JSON.stringify({
+                Label: {
+                    id: "string_label",
+                    text: "String fallback",
+                    style: {}
+                }
+            }));
+        "#;
+        c.eval::<(), _>(script).unwrap();
+    });
+
+    let tree2 = ui_tree.lock().unwrap().clone();
+    assert!(tree2.is_some());
+    if let Some(Element::Label { id, text, .. }) = tree2 {
+        assert_eq!(id, Some("string_label".to_string()));
+        assert_eq!(text, "String fallback");
+    } else {
+        panic!("Expected Label element");
+    }
+}
+
+#[test]
+fn test_host_set_ui_fast_permission_gated() {
+    use std::sync::{Arc, Mutex};
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    let ui_tree = Arc::new(Mutex::new(None));
+    // No UI permission granted
+    let perms: Vec<String> = vec![];
+    let granted = Arc::new(Mutex::new(vec![]));
+
+    ctx.with(|c| {
+        sniffer_plugin::js::bindings_ui::register_ui_bindings(
+            &c,
+            &c.globals(),
+            ui_tree.clone(),
+            &perms,
+            granted,
+            None,
+        );
+
+        let script = r#"
+            host_set_ui_fast({
+                Container: {
+                    id: "unauthorized_container",
+                    style: {},
+                    children: []
+                }
+            });
+        "#;
+        c.eval::<(), _>(script).unwrap();
+    });
+
+    assert!(
+        ui_tree.lock().unwrap().is_none(),
+        "ui_tree must remain None when plugin.permission.UI is not granted"
+    );
+}
+
