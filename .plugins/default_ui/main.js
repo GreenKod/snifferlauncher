@@ -295,13 +295,16 @@ if (typeof subscribeChannel === "function") {
     subscribeChannel("dock.ready", function() {
         SnifferUI.forceUpdate();
     });
+    subscribeChannel("devkit_hud.ready", function() {
+        SnifferUI.forceUpdate();
+    });
 }
 
 SnifferUI.start(Root, state);
 
 if (typeof setInterval === "function") {
     setInterval(function() {
-        if (getDevKitHUD() !== null) {
+        if (state.showDevKitHud) {
             SnifferUI.forceUpdate();
         }
     }, 500);
