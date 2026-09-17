@@ -93,6 +93,78 @@ impl Default for QuadBatch {
     }
 }
 
+pub struct TextBatch {
+    pub normal_vertices: Vec<f32>,
+    pub color_vertices: Vec<f32>,
+    pub max_capacity: usize,
+}
+
+impl TextBatch {
+    pub const DEFAULT_MAX_CAPACITY: usize = 65_536;
+    pub const INITIAL_CAPACITY: usize = 2_048;
+
+    #[must_use]
+    pub fn new(max_capacity: usize) -> Self {
+        Self {
+            normal_vertices: Vec::with_capacity(Self::INITIAL_CAPACITY.min(max_capacity)),
+            color_vertices: Vec::new(),
+            max_capacity,
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.normal_vertices.is_empty() && self.color_vertices.is_empty()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.normal_vertices.len() + self.color_vertices.len()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn is_full(&self) -> bool {
+        self.len() >= self.max_capacity
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.normal_vertices.clear();
+        self.color_vertices.clear();
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn as_normal_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                self.normal_vertices.as_ptr().cast::<u8>(),
+                self.normal_vertices.len() * std::mem::size_of::<f32>(),
+            )
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn as_color_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                self.color_vertices.as_ptr().cast::<u8>(),
+                self.color_vertices.len() * std::mem::size_of::<f32>(),
+            )
+        }
+    }
+}
+
+impl Default for TextBatch {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_MAX_CAPACITY)
+    }
+}
+
 pub(crate) fn unpack_color(color: u32) -> [f32; 4] {
     let a =
         f32::from(u8::try_from((color >> 24) & 0xff).expect("alpha channel fits in u8")) / 255.0;
@@ -411,5 +483,28 @@ mod tests {
         assert_eq!(instance.is_gradient, 1.0);
         assert_eq!(instance.is_circle, 0.0);
         assert_eq!(instance.is_shadow, 0.0);
+    }
+
+    #[test]
+    fn test_text_batch_lifecycle() {
+        let mut batch = TextBatch::new(100);
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
+
+        batch
+            .normal_vertices
+            .extend_from_slice(&[1.0, 2.0, 3.0, 4.0]);
+        batch.color_vertices.extend_from_slice(&[5.0, 6.0]);
+        assert!(!batch.is_empty());
+        assert_eq!(batch.len(), 6);
+        assert_eq!(
+            batch.as_normal_bytes().len(),
+            4 * std::mem::size_of::<f32>()
+        );
+        assert_eq!(batch.as_color_bytes().len(), 2 * std::mem::size_of::<f32>());
+
+        batch.clear();
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
     }
 }
