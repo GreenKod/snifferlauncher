@@ -367,4 +367,3 @@ fn test_host_set_ui_fast_permission_gated() {
         "ui_tree must remain None when plugin.permission.UI is not granted"
     );
 }
-

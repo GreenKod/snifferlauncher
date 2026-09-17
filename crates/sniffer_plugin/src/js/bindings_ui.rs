@@ -169,78 +169,77 @@ pub fn register_ui_bindings<'js>(
     let apply_ui_fast = Arc::clone(&apply_element);
     let plugin_permissions_ui_fast = plugin_permissions.to_vec();
     let granted_permissions_ui_fast = granted_permissions.clone();
-    let set_ui_fast_func = Function::new(
-        ctx.clone(),
-        move |ctx: Ctx<'js>, val: Value<'js>| {
-            if !permission_granted(
-                obfstr!("plugin.permission.UI"),
-                &plugin_permissions_ui_fast,
-                &granted_permissions_ui_fast,
-            ) {
-                return;
-            }
+    let set_ui_fast_func = Function::new(ctx.clone(), move |ctx: Ctx<'js>, val: Value<'js>| {
+        if !permission_granted(
+            obfstr!("plugin.permission.UI"),
+            &plugin_permissions_ui_fast,
+            &granted_permissions_ui_fast,
+        ) {
+            return;
+        }
 
-            let json_str = if let Some(s) = val.as_string() {
-                match s.to_string() {
+        let json_str = if let Some(s) = val.as_string() {
+            match s.to_string() {
+                Ok(s) => s,
+                Err(e) => {
+                    dev_err!(
+                        "{}: {e}",
+                        obfstr!("JS Error: Failed to extract host_set_ui_fast string")
+                    );
+                    return;
+                }
+            }
+        } else {
+            match ctx.json_stringify(val) {
+                Ok(Some(js_str)) => match js_str.to_string() {
                     Ok(s) => s,
                     Err(e) => {
                         dev_err!(
                             "{}: {e}",
-                            obfstr!("JS Error: Failed to extract host_set_ui_fast string")
+                            obfstr!("JS Error: Failed to convert host_set_ui_fast string")
                         );
                         return;
                     }
-                }
-            } else {
-                match ctx.json_stringify(val) {
-                    Ok(Some(js_str)) => match js_str.to_string() {
-                        Ok(s) => s,
-                        Err(e) => {
-                            dev_err!(
-                                "{}: {e}",
-                                obfstr!("JS Error: Failed to convert host_set_ui_fast string")
-                            );
-                            return;
-                        }
-                    },
-                    Ok(None) => {
-                        dev_err!(
-                            "{}",
-                            obfstr!("JS Error: host_set_ui_fast received undefined or unstringifiable value")
-                        );
-                        return;
-                    }
-                    Err(e) => {
-                        dev_err!(
-                            "{}: {e}",
-                            obfstr!("JS Error: Failed to json_stringify in host_set_ui_fast")
-                        );
-                        return;
-                    }
-                }
-            };
-
-            match serde_json::from_str::<Element>(&json_str) {
-                Ok(parsed) => {
-                    apply_ui_fast(parsed);
+                },
+                Ok(None) => {
+                    dev_err!(
+                        "{}",
+                        obfstr!(
+                            "JS Error: host_set_ui_fast received undefined or unstringifiable value"
+                        )
+                    );
+                    return;
                 }
                 Err(e) => {
-                    let col = e.column();
-                    let start = col.saturating_sub(50);
-                    let end = (col + 50).min(json_str.len());
-                    let snippet = if start < json_str.len() {
-                        &json_str[start..end]
-                    } else {
-                        ""
-                    };
                     dev_err!(
-                        "{}: {e} (around col {col}: '{snippet}')",
-                        obfstr!("JS Error: Failed to parse host_set_ui_fast JSON")
+                        "{}: {e}",
+                        obfstr!("JS Error: Failed to json_stringify in host_set_ui_fast")
                     );
+                    return;
                 }
             }
-        },
-    )
+        };
+
+        match serde_json::from_str::<Element>(&json_str) {
+            Ok(parsed) => {
+                apply_ui_fast(parsed);
+            }
+            Err(e) => {
+                let col = e.column();
+                let start = col.saturating_sub(50);
+                let end = (col + 50).min(json_str.len());
+                let snippet = if start < json_str.len() {
+                    &json_str[start..end]
+                } else {
+                    ""
+                };
+                dev_err!(
+                    "{}: {e} (around col {col}: '{snippet}')",
+                    obfstr!("JS Error: Failed to parse host_set_ui_fast JSON")
+                );
+            }
+        }
+    })
     .unwrap();
     globals
         .set(obfstr!("host_set_ui_fast"), set_ui_fast_func)
