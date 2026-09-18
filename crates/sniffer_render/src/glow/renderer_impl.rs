@@ -256,4 +256,103 @@ impl GlowRenderer {
             }
         }
     }
+
+    #[must_use]
+    pub fn active_sdf_clip(&self) -> Option<ClipRegion> {
+        self.clip_stack
+            .iter()
+            .rev()
+            .find(|c| c.is_rounded())
+            .copied()
+    }
+
+    #[must_use]
+    pub fn sdf_clip_data(&self) -> SdfClipData {
+        if let Some(clip) = self.active_sdf_clip() {
+            SdfClipData {
+                rect: [clip.rect.x, clip.rect.y, clip.rect.width, clip.rect.height],
+                radius: clip.radius,
+                inv_transform: clip.inverse_transform(),
+            }
+        } else {
+            SdfClipData::DISABLED
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) unsafe fn upload_clip_uniforms(
+        &self,
+        u_rect: Option<&glow::UniformLocation>,
+        u_radius: Option<&glow::UniformLocation>,
+        u_inv_transform: Option<&glow::UniformLocation>,
+    ) {
+        let clip_data = self.sdf_clip_data();
+        if let Some(loc) = u_rect {
+            unsafe {
+                self.gl.uniform_4_f32(
+                    Some(loc),
+                    clip_data.rect[0],
+                    clip_data.rect[1],
+                    clip_data.rect[2],
+                    clip_data.rect[3],
+                );
+            }
+        }
+        if let Some(loc) = u_radius {
+            unsafe {
+                self.gl.uniform_1_f32(Some(loc), clip_data.radius);
+            }
+        }
+        if let Some(loc) = u_inv_transform {
+            unsafe {
+                self.gl
+                    .uniform_matrix_3_f32_slice(Some(loc), false, &clip_data.inv_transform);
+            }
+        }
+    }
+}
+
+/// Active SDF clipping payload uploaded to fragment shaders for antialiased rounded clipping.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SdfClipData {
+    pub rect: [f32; 4],
+    pub radius: f32,
+    pub inv_transform: [f32; 9],
+}
+
+impl SdfClipData {
+    pub const DISABLED: Self = Self {
+        rect: [0.0, 0.0, 0.0, 0.0],
+        radius: -1.0,
+        inv_transform: ClipRegion::IDENTITY_TRANSFORM,
+    };
+
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        self.radius >= 0.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sdf_clip_data_disabled_state() {
+        let disabled = SdfClipData::DISABLED;
+        assert!(!disabled.is_active());
+        assert_eq!(disabled.radius, -1.0);
+        assert_eq!(disabled.inv_transform, ClipRegion::IDENTITY_TRANSFORM);
+    }
+
+    #[test]
+    fn test_sdf_clip_data_active_state() {
+        let active = SdfClipData {
+            rect: [10.0, 20.0, 100.0, 50.0],
+            radius: 12.0,
+            inv_transform: ClipRegion::IDENTITY_TRANSFORM,
+        };
+        assert!(active.is_active());
+        assert_eq!(active.radius, 12.0);
+    }
 }
