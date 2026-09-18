@@ -2,7 +2,7 @@ use super::{GlowRenderer, batching, f32_to_i32, text};
 use crate::text::font_atlas;
 use glow::HasContext;
 use sniffer_core::math::Rect;
-use sniffer_core::render::Renderer;
+use sniffer_core::render::{ClipRegion, Renderer};
 
 impl Renderer for GlowRenderer {
     fn clear(&mut self, color: u32) {
@@ -88,47 +88,43 @@ impl Renderer for GlowRenderer {
     fn set_clip_rect(&mut self, rect: Rect) {
         self.flush_shapes();
         self.flush_text();
-        unsafe {
-            self.gl.enable(glow::SCISSOR_TEST);
-            let y = self.resolution.1 - rect.y - rect.height;
-            self.gl.scissor(
-                f32_to_i32(rect.x),
-                f32_to_i32(y),
-                f32_to_i32(rect.width),
-                f32_to_i32(rect.height),
-            );
-        }
+        self.clip_stack.clear();
+        self.push_clip_region(ClipRegion::from_rect(rect));
     }
 
     fn clear_clip_rect(&mut self) {
         self.flush_shapes();
         self.flush_text();
-        unsafe {
-            self.gl.disable(glow::SCISSOR_TEST);
-        }
+        self.clip_stack.clear();
+        self.apply_current_clip();
+    }
+
+    fn push_clip_region(&mut self, region: ClipRegion) {
+        self.flush_shapes();
+        self.flush_text();
+        self.clip_stack.push(region);
+        self.apply_current_clip();
+    }
+
+    fn current_clip(&self) -> Option<&ClipRegion> {
+        self.clip_stack.last()
     }
 
     fn push_clip_rect(&mut self, rect: Rect, radius: f32) {
-        let current = if let Some(&(cur_rect, _)) = self.clip_stack.last() {
-            let cx = cur_rect.x.max(rect.x);
-            let cy = cur_rect.y.max(rect.y);
-            let cw = (cur_rect.x + cur_rect.width).min(rect.x + rect.width) - cx;
-            let ch = (cur_rect.y + cur_rect.height).min(rect.y + rect.height) - cy;
-            Rect::new(cx, cy, cw.max(0.0), ch.max(0.0))
-        } else {
-            rect
-        };
-        self.clip_stack.push((current, radius));
-        self.set_clip_rect(current);
+        let current_transform = self
+            .transform_stack
+            .last()
+            .copied()
+            .unwrap_or(ClipRegion::IDENTITY_TRANSFORM);
+        let region = ClipRegion::new(rect, radius, current_transform);
+        self.push_clip_region(region);
     }
 
     fn pop_clip_rect(&mut self) {
+        self.flush_shapes();
+        self.flush_text();
         self.clip_stack.pop();
-        if let Some(&(rect, _)) = self.clip_stack.last() {
-            self.set_clip_rect(rect);
-        } else {
-            self.clear_clip_rect();
-        }
+        self.apply_current_clip();
     }
 
     fn push_transform(&mut self, cx: f32, cy: f32, scale: f32, rotate: f32, tx: f32, ty: f32) {
@@ -233,5 +229,31 @@ impl Renderer for GlowRenderer {
             let scale = size / atlas.rasterize_size;
             atlas.ascent * scale
         })
+    }
+}
+
+impl GlowRenderer {
+    pub(crate) fn apply_current_clip(&mut self) {
+        if self.clip_stack.is_empty() {
+            unsafe {
+                self.gl.disable(glow::SCISSOR_TEST);
+            }
+        } else {
+            let mut combined_bounds = self.clip_stack[0].screen_bounds();
+            for region in &self.clip_stack[1..] {
+                combined_bounds = region.intersect_screen_bounds(combined_bounds);
+            }
+
+            unsafe {
+                self.gl.enable(glow::SCISSOR_TEST);
+                let y = self.resolution.1 - combined_bounds.y - combined_bounds.height;
+                self.gl.scissor(
+                    f32_to_i32(combined_bounds.x),
+                    f32_to_i32(y),
+                    f32_to_i32(combined_bounds.width),
+                    f32_to_i32(combined_bounds.height),
+                );
+            }
+        }
     }
 }

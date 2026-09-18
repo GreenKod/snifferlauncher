@@ -1,4 +1,5 @@
 use sniffer_core::math::Rect;
+use sniffer_core::render::ClipRegion;
 
 use crate::text::font_atlas::{self, FontAtlas};
 use crate::{dev_err, dev_log};
@@ -35,7 +36,7 @@ pub struct GlowRenderer {
     pub(crate) texture_cache: textures::LruTextureCache,
     pub(crate) global_alpha: f32,
     pub(crate) transform_stack: Vec<[f32; 9]>,
-    pub(crate) clip_stack: Vec<(Rect, f32)>,
+    pub(crate) clip_stack: Vec<ClipRegion>,
     pub(crate) shape_uniforms: ShapeUniforms,
     pub(crate) image_uniforms: ImageUniforms,
     pub(crate) text_uniforms: TextUniforms,
