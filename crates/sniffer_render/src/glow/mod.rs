@@ -13,6 +13,7 @@ pub mod text;
 pub mod textures;
 pub mod uniforms;
 
+pub use renderer_impl::SdfClipData;
 pub use uniforms::{ImageUniforms, ShapeUniforms, TextUniforms};
 
 pub struct GlowRenderer {
