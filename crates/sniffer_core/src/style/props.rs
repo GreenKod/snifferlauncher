@@ -134,6 +134,10 @@ pub struct Style {
     pub overflow_hidden: bool,
     pub object_fit: ObjectFit,
 
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
+    pub backdrop_blur: f32,
+    pub backdrop_tint: Option<u32>,
+
     pub transition: Transition,
     pub transform: Transform,
 }
@@ -179,6 +183,8 @@ impl Default for Style {
             text_size: 16.0,
             overflow_hidden: false,
             object_fit: ObjectFit::Fill,
+            backdrop_blur: 0.0,
+            backdrop_tint: None,
             transition: Transition::default(),
             transform: Transform::default(),
         }
@@ -204,6 +210,16 @@ impl StyleBuilder {
     pub const fn build(self) -> Style {
         self.0
     }
+    #[must_use]
+    pub fn backdrop_blur(mut self, blur: f32) -> Self {
+        self.0.backdrop_blur = blur;
+        self
+    }
+    #[must_use]
+    pub fn backdrop_tint(mut self, tint: u32) -> Self {
+        self.0.backdrop_tint = Some(tint);
+        self
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -211,6 +227,8 @@ pub struct StyleOverride {
     pub background_color: Option<u32>,
     pub text_color: Option<u32>,
     pub border_color: Option<u32>,
+    pub backdrop_blur: Option<f32>,
+    pub backdrop_tint: Option<u32>,
 }
 
 impl StyleOverride {
@@ -224,6 +242,12 @@ impl StyleOverride {
         }
         if let Some(c) = self.border_color {
             base.border_color = Some(c);
+        }
+        if let Some(b) = self.backdrop_blur {
+            base.backdrop_blur = b;
+        }
+        if let Some(t) = self.backdrop_tint {
+            base.backdrop_tint = Some(t);
         }
         base
     }

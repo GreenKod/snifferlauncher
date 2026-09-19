@@ -147,6 +147,16 @@ impl AnimState {
             self.target_style.border_radius,
             eased_t,
         );
+        self.current_style.backdrop_blur = lerp(
+            self.start_style.backdrop_blur,
+            self.target_style.backdrop_blur,
+            eased_t,
+        );
+        self.current_style.backdrop_tint = lerp_opt_color(
+            self.start_style.backdrop_tint,
+            self.target_style.backdrop_tint,
+            eased_t,
+        );
 
         // Transforms
         self.current_style.transform.scale = lerp(

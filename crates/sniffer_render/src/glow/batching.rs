@@ -93,6 +93,68 @@ impl Default for QuadBatch {
     }
 }
 
+pub struct TextBatch {
+    pub vertices: Vec<f32>,
+    pub max_capacity: usize,
+    pub current_transform: Option<[f32; 9]>,
+}
+
+impl TextBatch {
+    pub const DEFAULT_MAX_CAPACITY: usize = 65_536;
+    pub const INITIAL_CAPACITY: usize = 2_048;
+    pub const FLOATS_PER_VERTEX: usize = 9;
+
+    #[must_use]
+    pub fn new(max_capacity: usize) -> Self {
+        Self {
+            vertices: Vec::with_capacity(Self::INITIAL_CAPACITY.min(max_capacity)),
+            max_capacity,
+            current_transform: None,
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.vertices.is_empty()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.vertices.len()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn is_full(&self) -> bool {
+        self.len() >= self.max_capacity
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.vertices.clear();
+        self.current_transform = None;
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                self.vertices.as_ptr().cast::<u8>(),
+                self.vertices.len() * std::mem::size_of::<f32>(),
+            )
+        }
+    }
+}
+
+impl Default for TextBatch {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_MAX_CAPACITY)
+    }
+}
+
 pub(crate) fn unpack_color(color: u32) -> [f32; 4] {
     let a =
         f32::from(u8::try_from((color >> 24) & 0xff).expect("alpha channel fits in u8")) / 255.0;
@@ -125,6 +187,12 @@ impl GlowRenderer {
                 self.gl
                     .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
             }
+
+            self.upload_clip_uniforms(
+                u.u_clip_rect.as_ref(),
+                u.u_clip_radius.as_ref(),
+                u.u_clip_inv_transform.as_ref(),
+            );
 
             self.gl
                 .bind_buffer(glow::ARRAY_BUFFER, Some(self.shape_instance_vbo));
@@ -257,6 +325,13 @@ impl GlowRenderer {
             };
             self.gl
                 .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
+
+            self.upload_clip_uniforms(
+                u.u_clip_rect.as_ref(),
+                u.u_clip_radius.as_ref(),
+                u.u_clip_inv_transform.as_ref(),
+            );
+
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
@@ -302,6 +377,13 @@ impl GlowRenderer {
             };
             self.gl
                 .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
+
+            self.upload_clip_uniforms(
+                u.u_clip_rect.as_ref(),
+                u.u_clip_radius.as_ref(),
+                u.u_clip_inv_transform.as_ref(),
+            );
+
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
@@ -411,5 +493,104 @@ mod tests {
         assert_eq!(instance.is_gradient, 1.0);
         assert_eq!(instance.is_circle, 0.0);
         assert_eq!(instance.is_shadow, 0.0);
+    }
+
+    #[test]
+    fn test_text_batch_lifecycle() {
+        let mut batch = TextBatch::new(100);
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
+
+        batch
+            .vertices
+            .extend_from_slice(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
+        assert!(!batch.is_empty());
+        assert_eq!(batch.len(), 9);
+        assert_eq!(batch.as_bytes().len(), 9 * std::mem::size_of::<f32>());
+
+        batch.clear();
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
+    }
+
+    #[test]
+    fn test_text_batch_100_labels_unified_draw_call() {
+        let mut batch = TextBatch::new(65_536);
+        assert!(batch.is_empty());
+
+        // Simulate 120 labels (e.g. an App Drawer with 120 app titles + emojis)
+        for i in 0..120 {
+            let is_emoji = if i % 3 == 0 { 1.0 } else { 0.0 };
+            #[allow(clippy::cast_precision_loss)]
+            let red = (i as f32) / 120.0;
+            let green = 0.5;
+            let blue = 1.0 - red;
+            let alpha = 1.0;
+
+            // Each character/glyph quad produces 6 vertices of 9 floats = 54 floats
+            for vertex_idx in 0..6 {
+                #[allow(clippy::cast_precision_loss)]
+                let pos_x = (i as f32) * 10.0 + (vertex_idx as f32);
+                let pos_y = 50.0;
+                let uv_u = 0.1;
+                let uv_v = 0.2;
+                batch.vertices.extend_from_slice(&[
+                    pos_x, pos_y, uv_u, uv_v, red, green, blue, alpha, is_emoji,
+                ]);
+            }
+        }
+
+        // 120 labels * 6 vertices = 720 vertices
+        // 720 vertices * 9 floats = 6,480 floats
+        assert_eq!(batch.len(), 120 * 6 * 9);
+        assert_eq!(batch.len() / TextBatch::FLOATS_PER_VERTEX, 720);
+        assert_eq!(
+            batch.as_bytes().len(),
+            120 * 6 * 9 * std::mem::size_of::<f32>()
+        );
+
+        // Verify vertex attributes integrity of normal glyph vs emoji glyph
+        // Check 1st label (i = 0, is_emoji = 1.0)
+        assert_eq!(batch.vertices[8], 1.0); // is_color attribute
+        assert_eq!(batch.vertices[4], 0.0); // r channel
+
+        // Check 2nd label (i = 1, is_emoji = 0.0)
+        let label1_offset = 6 * 9;
+        assert_eq!(batch.vertices[label1_offset + 8], 0.0); // is_color attribute
+        assert!((batch.vertices[label1_offset + 4] - (1.0 / 120.0)).abs() < 1e-5);
+
+        batch.clear();
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
+    }
+
+    #[test]
+    fn test_text_batch_performance_and_capacity() {
+        let mut batch = TextBatch::new(65_536);
+        let start = std::time::Instant::now();
+
+        // 500 labels with 10 glyphs each = 5,000 quads = 30,000 vertices
+        let quad_sample = [
+            10.0, 10.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 20.0, 10.0, 1.0, 0.0, 1.0, 1.0, 1.0,
+            1.0, 0.0, 10.0, 20.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 20.0, 10.0, 1.0, 0.0, 1.0,
+            1.0, 1.0, 1.0, 0.0, 20.0, 20.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 10.0, 20.0, 0.0,
+            1.0, 1.0, 1.0, 1.0, 1.0, 0.0,
+        ];
+
+        for _ in 0..1000 {
+            batch.vertices.extend_from_slice(&quad_sample);
+        }
+
+        let elapsed = start.elapsed();
+        assert_eq!(batch.len(), 1000 * 54);
+        assert!(!batch.is_empty());
+        // 1,000 glyph quads in batch should execute well under 5 milliseconds on any modern CPU
+        assert!(
+            elapsed.as_millis() < 20,
+            "Batching took too long: {elapsed:?}"
+        );
+
+        batch.clear();
+        assert!(batch.is_empty());
     }
 }

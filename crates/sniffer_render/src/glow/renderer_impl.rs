@@ -2,7 +2,7 @@ use super::{GlowRenderer, batching, f32_to_i32, text};
 use crate::text::font_atlas;
 use glow::HasContext;
 use sniffer_core::math::Rect;
-use sniffer_core::render::Renderer;
+use sniffer_core::render::{ClipRegion, Renderer};
 
 impl Renderer for GlowRenderer {
     fn clear(&mut self, color: u32) {
@@ -21,6 +21,7 @@ impl Renderer for GlowRenderer {
         border_width: f32,
         border_color: Option<u32>,
     ) {
+        self.flush_text();
         self.draw_rect_impl(rect, color, radius, border_width, border_color);
     }
 
@@ -33,6 +34,7 @@ impl Renderer for GlowRenderer {
         border_width: f32,
         border_color: Option<u32>,
     ) {
+        self.flush_text();
         self.draw_rect_gradient_impl(
             rect,
             color_top,
@@ -44,10 +46,12 @@ impl Renderer for GlowRenderer {
     }
 
     fn draw_shadow(&mut self, rect: Rect, radius: f32, offset_y: f32, spread: f32, color: u32) {
+        self.flush_text();
         self.draw_shadow_impl(rect, radius, offset_y, spread, color);
     }
 
     fn draw_circle(&mut self, cx: f32, cy: f32, radius: f32, color: u32) {
+        self.flush_text();
         self.draw_circle_impl(cx, cy, radius, color);
     }
 
@@ -70,6 +74,7 @@ impl Renderer for GlowRenderer {
 
     fn end_frame(&mut self) {
         self.flush_shapes();
+        self.flush_text();
         unsafe {
             self.ensure_quad_vao();
         }
@@ -77,54 +82,54 @@ impl Renderer for GlowRenderer {
 
     fn flush(&mut self) {
         self.flush_shapes();
+        self.flush_text();
     }
 
     fn set_clip_rect(&mut self, rect: Rect) {
         self.flush_shapes();
-        unsafe {
-            self.gl.enable(glow::SCISSOR_TEST);
-            let y = self.resolution.1 - rect.y - rect.height;
-            self.gl.scissor(
-                f32_to_i32(rect.x),
-                f32_to_i32(y),
-                f32_to_i32(rect.width),
-                f32_to_i32(rect.height),
-            );
-        }
+        self.flush_text();
+        self.clip_stack.clear();
+        self.push_clip_region(ClipRegion::from_rect(rect));
     }
 
     fn clear_clip_rect(&mut self) {
         self.flush_shapes();
-        unsafe {
-            self.gl.disable(glow::SCISSOR_TEST);
-        }
+        self.flush_text();
+        self.clip_stack.clear();
+        self.apply_current_clip();
+    }
+
+    fn push_clip_region(&mut self, region: ClipRegion) {
+        self.flush_shapes();
+        self.flush_text();
+        self.clip_stack.push(region);
+        self.apply_current_clip();
+    }
+
+    fn current_clip(&self) -> Option<&ClipRegion> {
+        self.clip_stack.last()
     }
 
     fn push_clip_rect(&mut self, rect: Rect, radius: f32) {
-        let current = if let Some(&(cur_rect, _)) = self.clip_stack.last() {
-            let cx = cur_rect.x.max(rect.x);
-            let cy = cur_rect.y.max(rect.y);
-            let cw = (cur_rect.x + cur_rect.width).min(rect.x + rect.width) - cx;
-            let ch = (cur_rect.y + cur_rect.height).min(rect.y + rect.height) - cy;
-            Rect::new(cx, cy, cw.max(0.0), ch.max(0.0))
-        } else {
-            rect
-        };
-        self.clip_stack.push((current, radius));
-        self.set_clip_rect(current);
+        let current_transform = self
+            .transform_stack
+            .last()
+            .copied()
+            .unwrap_or(ClipRegion::IDENTITY_TRANSFORM);
+        let region = ClipRegion::new(rect, radius, current_transform);
+        self.push_clip_region(region);
     }
 
     fn pop_clip_rect(&mut self) {
+        self.flush_shapes();
+        self.flush_text();
         self.clip_stack.pop();
-        if let Some(&(rect, _)) = self.clip_stack.last() {
-            self.set_clip_rect(rect);
-        } else {
-            self.clear_clip_rect();
-        }
+        self.apply_current_clip();
     }
 
     fn push_transform(&mut self, cx: f32, cy: f32, scale: f32, rotate: f32, tx: f32, ty: f32) {
         self.flush_shapes();
+        self.flush_text();
         let p = self
             .transform_stack
             .last()
@@ -160,12 +165,15 @@ impl Renderer for GlowRenderer {
 
     fn pop_transform(&mut self) {
         self.flush_shapes();
+        self.flush_text();
         if self.transform_stack.len() > 1 {
             self.transform_stack.pop();
         }
     }
 
     fn set_global_alpha(&mut self, alpha: f32) {
+        self.flush_shapes();
+        self.flush_text();
         self.global_alpha = alpha;
     }
 
@@ -183,7 +191,92 @@ impl Renderer for GlowRenderer {
 
     fn draw_wallpaper(&mut self, width: f32, height: f32) {
         self.flush_shapes();
+        self.flush_text();
         self.draw_wallpaper_impl(width, height);
+    }
+
+    fn draw_backdrop_blur(&mut self, rect: Rect, radius: f32, blur_radius: f32, tint: Option<u32>) {
+        if blur_radius <= 0.0 {
+            return;
+        }
+        self.flush_shapes();
+        self.flush_text();
+
+        let screen_w = f32_to_i32(self.resolution.0);
+        let screen_h = f32_to_i32(self.resolution.1);
+
+        if screen_w <= 0 || screen_h <= 0 {
+            return;
+        }
+
+        if self.ensure_blur_pipeline(screen_w, screen_h, 0.5).is_ok()
+            && let Some(ref pipeline) = self.blur_pipeline
+        {
+            unsafe {
+                pipeline.capture_screen(&self.gl, screen_w, screen_h);
+                let passes = super::blur::BlurPipeline::optimal_pass_count(blur_radius);
+                let blurred_tex = pipeline.execute_kawase_blur(
+                    &self.gl,
+                    self.quad_vertex_array,
+                    self.blur_program,
+                    &self.blur_uniforms,
+                    passes,
+                    blur_radius,
+                );
+                self.gl.viewport(0, 0, screen_w, screen_h);
+                self.ensure_quad_vao();
+
+                self.gl.use_program(Some(self.glass_program));
+
+                if let Some(loc) = &self.glass_uniforms.u_resolution {
+                    self.gl
+                        .uniform_2_f32(Some(loc), self.resolution.0, self.resolution.1);
+                }
+                if let Some(loc) = &self.glass_uniforms.u_rect_pos {
+                    self.gl.uniform_2_f32(Some(loc), rect.x, rect.y);
+                }
+                if let Some(loc) = &self.glass_uniforms.u_rect_size {
+                    self.gl.uniform_2_f32(Some(loc), rect.width, rect.height);
+                }
+                if let Some(loc) = &self.glass_uniforms.u_radius {
+                    self.gl.uniform_1_f32(Some(loc), radius);
+                }
+                let tint_col = tint.map_or([0.0, 0.0, 0.0, 0.0], batching::unpack_color);
+                if let Some(loc) = &self.glass_uniforms.u_tint_color {
+                    self.gl.uniform_4_f32(
+                        Some(loc),
+                        tint_col[0],
+                        tint_col[1],
+                        tint_col[2],
+                        tint_col[3],
+                    );
+                }
+                if let Some(loc) = &self.glass_uniforms.u_global_alpha {
+                    self.gl.uniform_1_f32(Some(loc), self.global_alpha);
+                }
+                if let Some(loc) = &self.glass_uniforms.u_transform
+                    && let Some(mat) = self.transform_stack.last()
+                {
+                    self.gl.uniform_matrix_3_f32_slice(Some(loc), false, mat);
+                }
+
+                self.upload_clip_uniforms(
+                    self.glass_uniforms.u_clip_rect.as_ref(),
+                    self.glass_uniforms.u_clip_radius.as_ref(),
+                    self.glass_uniforms.u_clip_inv_transform.as_ref(),
+                );
+
+                self.gl.active_texture(glow::TEXTURE0);
+                self.gl.bind_texture(glow::TEXTURE_2D, Some(blurred_tex));
+                if let Some(loc) = &self.glass_uniforms.u_blur_texture {
+                    self.gl.uniform_1_i32(Some(loc), 0);
+                }
+
+                self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+
+                self.gl.bind_texture(glow::TEXTURE_2D, None);
+            }
+        }
     }
 
     fn draw_image(
@@ -194,6 +287,7 @@ impl Renderer for GlowRenderer {
         object_fit: sniffer_core::style::ObjectFit,
     ) {
         self.flush_shapes();
+        self.flush_text();
         self.draw_image_impl(id, rect, radius, object_fit);
     }
 
@@ -219,5 +313,129 @@ impl Renderer for GlowRenderer {
             let scale = size / atlas.rasterize_size;
             atlas.ascent * scale
         })
+    }
+}
+
+impl GlowRenderer {
+    pub(crate) fn apply_current_clip(&mut self) {
+        if self.clip_stack.is_empty() {
+            unsafe {
+                self.gl.disable(glow::SCISSOR_TEST);
+            }
+        } else {
+            let mut combined_bounds = self.clip_stack[0].screen_bounds();
+            for region in &self.clip_stack[1..] {
+                combined_bounds = region.intersect_screen_bounds(combined_bounds);
+            }
+
+            unsafe {
+                self.gl.enable(glow::SCISSOR_TEST);
+                let y = self.resolution.1 - combined_bounds.y - combined_bounds.height;
+                self.gl.scissor(
+                    f32_to_i32(combined_bounds.x),
+                    f32_to_i32(y),
+                    f32_to_i32(combined_bounds.width),
+                    f32_to_i32(combined_bounds.height),
+                );
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn active_sdf_clip(&self) -> Option<ClipRegion> {
+        self.clip_stack
+            .iter()
+            .rev()
+            .find(|c| c.is_rounded())
+            .copied()
+    }
+
+    #[must_use]
+    pub fn sdf_clip_data(&self) -> SdfClipData {
+        if let Some(clip) = self.active_sdf_clip() {
+            SdfClipData {
+                rect: [clip.rect.x, clip.rect.y, clip.rect.width, clip.rect.height],
+                radius: clip.radius,
+                inv_transform: clip.inverse_transform(),
+            }
+        } else {
+            SdfClipData::DISABLED
+        }
+    }
+
+    pub(crate) unsafe fn upload_clip_uniforms(
+        &self,
+        u_rect: Option<&glow::UniformLocation>,
+        u_radius: Option<&glow::UniformLocation>,
+        u_inv_transform: Option<&glow::UniformLocation>,
+    ) {
+        let clip_data = self.sdf_clip_data();
+        if let Some(loc) = u_rect {
+            unsafe {
+                self.gl.uniform_4_f32(
+                    Some(loc),
+                    clip_data.rect[0],
+                    clip_data.rect[1],
+                    clip_data.rect[2],
+                    clip_data.rect[3],
+                );
+            }
+        }
+        if let Some(loc) = u_radius {
+            unsafe {
+                self.gl.uniform_1_f32(Some(loc), clip_data.radius);
+            }
+        }
+        if let Some(loc) = u_inv_transform {
+            unsafe {
+                self.gl
+                    .uniform_matrix_3_f32_slice(Some(loc), false, &clip_data.inv_transform);
+            }
+        }
+    }
+}
+
+/// Active SDF clipping payload uploaded to fragment shaders for antialiased rounded clipping.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SdfClipData {
+    pub rect: [f32; 4],
+    pub radius: f32,
+    pub inv_transform: [f32; 9],
+}
+
+impl SdfClipData {
+    pub const DISABLED: Self = Self {
+        rect: [0.0, 0.0, 0.0, 0.0],
+        radius: -1.0,
+        inv_transform: ClipRegion::IDENTITY_TRANSFORM,
+    };
+
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        self.radius >= 0.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sdf_clip_data_disabled_state() {
+        let disabled = SdfClipData::DISABLED;
+        assert!(!disabled.is_active());
+        assert_eq!(disabled.radius, -1.0);
+        assert_eq!(disabled.inv_transform, ClipRegion::IDENTITY_TRANSFORM);
+    }
+
+    #[test]
+    fn test_sdf_clip_data_active_state() {
+        let active = SdfClipData {
+            rect: [10.0, 20.0, 100.0, 50.0],
+            radius: 12.0,
+            inv_transform: ClipRegion::IDENTITY_TRANSFORM,
+        };
+        assert!(active.is_active());
+        assert_eq!(active.radius, 12.0);
     }
 }

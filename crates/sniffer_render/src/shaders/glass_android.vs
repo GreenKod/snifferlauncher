@@ -1,24 +1,21 @@
-#version 330 core
+#version 300 es
 layout(location = 0) in vec2 position;
-layout(location = 1) in vec2 uv;
-layout(location = 2) in vec4 color;
-layout(location = 3) in float is_color;
-
-out vec2 v_uv;
-out vec4 v_color;
-flat out float v_is_color;
 out vec2 v_screen_pos;
+out vec2 v_local_pos;
+out vec2 v_blur_uv;
 
 uniform vec2 u_resolution;
+uniform vec2 u_rect_pos;
+uniform vec2 u_rect_size;
 uniform mat3 u_transform;
 
 void main() {
-    vec3 pixel_pos_3 = u_transform * vec3(position, 1.0);
+    vec3 pixel_pos_3 = u_transform * vec3(position * u_rect_size + u_rect_pos, 1.0);
     vec2 pixel_pos = pixel_pos_3.xy;
     v_screen_pos = pixel_pos;
-    v_uv = uv;
-    v_color = color;
-    v_is_color = is_color;
+    v_local_pos = position * u_rect_size;
+    // Align screen UV with the captured background in the FBO
+    v_blur_uv = vec2(pixel_pos.x / u_resolution.x, 1.0 - pixel_pos.y / u_resolution.y);
 
     vec2 zero_to_one = pixel_pos / u_resolution;
     vec2 zero_to_two = zero_to_one * 2.0;

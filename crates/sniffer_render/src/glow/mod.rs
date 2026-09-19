@@ -1,4 +1,5 @@
 use sniffer_core::math::Rect;
+use sniffer_core::render::ClipRegion;
 
 use crate::text::font_atlas::{self, FontAtlas};
 use crate::{dev_err, dev_log};
@@ -6,20 +7,24 @@ use glow::HasContext;
 use obfstr::obfstr;
 
 pub mod batching;
+pub mod blur;
 pub mod renderer_impl;
 pub mod shaders;
 pub mod text;
 pub mod textures;
 pub mod uniforms;
 
-pub use uniforms::{ImageUniforms, ShapeUniforms, TextUniforms};
+pub use blur::{BlurPipeline, PingPongTarget};
+pub use renderer_impl::SdfClipData;
+pub use uniforms::{BlurUniforms, GlassUniforms, ImageUniforms, ShapeUniforms, TextUniforms};
 
 pub struct GlowRenderer {
     pub(crate) gl: glow::Context,
     pub(crate) quad_vertex_array: glow::VertexArray,
     pub(crate) _quad_vertex_buffer: glow::Buffer,
-    pub(crate) text_vertex_array: glow::VertexArray,
-    pub(crate) text_vertex_buffer: glow::Buffer,
+    pub(crate) text_instance_vao: glow::VertexArray,
+    pub(crate) text_instance_vbo: glow::Buffer,
+    pub(crate) text_batch: batching::TextBatch,
     pub(crate) shape_instance_vao: glow::VertexArray,
     pub(crate) shape_instance_vbo: glow::Buffer,
     pub(crate) shape_batch: batching::QuadBatch,
@@ -34,11 +39,16 @@ pub struct GlowRenderer {
     pub(crate) texture_cache: textures::LruTextureCache,
     pub(crate) global_alpha: f32,
     pub(crate) transform_stack: Vec<[f32; 9]>,
-    pub(crate) clip_stack: Vec<(Rect, f32)>,
+    pub(crate) clip_stack: Vec<ClipRegion>,
     pub(crate) shape_uniforms: ShapeUniforms,
     pub(crate) image_uniforms: ImageUniforms,
     pub(crate) text_uniforms: TextUniforms,
+    pub(crate) blur_uniforms: BlurUniforms,
+    pub(crate) glass_uniforms: GlassUniforms,
     pub(crate) current_vao: Option<glow::VertexArray>,
+    pub(crate) blur_pipeline: Option<blur::BlurPipeline>,
+    pub(crate) blur_program: glow::Program,
+    pub(crate) glass_program: glow::Program,
 }
 
 #[allow(clippy::cast_possible_truncation)]
@@ -81,10 +91,16 @@ impl GlowRenderer {
             gl.bind_vertex_array(Some(text_vertex_array));
             let text_vertex_buffer = gl.create_buffer()?;
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(text_vertex_buffer));
+            let text_stride =
+                i32::try_from(9 * std::mem::size_of::<f32>()).expect("text stride fits in i32");
             gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 16, 0);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, text_stride, 0);
             gl.enable_vertex_attrib_array(1);
-            gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, 16, 8);
+            gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, text_stride, 8);
+            gl.enable_vertex_attrib_array(2);
+            gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, text_stride, 16);
+            gl.enable_vertex_attrib_array(3);
+            gl.vertex_attrib_pointer_f32(3, 1, glow::FLOAT, false, text_stride, 32);
 
             let shape_instance_vao = gl.create_vertex_array()?;
             gl.bind_vertex_array(Some(shape_instance_vao));
@@ -136,6 +152,10 @@ impl GlowRenderer {
                 text_fragment_src,
                 image_vertex_src,
                 image_fragment_src,
+                blur_vertex_src,
+                blur_fragment_src,
+                glass_vertex_src,
+                glass_fragment_src,
             ) = (
                 crate::secure::decrypt(enc::SHAPE_ANDROID_VS),
                 crate::secure::decrypt(enc::SHAPE_ANDROID_FS),
@@ -143,6 +163,10 @@ impl GlowRenderer {
                 crate::secure::decrypt(enc::TEXT_ANDROID_FS),
                 crate::secure::decrypt(enc::IMAGE_ANDROID_VS),
                 crate::secure::decrypt(enc::IMAGE_ANDROID_FS),
+                crate::secure::decrypt(enc::BLUR_ANDROID_VS),
+                crate::secure::decrypt(enc::BLUR_ANDROID_FS),
+                crate::secure::decrypt(enc::GLASS_ANDROID_VS),
+                crate::secure::decrypt(enc::GLASS_ANDROID_FS),
             );
 
             #[cfg(not(target_os = "android"))]
@@ -153,6 +177,10 @@ impl GlowRenderer {
                 text_fragment_src,
                 image_vertex_src,
                 image_fragment_src,
+                blur_vertex_src,
+                blur_fragment_src,
+                glass_vertex_src,
+                glass_fragment_src,
             ) = (
                 crate::secure::decrypt(enc::SHAPE_DESKTOP_VS),
                 crate::secure::decrypt(enc::SHAPE_DESKTOP_FS),
@@ -160,6 +188,10 @@ impl GlowRenderer {
                 crate::secure::decrypt(enc::TEXT_DESKTOP_FS),
                 crate::secure::decrypt(enc::IMAGE_DESKTOP_VS),
                 crate::secure::decrypt(enc::IMAGE_DESKTOP_FS),
+                crate::secure::decrypt(enc::BLUR_DESKTOP_VS),
+                crate::secure::decrypt(enc::BLUR_DESKTOP_FS),
+                crate::secure::decrypt(enc::GLASS_DESKTOP_VS),
+                crate::secure::decrypt(enc::GLASS_DESKTOP_FS),
             );
 
             let shape_program =
@@ -167,6 +199,9 @@ impl GlowRenderer {
             let text_program = shaders::compile_program(&gl, text_vertex_src, text_fragment_src)?;
             let image_program =
                 shaders::compile_program(&gl, image_vertex_src, image_fragment_src)?;
+            let blur_program = shaders::compile_program(&gl, blur_vertex_src, blur_fragment_src)?;
+            let glass_program =
+                shaders::compile_program(&gl, glass_vertex_src, glass_fragment_src)?;
 
             let (font_texture, font_atlas, atlas_width, atlas_height) =
                 if let Some(font_bytes) = font_data {
@@ -210,6 +245,10 @@ impl GlowRenderer {
                 u_shape_size: gl.get_uniform_location(shape_program, "u_shape_size"),
                 u_transform: gl.get_uniform_location(shape_program, "u_transform"),
                 u_instanced: gl.get_uniform_location(shape_program, "u_instanced"),
+                u_clip_rect: gl.get_uniform_location(shape_program, "u_clip_rect"),
+                u_clip_radius: gl.get_uniform_location(shape_program, "u_clip_radius"),
+                u_clip_inv_transform: gl
+                    .get_uniform_location(shape_program, "u_clip_inv_transform"),
             };
 
             let image_uniforms = ImageUniforms {
@@ -221,6 +260,10 @@ impl GlowRenderer {
                 u_radius: gl.get_uniform_location(image_program, "u_radius"),
                 u_global_alpha: gl.get_uniform_location(image_program, "u_global_alpha"),
                 u_transform: gl.get_uniform_location(image_program, "u_transform"),
+                u_clip_rect: gl.get_uniform_location(image_program, "u_clip_rect"),
+                u_clip_radius: gl.get_uniform_location(image_program, "u_clip_radius"),
+                u_clip_inv_transform: gl
+                    .get_uniform_location(image_program, "u_clip_inv_transform"),
             };
 
             let text_uniforms = TextUniforms {
@@ -232,6 +275,29 @@ impl GlowRenderer {
                 u_uv_end: gl.get_uniform_location(text_program, "u_uv_end"),
                 u_transform: gl.get_uniform_location(text_program, "u_transform"),
                 u_is_color: gl.get_uniform_location(text_program, "u_is_color"),
+                u_clip_rect: gl.get_uniform_location(text_program, "u_clip_rect"),
+                u_clip_radius: gl.get_uniform_location(text_program, "u_clip_radius"),
+                u_clip_inv_transform: gl.get_uniform_location(text_program, "u_clip_inv_transform"),
+            };
+
+            let blur_uniforms = BlurUniforms {
+                u_texture: gl.get_uniform_location(blur_program, "u_texture"),
+                u_offset: gl.get_uniform_location(blur_program, "u_offset"),
+            };
+
+            let glass_uniforms = GlassUniforms {
+                u_resolution: gl.get_uniform_location(glass_program, "u_resolution"),
+                u_rect_pos: gl.get_uniform_location(glass_program, "u_rect_pos"),
+                u_rect_size: gl.get_uniform_location(glass_program, "u_rect_size"),
+                u_radius: gl.get_uniform_location(glass_program, "u_radius"),
+                u_tint_color: gl.get_uniform_location(glass_program, "u_tint_color"),
+                u_global_alpha: gl.get_uniform_location(glass_program, "u_global_alpha"),
+                u_transform: gl.get_uniform_location(glass_program, "u_transform"),
+                u_blur_texture: gl.get_uniform_location(glass_program, "u_blur_texture"),
+                u_clip_rect: gl.get_uniform_location(glass_program, "u_clip_rect"),
+                u_clip_radius: gl.get_uniform_location(glass_program, "u_clip_radius"),
+                u_clip_inv_transform: gl
+                    .get_uniform_location(glass_program, "u_clip_inv_transform"),
             };
 
             gl.enable(glow::BLEND);
@@ -243,8 +309,9 @@ impl GlowRenderer {
                 gl,
                 quad_vertex_array,
                 _quad_vertex_buffer: quad_vertex_buffer,
-                text_vertex_array,
-                text_vertex_buffer,
+                text_instance_vao: text_vertex_array,
+                text_instance_vbo: text_vertex_buffer,
+                text_batch: batching::TextBatch::default(),
                 shape_instance_vao,
                 shape_instance_vbo,
                 shape_batch: batching::QuadBatch::default(),
@@ -263,7 +330,12 @@ impl GlowRenderer {
                 shape_uniforms,
                 image_uniforms,
                 text_uniforms,
+                blur_uniforms,
+                glass_uniforms,
                 current_vao: Some(quad_vertex_array),
+                blur_pipeline: None,
+                blur_program,
+                glass_program,
             })
         }
     }
@@ -279,12 +351,12 @@ impl GlowRenderer {
     }
 
     #[inline]
-    pub(crate) unsafe fn ensure_text_vao(&mut self) {
-        if self.current_vao != Some(self.text_vertex_array) {
+    pub(crate) unsafe fn ensure_text_instance_vao(&mut self) {
+        if self.current_vao != Some(self.text_instance_vao) {
             unsafe {
-                self.gl.bind_vertex_array(Some(self.text_vertex_array));
+                self.gl.bind_vertex_array(Some(self.text_instance_vao));
             }
-            self.current_vao = Some(self.text_vertex_array);
+            self.current_vao = Some(self.text_instance_vao);
         }
     }
 
@@ -302,6 +374,58 @@ impl GlowRenderer {
         self.trim_memory_level(textures::MemoryTrimLevel::Critical);
     }
 
+    /// Ensures that the dual-FBO blur pipeline is initialized and sized for the given dimensions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if FBO or texture allocation fails.
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+    pub fn ensure_blur_pipeline(
+        &mut self,
+        width: i32,
+        height: i32,
+        downsample_factor: f32,
+    ) -> Result<(), String> {
+        let max_dim = 960.0_f32;
+        let factor = if downsample_factor > 0.0 {
+            downsample_factor
+        } else {
+            0.5
+        };
+        let mut target_w = ((width as f32) * factor).max(1.0);
+        let mut target_h = ((height as f32) * factor).max(1.0);
+
+        // Frame budget and VRAM protection: Clamp max blur texture dimension to 960px.
+        // On 4K/1440p displays, this prevents fill-rate degradation while preserving frosted glass quality.
+        if target_w > max_dim || target_h > max_dim {
+            let scale = (max_dim / target_w).min(max_dim / target_h);
+            target_w = (target_w * scale).max(1.0);
+            target_h = (target_h * scale).max(1.0);
+        }
+
+        let tw = target_w as i32;
+        let th = target_h as i32;
+
+        if let Some(ref mut pipeline) = self.blur_pipeline {
+            unsafe {
+                pipeline.ensure_size(&self.gl, tw, th)?;
+            }
+        } else {
+            let pipeline = unsafe { blur::BlurPipeline::new(&self.gl, tw, th, factor)? };
+            self.blur_pipeline = Some(pipeline);
+        }
+
+        Ok(())
+    }
+
+    /// Returns the total VRAM bytes currently allocated for blur ping-pong FBO textures.
+    #[must_use]
+    pub fn blur_vram_bytes(&self) -> usize {
+        self.blur_pipeline
+            .as_ref()
+            .map_or(0, blur::BlurPipeline::vram_bytes)
+    }
+
     pub fn warm_up_shaders(&mut self) {
         let dummy_rect = Rect::new(0.0, 0.0, 1.0, 1.0);
         let alpha_zero = 0x00FF_FFFF;
@@ -316,6 +440,7 @@ impl GlowRenderer {
         self.draw_shadow_impl(dummy_rect, 0.0, 5.0, 10.0, alpha_zero);
         self.draw_circle_impl(0.0, 0.0, 1.0, alpha_zero);
         text::draw_text_impl(self, "W", 0.0, 0.0, 12.0, alpha_zero);
+        self.flush_text();
 
         unsafe {
             self.gl.enable(glow::SCISSOR_TEST);

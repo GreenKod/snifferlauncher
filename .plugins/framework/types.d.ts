@@ -49,6 +49,8 @@ interface Style {
     borderWidth?: number;
     borderColor?: number | string;
     overflowHidden?: boolean;
+    backdropBlur?: number;
+    backdropTint?: number | string;
 }
 
 type UIElement =

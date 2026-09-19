@@ -111,7 +111,11 @@ subscribeChannel("dock.ready", function() {
 });
 
 subscribeChannel("devkit_hud.ready", function() {
-    SnifferUI.forceUpdate();
+    SnifferUI.forceUpdate(true);
+});
+
+subscribeChannel("devkit_hud.toggleChanged", function() {
+    SnifferUI.forceUpdate(true);
 });
 
 subscribeChannel("dock.stateChanged", function() {
@@ -267,7 +271,7 @@ globalThis.onEvent = function (eventJsonString) {
             if (typeof callApi === "function") {
                 try {
                     callApi("devkit_hud.toggle");
-                    SnifferUI.forceUpdate();
+                    SnifferUI.forceUpdate(true);
                 } catch (e) {}
             }
             return "[]";
@@ -290,10 +294,16 @@ globalThis.onEvent = function (eventJsonString) {
 
 if (typeof subscribeChannel === "function") {
     subscribeChannel("dock.stateChanged", function() {
-        SnifferUI.forceUpdate();
+        SnifferUI.forceUpdate(true);
     });
     subscribeChannel("dock.ready", function() {
-        SnifferUI.forceUpdate();
+        SnifferUI.forceUpdate(true);
+    });
+    subscribeChannel("devkit_hud.ready", function() {
+        SnifferUI.forceUpdate(true);
+    });
+    subscribeChannel("devkit_hud.toggleChanged", function() {
+        SnifferUI.forceUpdate(true);
     });
 }
 
@@ -301,8 +311,8 @@ SnifferUI.start(Root, state);
 
 if (typeof setInterval === "function") {
     setInterval(function() {
-        if (getDevKitHUD() !== null) {
-            SnifferUI.forceUpdate();
+        if (state.showDevKitHud) {
+            SnifferUI.forceUpdate(true);
         }
     }, 500);
 }

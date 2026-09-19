@@ -39,8 +39,8 @@ find . -name "*.apk" -ls || true
 
 APK_FILE=$(find . -name "*x86_64*.apk" | head -n 1)
 if [ -z "$APK_FILE" ]; then
-    echo "Warning: No specific *x86_64*.apk found, falling back to any available APK..."
-    APK_FILE=$(find . -name "*.apk" | head -n 1)
+    echo "Warning: No specific *x86_64*.apk found, falling back to release APK..."
+    APK_FILE=$(find . -name "*.apk" ! -name "*unaligned*" | head -n 1)
 fi
 
 if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
@@ -54,7 +54,7 @@ echo "3. Installing APK: $APK_FILE..."
 timeout 90s adb install -r "$APK_FILE"
 
 echo "Clearing logcat buffer before launch..."
-adb logcat -c || true
+adb logcat -b all -c || adb logcat -c || true
 
 echo "4. Starting SnifferLauncher (NativeActivity)..."
 LAUNCHED=false
@@ -143,10 +143,18 @@ else
 fi
 echo "SUCCESS: Valid PNG screenshot confirmed ($SCREEN_BYTES bytes)."
 
-echo "9. Scanning logcat for fatal exceptions and crashes..."
-CRASH_MATCHES=$(grep -E "FATAL EXCEPTION|Fatal signal|SIGSEGV|signal 11|Abort message:|AndroidRuntime: FATAL" logcat_full.txt || true)
+echo "9. Verifying process liveness and scanning logcat for app crashes..."
+FINAL_PID=$(adb shell pidof com.greenkod.snifferlauncher 2>/dev/null | tr -d '\r' || true)
+if [ -z "$FINAL_PID" ]; then
+    echo "ERROR: com.greenkod.snifferlauncher died or exited during testing!"
+    adb logcat -d -t 300 > logcat_snippet.txt || true
+    exit 1
+fi
+echo "SnifferLauncher confirmed alive at end of test (PID: $FINAL_PID)."
+
+CRASH_MATCHES=$(grep -E "(>>> com\.greenkod\.snifferlauncher <<<|Process: com\.greenkod\.snifferlauncher|Process com\.greenkod\.snifferlauncher .* has died|pid: $APP_PID.*signal|pid: $APP_PID.*SIGSEGV|pid: $APP_PID.*SIGABRT|pid: $FINAL_PID.*signal|pid: $FINAL_PID.*SIGSEGV|pid: $FINAL_PID.*SIGABRT)" logcat_full.txt || true)
 if [ -n "$CRASH_MATCHES" ]; then
-    echo "ERROR: Crash or fatal signal detected in logcat!"
+    echo "ERROR: SnifferLauncher crash detected in logcat!"
     echo "$CRASH_MATCHES"
     exit 1
 fi

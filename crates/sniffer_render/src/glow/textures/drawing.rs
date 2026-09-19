@@ -191,6 +191,9 @@ impl GlowRenderer {
                                 .saturating_sub(removed.size_bytes);
                         }
                     }
+                    if let Some(mut pipeline) = self.blur_pipeline.take() {
+                        pipeline.destroy(&self.gl);
+                    }
                 }
             }
         }
@@ -321,6 +324,13 @@ impl GlowRenderer {
                 };
                 self.gl
                     .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
+
+                self.upload_clip_uniforms(
+                    u.u_clip_rect.as_ref(),
+                    u.u_clip_radius.as_ref(),
+                    u.u_clip_inv_transform.as_ref(),
+                );
+
                 self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
             }
         }
