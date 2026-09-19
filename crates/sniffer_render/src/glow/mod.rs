@@ -16,7 +16,7 @@ pub mod uniforms;
 
 pub use blur::{BlurPipeline, PingPongTarget};
 pub use renderer_impl::SdfClipData;
-pub use uniforms::{ImageUniforms, ShapeUniforms, TextUniforms};
+pub use uniforms::{BlurUniforms, GlassUniforms, ImageUniforms, ShapeUniforms, TextUniforms};
 
 pub struct GlowRenderer {
     pub(crate) gl: glow::Context,
@@ -43,8 +43,14 @@ pub struct GlowRenderer {
     pub(crate) shape_uniforms: ShapeUniforms,
     pub(crate) image_uniforms: ImageUniforms,
     pub(crate) text_uniforms: TextUniforms,
+    pub(crate) blur_uniforms: BlurUniforms,
+    #[allow(dead_code)]
+    pub(crate) glass_uniforms: GlassUniforms,
     pub(crate) current_vao: Option<glow::VertexArray>,
     pub(crate) blur_pipeline: Option<blur::BlurPipeline>,
+    pub(crate) blur_program: glow::Program,
+    #[allow(dead_code)]
+    pub(crate) glass_program: glow::Program,
 }
 
 #[allow(clippy::cast_possible_truncation)]
@@ -148,6 +154,10 @@ impl GlowRenderer {
                 text_fragment_src,
                 image_vertex_src,
                 image_fragment_src,
+                blur_vertex_src,
+                blur_fragment_src,
+                glass_vertex_src,
+                glass_fragment_src,
             ) = (
                 crate::secure::decrypt(enc::SHAPE_ANDROID_VS),
                 crate::secure::decrypt(enc::SHAPE_ANDROID_FS),
@@ -155,6 +165,10 @@ impl GlowRenderer {
                 crate::secure::decrypt(enc::TEXT_ANDROID_FS),
                 crate::secure::decrypt(enc::IMAGE_ANDROID_VS),
                 crate::secure::decrypt(enc::IMAGE_ANDROID_FS),
+                crate::secure::decrypt(enc::BLUR_ANDROID_VS),
+                crate::secure::decrypt(enc::BLUR_ANDROID_FS),
+                crate::secure::decrypt(enc::GLASS_ANDROID_VS),
+                crate::secure::decrypt(enc::GLASS_ANDROID_FS),
             );
 
             #[cfg(not(target_os = "android"))]
@@ -165,6 +179,10 @@ impl GlowRenderer {
                 text_fragment_src,
                 image_vertex_src,
                 image_fragment_src,
+                blur_vertex_src,
+                blur_fragment_src,
+                glass_vertex_src,
+                glass_fragment_src,
             ) = (
                 crate::secure::decrypt(enc::SHAPE_DESKTOP_VS),
                 crate::secure::decrypt(enc::SHAPE_DESKTOP_FS),
@@ -172,6 +190,10 @@ impl GlowRenderer {
                 crate::secure::decrypt(enc::TEXT_DESKTOP_FS),
                 crate::secure::decrypt(enc::IMAGE_DESKTOP_VS),
                 crate::secure::decrypt(enc::IMAGE_DESKTOP_FS),
+                crate::secure::decrypt(enc::BLUR_DESKTOP_VS),
+                crate::secure::decrypt(enc::BLUR_DESKTOP_FS),
+                crate::secure::decrypt(enc::GLASS_DESKTOP_VS),
+                crate::secure::decrypt(enc::GLASS_DESKTOP_FS),
             );
 
             let shape_program =
@@ -179,6 +201,9 @@ impl GlowRenderer {
             let text_program = shaders::compile_program(&gl, text_vertex_src, text_fragment_src)?;
             let image_program =
                 shaders::compile_program(&gl, image_vertex_src, image_fragment_src)?;
+            let blur_program = shaders::compile_program(&gl, blur_vertex_src, blur_fragment_src)?;
+            let glass_program =
+                shaders::compile_program(&gl, glass_vertex_src, glass_fragment_src)?;
 
             let (font_texture, font_atlas, atlas_width, atlas_height) =
                 if let Some(font_bytes) = font_data {
@@ -257,6 +282,26 @@ impl GlowRenderer {
                 u_clip_inv_transform: gl.get_uniform_location(text_program, "u_clip_inv_transform"),
             };
 
+            let blur_uniforms = BlurUniforms {
+                u_texture: gl.get_uniform_location(blur_program, "u_texture"),
+                u_offset: gl.get_uniform_location(blur_program, "u_offset"),
+            };
+
+            let glass_uniforms = GlassUniforms {
+                u_resolution: gl.get_uniform_location(glass_program, "u_resolution"),
+                u_rect_pos: gl.get_uniform_location(glass_program, "u_rect_pos"),
+                u_rect_size: gl.get_uniform_location(glass_program, "u_rect_size"),
+                u_radius: gl.get_uniform_location(glass_program, "u_radius"),
+                u_tint_color: gl.get_uniform_location(glass_program, "u_tint_color"),
+                u_global_alpha: gl.get_uniform_location(glass_program, "u_global_alpha"),
+                u_transform: gl.get_uniform_location(glass_program, "u_transform"),
+                u_blur_texture: gl.get_uniform_location(glass_program, "u_blur_texture"),
+                u_clip_rect: gl.get_uniform_location(glass_program, "u_clip_rect"),
+                u_clip_radius: gl.get_uniform_location(glass_program, "u_clip_radius"),
+                u_clip_inv_transform: gl
+                    .get_uniform_location(glass_program, "u_clip_inv_transform"),
+            };
+
             gl.enable(glow::BLEND);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
@@ -287,8 +332,12 @@ impl GlowRenderer {
                 shape_uniforms,
                 image_uniforms,
                 text_uniforms,
+                blur_uniforms,
+                glass_uniforms,
                 current_vao: Some(quad_vertex_array),
                 blur_pipeline: None,
+                blur_program,
+                glass_program,
             })
         }
     }

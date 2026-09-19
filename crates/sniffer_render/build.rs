@@ -16,6 +16,14 @@ fn main() {
         ("text_desktop.fs", "TEXT_DESKTOP_FS"),
         ("image_desktop.vs", "IMAGE_DESKTOP_VS"),
         ("image_desktop.fs", "IMAGE_DESKTOP_FS"),
+        ("blur_android.vs", "BLUR_ANDROID_VS"),
+        ("blur_android.fs", "BLUR_ANDROID_FS"),
+        ("blur_desktop.vs", "BLUR_DESKTOP_VS"),
+        ("blur_desktop.fs", "BLUR_DESKTOP_FS"),
+        ("glass_android.vs", "GLASS_ANDROID_VS"),
+        ("glass_android.fs", "GLASS_ANDROID_FS"),
+        ("glass_desktop.vs", "GLASS_DESKTOP_VS"),
+        ("glass_desktop.fs", "GLASS_DESKTOP_FS"),
     ];
 
     // Resolve the absolute path to the shader directory so include_str! macros

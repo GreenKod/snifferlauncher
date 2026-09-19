@@ -8,6 +8,42 @@ fn test_ping_pong_target_alternation() {
 }
 
 #[test]
+fn test_kawase_iteration_kernel_offsets() {
+    let width = 540_f32;
+    let height = 960_f32;
+    let inv_w = 1.0 / width;
+    let inv_h = 1.0 / height;
+
+    let blur_radius = 16.0_f32;
+    let base_offset = (blur_radius * 0.25).max(1.0);
+    assert!((base_offset - 4.0).abs() < f32::EPSILON);
+
+    // Pass 0: offset = (0.0 + 4.0) * inv_res
+    let pass0_x = (0.0 + base_offset) * inv_w;
+    let pass0_y = (0.0 + base_offset) * inv_h;
+    assert!((pass0_x - (4.0 / 540.0)).abs() < 1e-6);
+    assert!((pass0_y - (4.0 / 960.0)).abs() < 1e-6);
+
+    // Pass 1: offset = (1.0 + 4.0) * inv_res
+    let pass1_x = (1.0 + base_offset) * inv_w;
+    let pass1_y = (1.0 + base_offset) * inv_h;
+    assert!((pass1_x - (5.0 / 540.0)).abs() < 1e-6);
+    assert!((pass1_y - (5.0 / 960.0)).abs() < 1e-6);
+
+    // Ping pong target toggling across 2 passes:
+    let mut target = PingPongTarget::A;
+    for _ in 0..2 {
+        target = target.other();
+    }
+    // After 2 passes, target returns to A
+    assert_eq!(target, PingPongTarget::A);
+
+    // After 3 passes, target is B
+    target = target.other();
+    assert_eq!(target, PingPongTarget::B);
+}
+
+#[test]
 fn test_blur_downsample_and_vram_budget() {
     // Standard phone screen resolution: 1080x2400 (FHD+)
     let screen_w = 1080_f32;
