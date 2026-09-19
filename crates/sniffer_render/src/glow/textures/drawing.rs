@@ -21,6 +21,15 @@ impl GlowRenderer {
         let w_f32 = width as f32;
         let h_f32 = height as f32;
 
+        if width <= super::atlas::IconAtlas::MAX_ICON_DIM
+            && height <= super::atlas::IconAtlas::MAX_ICON_DIM
+            && id != "__system_wallpaper__"
+        {
+            if let Some(ref mut atlas) = self.icon_atlas {
+                let _ = unsafe { atlas.upload(&self.gl, id, rgba_pixels, width, height) };
+            }
+        }
+
         let current_frame = self.texture_cache.current_frame;
         if let Some(existing) = self.texture_cache.get_mut(id) {
             existing.last_frame = current_frame;
@@ -193,6 +202,9 @@ impl GlowRenderer {
                     }
                     if let Some(mut pipeline) = self.blur_pipeline.take() {
                         pipeline.destroy(&self.gl);
+                    }
+                    if let Some(ref mut atlas) = self.icon_atlas {
+                        atlas.clear();
                     }
                 }
             }
