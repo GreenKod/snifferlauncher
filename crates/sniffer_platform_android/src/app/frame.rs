@@ -64,6 +64,10 @@ pub fn update_and_render_state(
         sniffer_core::types::SCREEN_HEIGHT
             .store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
+        state.plugin_registry.broadcast("dock.stateChanged", "{}");
+        state.plugin_registry.broadcast("dock.ready", "{}");
+        state.plugin_registry.broadcast("system.resized", "{}");
+
         ui_changed = true;
     }
 

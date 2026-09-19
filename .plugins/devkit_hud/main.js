@@ -189,6 +189,9 @@ if (typeof registerApi === "function") {
     registerApi("devkit_hud.getUI", getDevKitHUDUI);
     registerApi("devkit_hud.toggle", function() {
         isDevKitExpanded = !isDevKitExpanded;
+        if (typeof broadcastEvent === "function") {
+            broadcastEvent("devkit_hud.toggleChanged", { expanded: isDevKitExpanded });
+        }
         return { expanded: isDevKitExpanded };
     });
 }
@@ -205,8 +208,11 @@ globalThis.onEvent = function(eventJsonString) {
         const idStr = String(e.id);
         if (devkitIdSet.includes(idStr) || idStr.startsWith("devkit_")) {
             isDevKitExpanded = !isDevKitExpanded;
+            if (typeof broadcastEvent === "function") {
+                broadcastEvent("devkit_hud.toggleChanged", { expanded: isDevKitExpanded });
+            }
             if (typeof SnifferUI !== "undefined" && typeof SnifferUI.forceUpdate === "function") {
-                SnifferUI.forceUpdate();
+                SnifferUI.forceUpdate(true);
             }
             return "[]";
         }

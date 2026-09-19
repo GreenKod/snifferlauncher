@@ -91,15 +91,15 @@ pub fn start_activity(
     Ok(())
 }
 
-/// Returns Android `DisplayMetrics` (density, scaledDensity).
+/// Returns Android `DisplayMetrics` (density, scaledDensity, widthPixels, heightPixels).
 ///
-/// Returns `(1.0, 1.0)` as a safe fallback if the JNI call fails.
+/// Returns `(1.0, 1.0, 1080.0, 1920.0)` as a safe fallback if the JNI call fails.
 #[must_use]
-pub fn get_density() -> (f32, f32) {
+pub fn get_display_metrics() -> (f32, f32, f32, f32) {
     let jvm = vm();
 
     jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
-        let res = (|| -> Result<(f32, f32), JniError> {
+        let res = (|| -> Result<(f32, f32, f32, f32), JniError> {
             let ctx = context(env);
 
             let resources = env
@@ -128,7 +128,28 @@ pub fn get_density() -> (f32, f32) {
                 .get_field(&display_metrics, jni_str!("scaledDensity"), jni_sig!("F"))?
                 .f()?;
 
-            Ok((density, scaled_density))
+            let width_pixels = env
+                .get_field(&display_metrics, jni_str!("widthPixels"), jni_sig!("I"))?
+                .i()?;
+
+            let height_pixels = env
+                .get_field(&display_metrics, jni_str!("heightPixels"), jni_sig!("I"))?
+                .i()?;
+
+            #[allow(clippy::cast_precision_loss)]
+            let w = if width_pixels > 0 {
+                width_pixels as f32
+            } else {
+                1080.0
+            };
+            #[allow(clippy::cast_precision_loss)]
+            let h = if height_pixels > 0 {
+                height_pixels as f32
+            } else {
+                1920.0
+            };
+
+            Ok((density, scaled_density, w, h))
         })();
 
         if res.is_err() {
@@ -137,7 +158,16 @@ pub fn get_density() -> (f32, f32) {
 
         res
     })
-    .unwrap_or((1.0_f32, 1.0_f32))
+    .unwrap_or((1.0_f32, 1.0_f32, 1080.0_f32, 1920.0_f32))
+}
+
+/// Returns Android `DisplayMetrics` (density, scaledDensity).
+///
+/// Returns `(1.0, 1.0)` as a safe fallback if the JNI call fails.
+#[must_use]
+pub fn get_density() -> (f32, f32) {
+    let (d, sd, _, _) = get_display_metrics();
+    (d, sd)
 }
 
 /// Sets `FLAG_SHOW_WALLPAPER` on the Activity's window.

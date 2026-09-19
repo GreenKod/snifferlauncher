@@ -24,17 +24,32 @@ pub fn android_main(app: AndroidApp) {
     crate::set_android_app(&app);
     crate::jni::bridge::set_show_wallpaper_flag(&app);
 
-    let mut state = AppState::new(&app);
+    let (density, scaled_density, disp_w, disp_h) = crate::jni::get_display_metrics();
 
-    let (initial_width, initial_height) = app.native_window().map_or((1080.0, 1920.0), |window| {
-        let w = f32::from(u16::try_from(window.width()).unwrap_or(1080));
-        let h = f32::from(u16::try_from(window.height()).unwrap_or(1920));
+    let (initial_width, initial_height) = app.native_window().map_or((disp_w, disp_h), |window| {
+        let w = f32::from(u16::try_from(window.width()).unwrap_or(0));
+        let h = f32::from(u16::try_from(window.height()).unwrap_or(0));
         if w > 0.0 && h > 0.0 {
             (w, h)
         } else {
-            (1080.0, 1920.0)
+            (disp_w, disp_h)
         }
     });
+
+    // Initialize screen dimensions BEFORE AppState evaluates JS plugins
+    // so that the initial UI layout has the correct vw/vh values.
+    sniffer_core::types::SCREEN_WIDTH.store(
+        initial_width.to_bits(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    sniffer_core::types::SCREEN_HEIGHT.store(
+        initial_height.to_bits(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+
+    let mut state = AppState::new(&app);
+    state.cached_density = (density, scaled_density);
+    state.cached_screen_size = (initial_width, initial_height);
 
     let initial_root = sniffer_core::types::Element::Container {
         id: None,
@@ -56,7 +71,7 @@ pub fn android_main(app: AndroidApp) {
     let shared_render_state = Arc::new(RwLock::new(Arc::new(SharedRenderState {
         root_element: initial_root,
         layout_tree: initial_layout,
-        metrics: ScreenMetrics::default_mdpi(initial_width, initial_height),
+        metrics: ScreenMetrics::from_scale(initial_width, initial_height, density, scaled_density),
         style_map: state.style_map.clone(),
         data_map: state.data_map.clone(),
         transition_manager: state.transition_manager.clone(),

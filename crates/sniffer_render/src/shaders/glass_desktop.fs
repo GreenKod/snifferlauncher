@@ -1,13 +1,13 @@
 #version 330 core
-in vec2 v_uv;
-in vec2 v_local_pos;
 in vec2 v_screen_pos;
+in vec2 v_local_pos;
+in vec2 v_blur_uv;
 out vec4 color;
 
-uniform sampler2D u_texture;
+uniform sampler2D u_blur_texture;
 uniform float u_radius;
-uniform vec2 u_rect_pos;
 uniform vec2 u_rect_size;
+uniform vec4 u_tint_color;
 uniform float u_global_alpha;
 uniform vec4 u_clip_rect;
 uniform float u_clip_radius;
@@ -18,21 +18,21 @@ float roundedBoxSDF(vec2 CenterPosition, vec2 Size, float Radius) {
 }
 
 void main() {
+    float alpha = 1.0;
     if (u_radius > 0.0) {
         vec2 center = u_rect_size * 0.5;
         vec2 half_size = u_rect_size * 0.5;
         float d = roundedBoxSDF(v_local_pos - center, half_size, u_radius);
-        
-        float alpha = 1.0 - smoothstep(-1.0, 0.5, d);
+        alpha = 1.0 - smoothstep(-1.0, 0.5, d);
         if (alpha <= 0.0) {
             discard;
         }
-        vec4 tex_color = texture(u_texture, v_uv);
-        color = vec4(tex_color.rgb, tex_color.a * alpha * u_global_alpha);
-    } else {
-        vec4 tex_color = texture(u_texture, v_uv);
-        color = vec4(tex_color.rgb, tex_color.a * u_global_alpha);
     }
+
+    vec4 blurred = texture(u_blur_texture, v_blur_uv);
+    vec3 mixed_rgb = mix(blurred.rgb, u_tint_color.rgb, u_tint_color.a);
+    float final_a = (blurred.a + u_tint_color.a * (1.0 - blurred.a)) * alpha * u_global_alpha;
+    color = vec4(mixed_rgb, final_a);
 
     if (u_clip_radius >= 0.0) {
         vec2 clip_p = (u_clip_inv_transform * vec3(v_screen_pos, 1.0)).xy;
