@@ -195,6 +195,33 @@ impl Renderer for GlowRenderer {
         self.draw_wallpaper_impl(width, height);
     }
 
+    fn draw_backdrop_blur(&mut self, rect: Rect, radius: f32, blur_radius: f32, tint: Option<u32>) {
+        if blur_radius <= 0.0 {
+            return;
+        }
+        self.flush_shapes();
+        self.flush_text();
+
+        let screen_w = f32_to_i32(self.resolution.0);
+        let screen_h = f32_to_i32(self.resolution.1);
+
+        if screen_w <= 0 || screen_h <= 0 {
+            return;
+        }
+
+        if self.ensure_blur_pipeline(screen_w, screen_h, 0.5).is_ok()
+            && let Some(ref pipeline) = self.blur_pipeline
+        {
+            unsafe {
+                pipeline.capture_screen(&self.gl, screen_w, screen_h);
+            }
+        }
+
+        if let Some(tint_color) = tint {
+            self.draw_rect_impl(rect, tint_color, radius, 0.0, None);
+        }
+    }
+
     fn draw_image(
         &mut self,
         id: &str,

@@ -191,6 +191,9 @@ impl GlowRenderer {
                                 .saturating_sub(removed.size_bytes);
                         }
                     }
+                    if let Some(mut pipeline) = self.blur_pipeline.take() {
+                        pipeline.destroy(&self.gl);
+                    }
                 }
             }
         }
