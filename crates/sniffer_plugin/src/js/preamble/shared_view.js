@@ -114,6 +114,10 @@ globalThis._dispatchBroadcast = function(channel, payload_json) {
                 try { cb(channel, data); } catch(e) {}
             });
         }
+
+        if (typeof globalThis.onBroadcast === "function") {
+            try { globalThis.onBroadcast(channel, data); } catch(e) {}
+        }
     } catch(e) {}
 };
 
