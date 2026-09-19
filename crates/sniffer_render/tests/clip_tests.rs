@@ -273,3 +273,218 @@ fn test_analytical_sdf_rounded_box_antialiasing() {
     let alpha_transition = sdf_clip_alpha((0.25, 50.0), center, half_size, radius);
     assert!(alpha_transition > 0.5 && alpha_transition < 1.0);
 }
+
+#[test]
+fn test_nested_triple_clip_regions_and_popping() {
+    let mut renderer = RecordingClipRenderer::default();
+
+    // Layer 1: Outer screen card (0, 0, 800, 600), radius = 32.0
+    let outer = ClipRegion::new(
+        Rect::new(0.0, 0.0, 800.0, 600.0),
+        32.0,
+        ClipRegion::IDENTITY_TRANSFORM,
+    );
+    renderer.push_clip_region(outer);
+    assert_eq!(renderer.current_depth, 1);
+    assert_eq!(renderer.current_clip(), Some(&outer));
+
+    // Layer 2: Middle scroll container (50, 50, 400, 400), radius = 16.0
+    let middle = ClipRegion::new(
+        Rect::new(50.0, 50.0, 400.0, 400.0),
+        16.0,
+        ClipRegion::IDENTITY_TRANSFORM,
+    );
+    renderer.push_clip_region(middle);
+    assert_eq!(renderer.current_depth, 2);
+    assert_eq!(renderer.current_clip(), Some(&middle));
+
+    // Intersecting screen bounds
+    let combined_1_2 = middle.intersect_screen_bounds(outer.screen_bounds());
+    assert_eq!(combined_1_2, Rect::new(50.0, 50.0, 400.0, 400.0));
+
+    // Layer 3: Inner widget (100, 100, 200, 100), radius = 0.0 (sharp)
+    let inner = ClipRegion::new(
+        Rect::new(100.0, 100.0, 200.0, 100.0),
+        0.0,
+        ClipRegion::IDENTITY_TRANSFORM,
+    );
+    renderer.push_clip_region(inner);
+    assert_eq!(renderer.current_depth, 3);
+    assert_eq!(renderer.current_clip(), Some(&inner));
+
+    let combined_all = inner.intersect_screen_bounds(combined_1_2);
+    assert_eq!(combined_all, Rect::new(100.0, 100.0, 200.0, 100.0));
+
+    // Pop Layer 3 -> restores Layer 2
+    renderer.pop_clip_rect();
+    assert_eq!(renderer.current_depth, 2);
+    assert_eq!(renderer.current_clip(), Some(&middle));
+
+    // Pop Layer 2 -> restores Layer 1
+    renderer.pop_clip_rect();
+    assert_eq!(renderer.current_depth, 1);
+    assert_eq!(renderer.current_clip(), Some(&outer));
+
+    // Pop Layer 1 -> empty stack
+    renderer.pop_clip_rect();
+    assert_eq!(renderer.current_depth, 0);
+    assert!(renderer.current_clip().is_none());
+}
+
+#[test]
+fn test_rotated_clip_region_transform_invariance() {
+    // Test multiple rotation angles: 30°, 45°, 90°, 180°
+    let angles = [30.0f32, 45.0, 90.0, 180.0];
+
+    for &deg in &angles {
+        let rad = deg.to_radians();
+        let cos_a = rad.cos();
+        let sin_a = rad.sin();
+
+        // 3x3 rotation matrix around origin + translation (50, 60)
+        let transform = [cos_a, sin_a, 0.0, -sin_a, cos_a, 0.0, 50.0, 60.0, 1.0];
+
+        let region = ClipRegion::new(Rect::new(10.0, 20.0, 100.0, 80.0), 12.0, transform);
+
+        let inv = region.inverse_transform();
+
+        // Check T * inv(T) ~ Identity
+        // Multiply transform and inv: (a, b) * (inv_a, inv_b) etc.
+        let test_points = [(10.0, 20.0), (110.0, 20.0), (10.0, 100.0), (60.0, 50.0)];
+        for pt in test_points {
+            let screen = region.transform_point(pt);
+            // Apply inverse
+            let local_x = inv[0].mul_add(screen.0, inv[3].mul_add(screen.1, inv[6]));
+            let local_y = inv[1].mul_add(screen.0, inv[4].mul_add(screen.1, inv[7]));
+
+            assert!(
+                (local_x - pt.0).abs() < 1e-4,
+                "Rotation {deg}° local_x mismatch: got {local_x}, expected {}",
+                pt.0
+            );
+            assert!(
+                (local_y - pt.1).abs() < 1e-4,
+                "Rotation {deg}° local_y mismatch: got {local_y}, expected {}",
+                pt.1
+            );
+        }
+    }
+}
+
+#[test]
+fn test_scaled_and_translated_clip_region_screen_bounds() {
+    // 2.0x uniform scale + (100, 200) translation
+    let transform = [2.0, 0.0, 0.0, 0.0, 2.0, 0.0, 100.0, 200.0, 1.0];
+
+    let region = ClipRegion::new(Rect::new(10.0, 20.0, 50.0, 30.0), 8.0, transform);
+
+    let bounds = region.screen_bounds();
+    // Expected x = 10 * 2 + 100 = 120
+    // Expected y = 20 * 2 + 200 = 240
+    // Expected width = 50 * 2 = 100
+    // Expected height = 30 * 2 = 60
+    assert_eq!(bounds.x, 120.0);
+    assert_eq!(bounds.y, 240.0);
+    assert_eq!(bounds.width, 100.0);
+    assert_eq!(bounds.height, 60.0);
+}
+
+#[test]
+fn test_degenerate_matrix_fallback() {
+    // Determinant is 0.0 (all zeroes)
+    let degenerate = [0.0; 9];
+    let region = ClipRegion::new(Rect::new(10.0, 20.0, 50.0, 30.0), 5.0, degenerate);
+
+    let inv = region.inverse_transform();
+    // Must safely fallback to identity without panic or NaN
+    assert_eq!(inv, ClipRegion::IDENTITY_TRANSFORM);
+    assert!(!inv[0].is_nan());
+}
+
+#[test]
+fn test_clip_stack_active_sdf_resolution() {
+    let mut stack = Vec::new();
+
+    // Stack is empty -> active_sdf_clip is None
+    let active = stack
+        .iter()
+        .rev()
+        .find(|c: &&ClipRegion| c.is_rounded())
+        .copied();
+    assert!(active.is_none());
+
+    // Push sharp clip
+    let sharp = ClipRegion::from_rect(Rect::new(0.0, 0.0, 100.0, 100.0));
+    stack.push(sharp);
+    let active = stack
+        .iter()
+        .rev()
+        .find(|c: &&ClipRegion| c.is_rounded())
+        .copied();
+    assert!(active.is_none());
+
+    // Push outer rounded clip
+    let rounded1 = ClipRegion::new(
+        Rect::new(10.0, 10.0, 80.0, 80.0),
+        16.0,
+        ClipRegion::IDENTITY_TRANSFORM,
+    );
+    stack.push(rounded1);
+    let active = stack
+        .iter()
+        .rev()
+        .find(|c: &&ClipRegion| c.is_rounded())
+        .copied();
+    assert_eq!(active, Some(rounded1));
+
+    // Push inner sharp clip -> active rounded clip is still rounded1
+    let sharp2 = ClipRegion::from_rect(Rect::new(20.0, 20.0, 40.0, 40.0));
+    stack.push(sharp2);
+    let active = stack
+        .iter()
+        .rev()
+        .find(|c: &&ClipRegion| c.is_rounded())
+        .copied();
+    assert_eq!(active, Some(rounded1));
+
+    // Push inner rounded clip -> innermost rounded clip takes precedence
+    let rounded2 = ClipRegion::new(
+        Rect::new(25.0, 25.0, 30.0, 30.0),
+        8.0,
+        ClipRegion::IDENTITY_TRANSFORM,
+    );
+    stack.push(rounded2);
+    let active = stack
+        .iter()
+        .rev()
+        .find(|c: &&ClipRegion| c.is_rounded())
+        .copied();
+    assert_eq!(active, Some(rounded2));
+
+    // Pop rounded2 -> restores rounded1
+    stack.pop();
+    let active = stack
+        .iter()
+        .rev()
+        .find(|c: &&ClipRegion| c.is_rounded())
+        .copied();
+    assert_eq!(active, Some(rounded1));
+
+    // Pop sharp2 -> still rounded1
+    stack.pop();
+    let active = stack
+        .iter()
+        .rev()
+        .find(|c: &&ClipRegion| c.is_rounded())
+        .copied();
+    assert_eq!(active, Some(rounded1));
+
+    // Pop rounded1 -> no rounded clip remains
+    stack.pop();
+    let active = stack
+        .iter()
+        .rev()
+        .find(|c: &&ClipRegion| c.is_rounded())
+        .copied();
+    assert!(active.is_none());
+}
