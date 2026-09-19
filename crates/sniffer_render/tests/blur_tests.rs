@@ -159,3 +159,132 @@ fn test_fast_path_zero_blur_overhead() {
         "When blur_radius > 0.0, blur pass must execute"
     );
 }
+
+#[test]
+fn test_draw_ui_frosted_glass_card_pipeline() {
+    use sniffer_core::layout::calculate_layout;
+    use sniffer_core::math::Size;
+    use sniffer_core::render::Renderer;
+    use sniffer_core::style::{Dimension, Style};
+    use sniffer_core::types::Element;
+    use sniffer_core::ui::data_map::DataMap;
+    use sniffer_core::ui::style_map::StyleMap;
+    use sniffer_core::{Rect, ScreenMetrics};
+    use sniffer_render::draw_ui;
+
+    struct GlassSpyRenderer {
+        blur_called: bool,
+        last_blur_radius: f32,
+        last_tint: Option<u32>,
+    }
+
+    impl Renderer for GlassSpyRenderer {
+        fn clear(&mut self, _color: u32) {}
+        fn draw_rect(
+            &mut self,
+            _rect: Rect,
+            _color: u32,
+            _radius: f32,
+            _border_width: f32,
+            _border_color: Option<u32>,
+        ) {
+        }
+        fn draw_rect_gradient(
+            &mut self,
+            _rect: Rect,
+            _color_top: u32,
+            _color_bottom: u32,
+            _radius: f32,
+            _border_width: f32,
+            _border_color: Option<u32>,
+        ) {
+        }
+        fn draw_shadow(
+            &mut self,
+            _rect: Rect,
+            _radius: f32,
+            _offset_y: f32,
+            _spread: f32,
+            _color: u32,
+        ) {
+        }
+        fn draw_circle(&mut self, _cx: f32, _cy: f32, _radius: f32, _color: u32) {}
+        fn draw_text(&mut self, _text: &str, _x: f32, _y: f32, _size: f32, _color: u32) {}
+        fn begin_frame(&mut self, _width: f32, _height: f32) {}
+        fn end_frame(&mut self) {}
+        fn set_clip_rect(&mut self, _rect: Rect) {}
+        fn clear_clip_rect(&mut self) {}
+        fn set_global_alpha(&mut self, _alpha: f32) {}
+        fn load_image(&mut self, _id: &str, _rgba_pixels: &[u8], _width: u32, _height: u32) {}
+        fn has_image(&self, _id: &str) -> bool {
+            false
+        }
+        fn draw_image(
+            &mut self,
+            _id: &str,
+            _rect: Rect,
+            _radius: f32,
+            _object_fit: sniffer_core::style::ObjectFit,
+        ) {
+        }
+        fn measure_text(&self, _text: &str, _size: f32) -> f32 {
+            0.0
+        }
+        fn draw_backdrop_blur(
+            &mut self,
+            _rect: Rect,
+            _radius: f32,
+            blur_radius: f32,
+            tint: Option<u32>,
+        ) {
+            self.blur_called = true;
+            self.last_blur_radius = blur_radius;
+            self.last_tint = tint;
+        }
+    }
+
+    let mut spy = GlassSpyRenderer {
+        blur_called: false,
+        last_blur_radius: 0.0,
+        last_tint: None,
+    };
+
+    let card = Element::Container {
+        id: Some("dock_glass".to_string()),
+        style: Style {
+            width: Dimension::Pixels(300.0),
+            height: Dimension::Pixels(80.0),
+            backdrop_blur: 24.0,
+            backdrop_tint: Some(0x33FF_FFFF),
+            border_radius: 20.0,
+            ..Default::default()
+        },
+        children: vec![],
+    };
+
+    let layout = calculate_layout(&card, Size::new(800.0, 600.0), 0.0, 0.0);
+    let metrics = ScreenMetrics::default_mdpi(800.0, 600.0);
+    let style_map = StyleMap::default();
+    let data_map = DataMap::default();
+    let transitions = sniffer_core::anim::TransitionManager::default();
+
+    draw_ui(
+        &mut spy,
+        &card,
+        &layout,
+        &metrics,
+        &style_map,
+        &data_map,
+        &transitions,
+        1.0,
+        0.0,
+        0.0,
+    );
+
+    assert!(
+        spy.blur_called,
+        "draw_ui must trigger draw_backdrop_blur for frosted glass cards"
+    );
+    assert_eq!(spy.last_blur_radius, 24.0);
+    assert_eq!(spy.last_tint, Some(0x33FF_FFFF));
+}
