@@ -37,6 +37,7 @@ pub struct GlowRenderer {
     pub(crate) atlas_height: i32,
     pub(crate) image_program: glow::Program,
     pub(crate) texture_cache: textures::LruTextureCache,
+    pub(crate) icon_atlas: Option<textures::IconAtlas>,
     pub(crate) global_alpha: f32,
     pub(crate) transform_stack: Vec<[f32; 9]>,
     pub(crate) clip_stack: Vec<ClipRegion>,
@@ -304,6 +305,12 @@ impl GlowRenderer {
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
             let default_matrix = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+            let icon_atlas = textures::IconAtlas::new(
+                &gl,
+                textures::IconAtlas::DEFAULT_ATLAS_DIM,
+                textures::IconAtlas::DEFAULT_ATLAS_DIM,
+            )
+            .ok();
 
             Ok(Self {
                 gl,
@@ -324,6 +331,7 @@ impl GlowRenderer {
                 atlas_height,
                 image_program,
                 texture_cache: textures::LruTextureCache::default(),
+                icon_atlas,
                 global_alpha: 1.0,
                 transform_stack: vec![default_matrix],
                 clip_stack: Vec::new(),
@@ -424,6 +432,20 @@ impl GlowRenderer {
         self.blur_pipeline
             .as_ref()
             .map_or(0, blur::BlurPipeline::vram_bytes)
+    }
+
+    /// Returns a reference to the GPU icon atlas if initialized.
+    #[must_use]
+    pub fn icon_atlas(&self) -> Option<&textures::IconAtlas> {
+        self.icon_atlas.as_ref()
+    }
+
+    /// Returns the total VRAM bytes currently allocated for the GPU icon atlas texture.
+    #[must_use]
+    pub fn icon_atlas_vram_bytes(&self) -> usize {
+        self.icon_atlas
+            .as_ref()
+            .map_or(0, textures::IconAtlas::vram_bytes)
     }
 
     pub fn warm_up_shaders(&mut self) {
