@@ -58,7 +58,7 @@ _Hedef: Dock bar, uygulama çekmecesi veya popup kartların arkasındaki duvar k
 _Hedef: Izgara (grid) içerisindeki onlarca uygulama ikonu ve resim için her kare yapılan ayrı ayrı shader ve doku değişimlerini (texture bind / draw call) en aza indirmek._
 
 - [x] **Aşama 4.1:** Çoklu ikon ve küçük resimler için dinamik GPU Texture Atlas / Texture Array tahsis mekanizmasının tasarlanması.
-- [ ] **Aşama 4.2:** `ImageInstanceData` ve instanced image shader (`image_desktop.vs`, `image_android.vs`) altyapısının kurulması.
+- [x] **Aşama 4.2:** `ImageInstanceData` ve instanced image shader (`image_desktop.vs`, `image_android.vs`) altyapısının kurulması.
 - [ ] **Aşama 4.3:** `draw_image_impl` çağrılarının atlaslanan resimlerde anında çizim yerine `ImageBatch` tamponuna veri ekleyecek şekilde refactor edilmesi.
 - [ ] **Aşama 4.4:** `flush_images()` çağrısının render döngüsüne eklenmesi; doku atlasındaki tüm ikonların tek bir instanced çağrıyla GPU'ya gönderilmesi.
 - [ ] **Aşama 4.5:** 60+ ikon içeren uygulama çekmecesinde (App Drawer) draw call sayısının ve GPU state değişimlerinin dramatik düşüşünün doğrulanması.
