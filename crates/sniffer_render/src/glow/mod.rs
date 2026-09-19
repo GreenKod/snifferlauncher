@@ -219,6 +219,10 @@ impl GlowRenderer {
                 u_shape_size: gl.get_uniform_location(shape_program, "u_shape_size"),
                 u_transform: gl.get_uniform_location(shape_program, "u_transform"),
                 u_instanced: gl.get_uniform_location(shape_program, "u_instanced"),
+                u_clip_rect: gl.get_uniform_location(shape_program, "u_clip_rect"),
+                u_clip_radius: gl.get_uniform_location(shape_program, "u_clip_radius"),
+                u_clip_inv_transform: gl
+                    .get_uniform_location(shape_program, "u_clip_inv_transform"),
             };
 
             let image_uniforms = ImageUniforms {
@@ -230,6 +234,10 @@ impl GlowRenderer {
                 u_radius: gl.get_uniform_location(image_program, "u_radius"),
                 u_global_alpha: gl.get_uniform_location(image_program, "u_global_alpha"),
                 u_transform: gl.get_uniform_location(image_program, "u_transform"),
+                u_clip_rect: gl.get_uniform_location(image_program, "u_clip_rect"),
+                u_clip_radius: gl.get_uniform_location(image_program, "u_clip_radius"),
+                u_clip_inv_transform: gl
+                    .get_uniform_location(image_program, "u_clip_inv_transform"),
             };
 
             let text_uniforms = TextUniforms {
@@ -241,6 +249,9 @@ impl GlowRenderer {
                 u_uv_end: gl.get_uniform_location(text_program, "u_uv_end"),
                 u_transform: gl.get_uniform_location(text_program, "u_transform"),
                 u_is_color: gl.get_uniform_location(text_program, "u_is_color"),
+                u_clip_rect: gl.get_uniform_location(text_program, "u_clip_rect"),
+                u_clip_radius: gl.get_uniform_location(text_program, "u_clip_radius"),
+                u_clip_inv_transform: gl.get_uniform_location(text_program, "u_clip_inv_transform"),
             };
 
             gl.enable(glow::BLEND);

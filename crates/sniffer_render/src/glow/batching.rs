@@ -188,6 +188,12 @@ impl GlowRenderer {
                     .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
             }
 
+            self.upload_clip_uniforms(
+                u.u_clip_rect.as_ref(),
+                u.u_clip_radius.as_ref(),
+                u.u_clip_inv_transform.as_ref(),
+            );
+
             self.gl
                 .bind_buffer(glow::ARRAY_BUFFER, Some(self.shape_instance_vbo));
             self.gl.buffer_data_u8_slice(
@@ -319,6 +325,13 @@ impl GlowRenderer {
             };
             self.gl
                 .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
+
+            self.upload_clip_uniforms(
+                u.u_clip_rect.as_ref(),
+                u.u_clip_radius.as_ref(),
+                u.u_clip_inv_transform.as_ref(),
+            );
+
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }
@@ -364,6 +377,13 @@ impl GlowRenderer {
             };
             self.gl
                 .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
+
+            self.upload_clip_uniforms(
+                u.u_clip_rect.as_ref(),
+                u.u_clip_radius.as_ref(),
+                u.u_clip_inv_transform.as_ref(),
+            );
+
             self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
         }
     }

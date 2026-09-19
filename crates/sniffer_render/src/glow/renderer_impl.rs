@@ -279,7 +279,6 @@ impl GlowRenderer {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) unsafe fn upload_clip_uniforms(
         &self,
         u_rect: Option<&glow::UniformLocation>,

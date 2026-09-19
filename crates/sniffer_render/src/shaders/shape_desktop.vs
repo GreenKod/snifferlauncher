@@ -19,6 +19,7 @@ out float v_is_circle;
 out float v_is_shadow;
 out float v_shadow_blur;
 out float v_is_gradient;
+out vec2 v_screen_pos;
 
 uniform vec2 u_resolution;
 uniform mat3 u_transform;
@@ -44,6 +45,7 @@ void main() {
     
     vec3 pixel_pos_3 = u_transform * vec3(position * rect_size + rect_pos, 1.0);
     vec2 pixel_pos = pixel_pos_3.xy;
+    v_screen_pos = pixel_pos;
     v_local_pos = position * rect_size;
     
     v_color = (u_instanced == 1) ? a_color : u_color;

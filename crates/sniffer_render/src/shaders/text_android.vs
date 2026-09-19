@@ -8,6 +8,7 @@ layout(location = 3) in float is_color;
 out vec2 v_uv;
 out vec4 v_color;
 flat out float v_is_color;
+out vec2 v_screen_pos;
 
 uniform vec2 u_resolution;
 uniform mat3 u_transform;
@@ -15,6 +16,7 @@ uniform mat3 u_transform;
 void main() {
     vec3 pixel_pos_3 = u_transform * vec3(position, 1.0);
     vec2 pixel_pos = pixel_pos_3.xy;
+    v_screen_pos = pixel_pos;
     v_uv = uv;
     v_color = color;
     v_is_color = is_color;
