@@ -260,6 +260,25 @@ impl BlurPipeline {
         self.downsample_factor
     }
 
+    /// Computes the optimal number of Kawase blur passes based on `blur_radius`
+    /// to maintain a 120Hz (8.33ms) frame budget on mobile GPUs.
+    #[must_use]
+    pub fn optimal_pass_count(blur_radius: f32) -> usize {
+        if blur_radius <= 8.0 {
+            1
+        } else if blur_radius <= 24.0 {
+            2
+        } else {
+            3
+        }
+    }
+
+    /// Returns the total VRAM in bytes allocated for both ping-pong textures.
+    #[must_use]
+    pub fn vram_bytes(&self) -> usize {
+        (self.width as usize) * (self.height as usize) * 4 * 2
+    }
+
     /// Renders a single Kawase blur pass from `source_tex` to `target_fbo`.
     pub unsafe fn render_kawase_pass(
         &self,
