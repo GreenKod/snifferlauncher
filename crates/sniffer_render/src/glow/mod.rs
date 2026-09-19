@@ -386,25 +386,44 @@ impl GlowRenderer {
         height: i32,
         downsample_factor: f32,
     ) -> Result<(), String> {
+        let max_dim = 960.0_f32;
         let factor = if downsample_factor > 0.0 {
             downsample_factor
         } else {
             0.5
         };
-        let target_w = ((width as f32) * factor).max(1.0) as i32;
-        let target_h = ((height as f32) * factor).max(1.0) as i32;
+        let mut target_w = ((width as f32) * factor).max(1.0);
+        let mut target_h = ((height as f32) * factor).max(1.0);
+
+        // Frame budget and VRAM protection: Clamp max blur texture dimension to 960px.
+        // On 4K/1440p displays, this prevents fill-rate degradation while preserving frosted glass quality.
+        if target_w > max_dim || target_h > max_dim {
+            let scale = (max_dim / target_w).min(max_dim / target_h);
+            target_w = (target_w * scale).max(1.0);
+            target_h = (target_h * scale).max(1.0);
+        }
+
+        let tw = target_w as i32;
+        let th = target_h as i32;
 
         if let Some(ref mut pipeline) = self.blur_pipeline {
             unsafe {
-                pipeline.ensure_size(&self.gl, target_w, target_h)?;
+                pipeline.ensure_size(&self.gl, tw, th)?;
             }
         } else {
-            let pipeline =
-                unsafe { blur::BlurPipeline::new(&self.gl, target_w, target_h, factor)? };
+            let pipeline = unsafe { blur::BlurPipeline::new(&self.gl, tw, th, factor)? };
             self.blur_pipeline = Some(pipeline);
         }
 
         Ok(())
+    }
+
+    /// Returns the total VRAM bytes currently allocated for blur ping-pong FBO textures.
+    #[must_use]
+    pub fn blur_vram_bytes(&self) -> usize {
+        self.blur_pipeline
+            .as_ref()
+            .map_or(0, blur::BlurPipeline::vram_bytes)
     }
 
     pub fn warm_up_shaders(&mut self) {

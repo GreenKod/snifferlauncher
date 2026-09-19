@@ -214,12 +214,13 @@ impl Renderer for GlowRenderer {
         {
             unsafe {
                 pipeline.capture_screen(&self.gl, screen_w, screen_h);
+                let passes = super::blur::BlurPipeline::optimal_pass_count(blur_radius);
                 let blurred_tex = pipeline.execute_kawase_blur(
                     &self.gl,
                     self.quad_vertex_array,
                     self.blur_program,
                     &self.blur_uniforms,
-                    2,
+                    passes,
                     blur_radius,
                 );
                 self.gl.viewport(0, 0, screen_w, screen_h);

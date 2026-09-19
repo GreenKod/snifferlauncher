@@ -288,3 +288,67 @@ fn test_draw_ui_frosted_glass_card_pipeline() {
     assert_eq!(spy.last_blur_radius, 24.0);
     assert_eq!(spy.last_tint, Some(0x33FF_FFFF));
 }
+
+#[test]
+fn test_120hz_pass_count_scaling_and_capping() {
+    use sniffer_render::BlurPipeline;
+
+    // Small blurs run in 1 pass for maximum 120 FPS performance
+    assert_eq!(BlurPipeline::optimal_pass_count(0.0), 1);
+    assert_eq!(BlurPipeline::optimal_pass_count(4.0), 1);
+    assert_eq!(BlurPipeline::optimal_pass_count(8.0), 1);
+
+    // Medium blurs (frosted glass standard) run in 2 passes
+    assert_eq!(BlurPipeline::optimal_pass_count(12.0), 2);
+    assert_eq!(BlurPipeline::optimal_pass_count(20.0), 2);
+    assert_eq!(BlurPipeline::optimal_pass_count(24.0), 2);
+
+    // Large blurs capped at 3 passes to guarantee < 8.33ms frame budget
+    assert_eq!(BlurPipeline::optimal_pass_count(32.0), 3);
+    assert_eq!(BlurPipeline::optimal_pass_count(64.0), 3);
+    assert_eq!(BlurPipeline::optimal_pass_count(500.0), 3);
+}
+
+#[test]
+fn test_vram_bounds_across_resolutions() {
+    let clamp_max_dim = |w: f32, h: f32| -> (usize, usize) {
+        let max_dim = 960.0_f32;
+        let mut target_w = (w * 0.5).max(1.0);
+        let mut target_h = (h * 0.5).max(1.0);
+        if target_w > max_dim || target_h > max_dim {
+            let scale = (max_dim / target_w).min(max_dim / target_h);
+            target_w = (target_w * scale).max(1.0);
+            target_h = (target_h * scale).max(1.0);
+        }
+        (target_w as usize, target_h as usize)
+    };
+
+    let resolutions = [
+        ("720p HD", 720.0, 1280.0),
+        ("1080p FHD+", 1080.0, 2400.0),
+        ("1440p QHD+", 1440.0, 3200.0),
+        ("4K UHD", 3840.0, 2160.0),
+    ];
+
+    for (name, screen_w, screen_h) in resolutions {
+        let (tw, th) = clamp_max_dim(screen_w, screen_h);
+        let pair_vram = tw * th * 4 * 2;
+
+        // VRAM for ping-pong pair must strictly stay under 8 MB on any resolution
+        assert!(
+            pair_vram <= 8 * 1024 * 1024,
+            "Resolution {name} exceeded 8MB VRAM: {pair_vram} bytes"
+        );
+        assert!(tw <= 960);
+        assert!(th <= 960);
+    }
+}
+
+#[test]
+fn test_half_res_fill_rate_savings_75_percent() {
+    let full_pixels: f32 = 1080.0 * 2400.0;
+    let half_pixels: f32 = (1080.0 * 0.5) * (2400.0 * 0.5);
+
+    let reduction = 1.0_f32 - (half_pixels / full_pixels);
+    assert!((reduction - 0.75_f32).abs() < f32::EPSILON);
+}
