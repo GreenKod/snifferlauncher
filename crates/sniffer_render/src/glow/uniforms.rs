@@ -56,7 +56,6 @@ pub struct BlurUniforms {
     pub u_offset: Option<glow::UniformLocation>,
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct GlassUniforms {
     pub u_resolution: Option<glow::UniformLocation>,

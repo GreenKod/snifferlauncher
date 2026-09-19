@@ -44,12 +44,10 @@ pub struct GlowRenderer {
     pub(crate) image_uniforms: ImageUniforms,
     pub(crate) text_uniforms: TextUniforms,
     pub(crate) blur_uniforms: BlurUniforms,
-    #[allow(dead_code)]
     pub(crate) glass_uniforms: GlassUniforms,
     pub(crate) current_vao: Option<glow::VertexArray>,
     pub(crate) blur_pipeline: Option<blur::BlurPipeline>,
     pub(crate) blur_program: glow::Program,
-    #[allow(dead_code)]
     pub(crate) glass_program: glow::Program,
 }
 

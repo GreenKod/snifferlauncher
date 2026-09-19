@@ -138,7 +138,23 @@ pub(crate) fn draw_ui_node(
         );
     }
 
-    if let Some((color_top, color_bottom)) = base_style.background_gradient {
+    if base_style.backdrop_blur > 0.0 {
+        renderer.draw_backdrop_blur(
+            rect,
+            base_style.border_radius,
+            base_style.backdrop_blur,
+            base_style.backdrop_tint.or(base_style.background_color),
+        );
+        if base_style.border_width > 0.0 && base_style.border_color.is_some() {
+            renderer.draw_rect(
+                rect,
+                0x0000_0000,
+                base_style.border_radius,
+                base_style.border_width,
+                base_style.border_color,
+            );
+        }
+    } else if let Some((color_top, color_bottom)) = base_style.background_gradient {
         renderer.draw_rect_gradient(
             rect,
             color_top,

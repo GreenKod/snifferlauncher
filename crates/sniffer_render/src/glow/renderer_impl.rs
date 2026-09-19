@@ -214,7 +214,7 @@ impl Renderer for GlowRenderer {
         {
             unsafe {
                 pipeline.capture_screen(&self.gl, screen_w, screen_h);
-                let _blurred_tex = pipeline.execute_kawase_blur(
+                let blurred_tex = pipeline.execute_kawase_blur(
                     &self.gl,
                     self.quad_vertex_array,
                     self.blur_program,
@@ -224,11 +224,57 @@ impl Renderer for GlowRenderer {
                 );
                 self.gl.viewport(0, 0, screen_w, screen_h);
                 self.ensure_quad_vao();
-            }
-        }
 
-        if let Some(tint_color) = tint {
-            self.draw_rect_impl(rect, tint_color, radius, 0.0, None);
+                self.gl.use_program(Some(self.glass_program));
+
+                if let Some(loc) = &self.glass_uniforms.u_resolution {
+                    self.gl
+                        .uniform_2_f32(Some(loc), self.resolution.0, self.resolution.1);
+                }
+                if let Some(loc) = &self.glass_uniforms.u_rect_pos {
+                    self.gl.uniform_2_f32(Some(loc), rect.x, rect.y);
+                }
+                if let Some(loc) = &self.glass_uniforms.u_rect_size {
+                    self.gl.uniform_2_f32(Some(loc), rect.width, rect.height);
+                }
+                if let Some(loc) = &self.glass_uniforms.u_radius {
+                    self.gl.uniform_1_f32(Some(loc), radius);
+                }
+                let tint_col = tint.map_or([0.0, 0.0, 0.0, 0.0], batching::unpack_color);
+                if let Some(loc) = &self.glass_uniforms.u_tint_color {
+                    self.gl.uniform_4_f32(
+                        Some(loc),
+                        tint_col[0],
+                        tint_col[1],
+                        tint_col[2],
+                        tint_col[3],
+                    );
+                }
+                if let Some(loc) = &self.glass_uniforms.u_global_alpha {
+                    self.gl.uniform_1_f32(Some(loc), self.global_alpha);
+                }
+                if let Some(loc) = &self.glass_uniforms.u_transform
+                    && let Some(mat) = self.transform_stack.last()
+                {
+                    self.gl.uniform_matrix_3_f32_slice(Some(loc), false, mat);
+                }
+
+                self.upload_clip_uniforms(
+                    self.glass_uniforms.u_clip_rect.as_ref(),
+                    self.glass_uniforms.u_clip_radius.as_ref(),
+                    self.glass_uniforms.u_clip_inv_transform.as_ref(),
+                );
+
+                self.gl.active_texture(glow::TEXTURE0);
+                self.gl.bind_texture(glow::TEXTURE_2D, Some(blurred_tex));
+                if let Some(loc) = &self.glass_uniforms.u_blur_texture {
+                    self.gl.uniform_1_i32(Some(loc), 0);
+                }
+
+                self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+
+                self.gl.bind_texture(glow::TEXTURE_2D, None);
+            }
         }
     }
 
