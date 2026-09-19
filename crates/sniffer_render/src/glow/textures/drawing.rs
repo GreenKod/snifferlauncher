@@ -266,6 +266,57 @@ impl GlowRenderer {
     ) {
         let current_frame = self.texture_cache.current_frame;
 
+        // --- Atlas fast-path: icon is already packed in the GPU atlas ---
+        if id != "__system_wallpaper__" {
+            if let Some(region) = self.icon_atlas.as_ref().and_then(|a| a.get(id)).copied() {
+                // Compute draw rect from object_fit (same logic as standalone path)
+                let img_w = region.width as f32;
+                let img_h = region.height as f32;
+                let mut draw_rect = rect;
+                let img_aspect = img_w / img_h;
+                let rect_aspect = rect.width / rect.height;
+
+                // For atlas icons the UV is pre-baked; Contain shrinks the draw_rect
+                // while Cover/Fill keeps the draw_rect at nominal size (UV already correct)
+                match object_fit {
+                    sniffer_core::style::ObjectFit::Contain => {
+                        if img_aspect > rect_aspect {
+                            let target_h = rect.width / img_aspect;
+                            draw_rect.y = rect.y + (rect.height - target_h) / 2.0;
+                            draw_rect.height = target_h;
+                        } else {
+                            let target_w = rect.height * img_aspect;
+                            draw_rect.x = rect.x + (rect.width - target_w) / 2.0;
+                            draw_rect.width = target_w;
+                        }
+                    }
+                    sniffer_core::style::ObjectFit::Fill
+                    | sniffer_core::style::ObjectFit::Cover => {}
+                }
+
+                let instance = crate::glow::batching::ImageInstanceData {
+                    rect_pos: [draw_rect.x, draw_rect.y],
+                    rect_size: [draw_rect.width, draw_rect.height],
+                    uv_rect: region.uv_rect,
+                    radius,
+                    alpha: self.global_alpha,
+                    pad: [0.0, 0.0],
+                };
+
+                if self.image_batch.is_full() {
+                    self.flush_images();
+                }
+                let _ = self.image_batch.push_instance(instance);
+
+                // Touch the LRU frame counter so the image isn't evicted
+                if let Some(handle) = self.texture_cache.get_mut(id) {
+                    handle.last_frame = current_frame;
+                }
+                return;
+            }
+        }
+
+        // --- Standalone path: large image or not yet in atlas (e.g. wallpaper) ---
         if let Some(handle) = self.texture_cache.get_mut(id) {
             handle.last_frame = current_frame;
             let tex = handle.texture;
@@ -304,6 +355,9 @@ impl GlowRenderer {
                     }
                 }
             }
+
+            // Flush any pending batched icons before switching to a different texture
+            self.flush_images();
 
             unsafe {
                 self.gl.use_program(Some(self.image_program));
