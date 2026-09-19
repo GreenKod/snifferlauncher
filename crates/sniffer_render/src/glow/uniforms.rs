@@ -49,3 +49,25 @@ pub struct TextUniforms {
     pub u_clip_radius: Option<glow::UniformLocation>,
     pub u_clip_inv_transform: Option<glow::UniformLocation>,
 }
+
+#[derive(Clone)]
+pub struct BlurUniforms {
+    pub u_texture: Option<glow::UniformLocation>,
+    pub u_offset: Option<glow::UniformLocation>,
+}
+
+#[allow(dead_code)]
+#[derive(Clone)]
+pub struct GlassUniforms {
+    pub u_resolution: Option<glow::UniformLocation>,
+    pub u_rect_pos: Option<glow::UniformLocation>,
+    pub u_rect_size: Option<glow::UniformLocation>,
+    pub u_radius: Option<glow::UniformLocation>,
+    pub u_tint_color: Option<glow::UniformLocation>,
+    pub u_global_alpha: Option<glow::UniformLocation>,
+    pub u_transform: Option<glow::UniformLocation>,
+    pub u_blur_texture: Option<glow::UniformLocation>,
+    pub u_clip_rect: Option<glow::UniformLocation>,
+    pub u_clip_radius: Option<glow::UniformLocation>,
+    pub u_clip_inv_transform: Option<glow::UniformLocation>,
+}

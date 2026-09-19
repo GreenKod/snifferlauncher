@@ -260,6 +260,76 @@ impl BlurPipeline {
         self.downsample_factor
     }
 
+    /// Renders a single Kawase blur pass from `source_tex` to `target_fbo`.
+    pub unsafe fn render_kawase_pass(
+        &self,
+        gl: &glow::Context,
+        quad_vao: glow::VertexArray,
+        program: glow::Program,
+        uniforms: &crate::glow::uniforms::BlurUniforms,
+        source_tex: glow::Texture,
+        target_fbo: glow::Framebuffer,
+        offset_x: f32,
+        offset_y: f32,
+    ) {
+        unsafe {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target_fbo));
+            gl.viewport(0, 0, self.width, self.height);
+            gl.use_program(Some(program));
+            gl.bind_vertex_array(Some(quad_vao));
+
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D, Some(source_tex));
+            if let Some(loc) = uniforms.u_texture {
+                gl.uniform_1_i32(Some(&loc), 0);
+            }
+            if let Some(loc) = uniforms.u_offset {
+                gl.uniform_2_f32(Some(&loc), offset_x, offset_y);
+            }
+
+            gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+
+            gl.bind_texture(glow::TEXTURE_2D, None);
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        }
+    }
+
+    /// Executes dual-pass Kawase blur ping-pong passes.
+    /// Returns the final blurred `glow::Texture`.
+    #[allow(clippy::cast_precision_loss)]
+    pub unsafe fn execute_kawase_blur(
+        &self,
+        gl: &glow::Context,
+        quad_vao: glow::VertexArray,
+        program: glow::Program,
+        uniforms: &crate::glow::uniforms::BlurUniforms,
+        passes: usize,
+        blur_radius: f32,
+    ) -> glow::Texture {
+        let mut current_target = PingPongTarget::A;
+        let inv_w = 1.0 / (self.width as f32);
+        let inv_h = 1.0 / (self.height as f32);
+
+        let num_passes = passes.clamp(1, 4);
+        let base_offset = (blur_radius * 0.25).max(1.0);
+
+        for pass in 0..num_passes {
+            let iteration = (pass as f32) + base_offset;
+            let offset_x = iteration * inv_w;
+            let offset_y = iteration * inv_h;
+
+            let (src_tex, dst_fbo) = self.pass_pair(current_target);
+            unsafe {
+                self.render_kawase_pass(
+                    gl, quad_vao, program, uniforms, src_tex, dst_fbo, offset_x, offset_y,
+                );
+            }
+            current_target = current_target.other();
+        }
+
+        self.texture_for(current_target)
+    }
+
     /// Destroys all GL resources (FBOs and textures).
     pub unsafe fn destroy(&mut self, gl: &glow::Context) {
         unsafe {
