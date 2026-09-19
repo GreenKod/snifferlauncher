@@ -93,6 +93,91 @@ impl Default for QuadBatch {
     }
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct ImageInstanceData {
+    pub rect_pos: [f32; 2],
+    pub rect_size: [f32; 2],
+    pub uv_rect: [f32; 4],
+    pub radius: f32,
+    pub alpha: f32,
+    pub pad: [f32; 2],
+}
+
+pub struct ImageBatch {
+    pub instances: Vec<ImageInstanceData>,
+    pub max_capacity: usize,
+}
+
+impl ImageBatch {
+    pub const DEFAULT_MAX_CAPACITY: usize = 512;
+    pub const INITIAL_CAPACITY: usize = 128;
+
+    #[must_use]
+    pub fn new(max_capacity: usize) -> Self {
+        Self {
+            instances: Vec::with_capacity(Self::INITIAL_CAPACITY.min(max_capacity)),
+            max_capacity,
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.instances.is_empty()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.instances.len()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn is_full(&self) -> bool {
+        self.instances.len() >= self.max_capacity
+    }
+
+    #[inline]
+    pub fn push_instance(&mut self, instance: ImageInstanceData) -> bool {
+        if self.is_full() {
+            return false;
+        }
+        self.instances.push(instance);
+        true
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.instances.clear();
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn as_slice(&self) -> &[ImageInstanceData] {
+        &self.instances
+    }
+
+    /// Returns the raw byte representation of instances for OpenGL buffer upload.
+    #[inline]
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                self.instances.as_ptr().cast::<u8>(),
+                self.instances.len() * std::mem::size_of::<ImageInstanceData>(),
+            )
+        }
+    }
+}
+
+impl Default for ImageBatch {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_MAX_CAPACITY)
+    }
+}
+
 pub struct TextBatch {
     pub vertices: Vec<f32>,
     pub max_capacity: usize,
@@ -592,5 +677,62 @@ mod tests {
 
         batch.clear();
         assert!(batch.is_empty());
+    }
+
+    #[test]
+    fn test_image_instance_data_layout() {
+        assert_eq!(std::mem::size_of::<ImageInstanceData>(), 48);
+        assert_eq!(std::mem::align_of::<ImageInstanceData>(), 4);
+
+        let data = ImageInstanceData::default();
+        let base = &raw const data as usize;
+
+        // 1. a_bounds: rect_pos (8B) + rect_size (8B) = 16B at offset 0
+        assert_eq!(&raw const data.rect_pos as usize - base, 0);
+        assert_eq!(&raw const data.rect_size as usize - base, 8);
+
+        // 2. a_uv_bounds: uv_rect (16B) at offset 16
+        assert_eq!(&raw const data.uv_rect as usize - base, 16);
+
+        // 3. a_params: radius (4B) + alpha (4B) + pad (8B) = 16B at offset 32
+        assert_eq!(&raw const data.radius as usize - base, 32);
+        assert_eq!(&raw const data.alpha as usize - base, 36);
+        assert_eq!(&raw const data.pad as usize - base, 40);
+    }
+
+    #[test]
+    fn test_image_batch_management() {
+        let mut batch = ImageBatch::new(4);
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
+        assert!(!batch.is_full());
+        assert_eq!(batch.as_slice().len(), 0);
+
+        let inst = ImageInstanceData {
+            rect_pos: [10.0, 20.0],
+            rect_size: [64.0, 64.0],
+            uv_rect: [0.0, 0.0, 0.5, 0.5],
+            radius: 8.0,
+            alpha: 1.0,
+            pad: [0.0, 0.0],
+        };
+
+        assert!(batch.push_instance(inst));
+        assert!(batch.push_instance(inst));
+        assert!(batch.push_instance(inst));
+        assert!(batch.push_instance(inst));
+        assert_eq!(batch.len(), 4);
+        assert!(batch.is_full());
+
+        // Cannot push past capacity
+        assert!(!batch.push_instance(inst));
+        assert_eq!(batch.len(), 4);
+
+        // 4 instances * 48 bytes = 192 bytes
+        assert_eq!(batch.as_bytes().len(), 4 * 48);
+
+        batch.clear();
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
     }
 }

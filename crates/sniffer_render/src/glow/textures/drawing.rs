@@ -313,6 +313,7 @@ impl GlowRenderer {
 
                 let u = &self.image_uniforms;
 
+                self.gl.uniform_1_i32(u.u_instanced.as_ref(), 0);
                 self.gl.uniform_2_f32(
                     u.u_resolution.as_ref(),
                     self.resolution.0,
