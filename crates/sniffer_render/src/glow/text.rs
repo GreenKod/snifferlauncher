@@ -310,6 +310,12 @@ impl GlowRenderer {
                     .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, &t);
             }
 
+            self.upload_clip_uniforms(
+                u.u_clip_rect.as_ref(),
+                u.u_clip_radius.as_ref(),
+                u.u_clip_inv_transform.as_ref(),
+            );
+
             self.gl
                 .bind_buffer(glow::ARRAY_BUFFER, Some(self.text_instance_vbo));
 
