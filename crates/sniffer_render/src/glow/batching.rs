@@ -295,6 +295,60 @@ impl GlowRenderer {
         }
     }
 
+    pub fn flush_images(&mut self) {
+        if self.image_batch.is_empty() {
+            return;
+        }
+
+        let Some(ref atlas) = self.icon_atlas else {
+            self.image_batch.clear();
+            return;
+        };
+        let atlas_tex = atlas.texture;
+
+        unsafe {
+            self.gl.use_program(Some(self.image_program));
+            self.ensure_image_instance_vao();
+
+            let u = &self.image_uniforms;
+            self.gl.uniform_1_i32(u.u_instanced.as_ref(), 1);
+            self.gl.uniform_2_f32(
+                u.u_resolution.as_ref(),
+                self.resolution.0,
+                self.resolution.1,
+            );
+
+            if let Some(t) = self.transform_stack.last() {
+                self.gl
+                    .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
+            }
+
+            self.upload_clip_uniforms(
+                u.u_clip_rect.as_ref(),
+                u.u_clip_radius.as_ref(),
+                u.u_clip_inv_transform.as_ref(),
+            );
+
+            self.gl.active_texture(glow::TEXTURE0);
+            self.gl.bind_texture(glow::TEXTURE_2D, Some(atlas_tex));
+
+            self.gl
+                .bind_buffer(glow::ARRAY_BUFFER, Some(self.image_instance_vbo));
+            self.gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                self.image_batch.as_bytes(),
+                glow::DYNAMIC_DRAW,
+            );
+
+            let count =
+                i32::try_from(self.image_batch.len()).expect("image instance count fits in i32");
+            self.gl
+                .draw_arrays_instanced(glow::TRIANGLE_STRIP, 0, 4, count);
+
+            self.image_batch.clear();
+        }
+    }
+
     pub(crate) fn draw_rect_impl(
         &mut self,
         rect: Rect,
