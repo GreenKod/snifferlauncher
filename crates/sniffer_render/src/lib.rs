@@ -9,6 +9,6 @@ pub use draw::{
 };
 pub use glow::batching::{QuadBatch, TextBatch};
 pub use glow::textures::MemoryTrimLevel;
-pub use glow::{GlowRenderer, SdfClipData};
+pub use glow::{BlurPipeline, GlowRenderer, PingPongTarget, SdfClipData};
 pub use sniffer_core::render::{ClipRegion, Renderer};
 pub use sniffer_core::{dev_err, dev_log};

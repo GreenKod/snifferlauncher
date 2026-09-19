@@ -169,6 +169,14 @@ pub trait Renderer {
     );
     fn load_wallpaper(&mut self, _rgba_pixels: &[u8], _width: u32, _height: u32) {}
     fn draw_wallpaper(&mut self, _width: f32, _height: f32) {}
+    fn draw_backdrop_blur(
+        &mut self,
+        _rect: Rect,
+        _radius: f32,
+        _blur_radius: f32,
+        _tint: Option<u32>,
+    ) {
+    }
     fn measure_text(&self, text: &str, size: f32) -> f32;
     /// Returns the ascent (distance from the top of the text box to the baseline)
     /// at the given size. Used to correctly center text vertically within a rect.

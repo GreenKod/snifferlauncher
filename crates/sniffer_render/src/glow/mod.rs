@@ -7,12 +7,14 @@ use glow::HasContext;
 use obfstr::obfstr;
 
 pub mod batching;
+pub mod blur;
 pub mod renderer_impl;
 pub mod shaders;
 pub mod text;
 pub mod textures;
 pub mod uniforms;
 
+pub use blur::{BlurPipeline, PingPongTarget};
 pub use renderer_impl::SdfClipData;
 pub use uniforms::{ImageUniforms, ShapeUniforms, TextUniforms};
 
@@ -42,6 +44,7 @@ pub struct GlowRenderer {
     pub(crate) image_uniforms: ImageUniforms,
     pub(crate) text_uniforms: TextUniforms,
     pub(crate) current_vao: Option<glow::VertexArray>,
+    pub(crate) blur_pipeline: Option<blur::BlurPipeline>,
 }
 
 #[allow(clippy::cast_possible_truncation)]
@@ -285,6 +288,7 @@ impl GlowRenderer {
                 image_uniforms,
                 text_uniforms,
                 current_vao: Some(quad_vertex_array),
+                blur_pipeline: None,
             })
         }
     }
@@ -321,6 +325,39 @@ impl GlowRenderer {
 
     pub fn trim_memory(&mut self) {
         self.trim_memory_level(textures::MemoryTrimLevel::Critical);
+    }
+
+    /// Ensures that the dual-FBO blur pipeline is initialized and sized for the given dimensions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if FBO or texture allocation fails.
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+    pub fn ensure_blur_pipeline(
+        &mut self,
+        width: i32,
+        height: i32,
+        downsample_factor: f32,
+    ) -> Result<(), String> {
+        let factor = if downsample_factor > 0.0 {
+            downsample_factor
+        } else {
+            0.5
+        };
+        let target_w = ((width as f32) * factor).max(1.0) as i32;
+        let target_h = ((height as f32) * factor).max(1.0) as i32;
+
+        if let Some(ref mut pipeline) = self.blur_pipeline {
+            unsafe {
+                pipeline.ensure_size(&self.gl, target_w, target_h)?;
+            }
+        } else {
+            let pipeline =
+                unsafe { blur::BlurPipeline::new(&self.gl, target_w, target_h, factor)? };
+            self.blur_pipeline = Some(pipeline);
+        }
+
+        Ok(())
     }
 
     pub fn warm_up_shaders(&mut self) {
