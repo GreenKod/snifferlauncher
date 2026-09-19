@@ -300,3 +300,29 @@ fn test_flex_wrap_align_content_start() {
     assert_eq!(layout.children[2].rect.y, 120.0);
     assert_eq!(layout.children[3].rect.y, 120.0);
 }
+
+#[test]
+fn test_style_backdrop_blur_and_tint_lifecycle() {
+    let mut style = Style::builder()
+        .backdrop_blur(20.0)
+        .backdrop_tint(0x33FF_FFFF)
+        .build();
+
+    assert_eq!(style.backdrop_blur, 20.0);
+    assert_eq!(style.backdrop_tint, Some(0x33FF_FFFF));
+
+    let style_override = sniffer_core::style::StyleOverride {
+        backdrop_blur: Some(30.0),
+        backdrop_tint: Some(0x8000_0000),
+        ..Default::default()
+    };
+    style = style_override.apply(style);
+    assert_eq!(style.backdrop_blur, 30.0);
+    assert_eq!(style.backdrop_tint, Some(0x8000_0000));
+
+    // Test JSON serialization & deserialization
+    let json = serde_json::to_string(&style).expect("serialize style");
+    let deserialized: Style = serde_json::from_str(&json).expect("deserialize style");
+    assert_eq!(deserialized.backdrop_blur, 30.0);
+    assert_eq!(deserialized.backdrop_tint, Some(0x8000_0000));
+}

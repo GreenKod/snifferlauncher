@@ -167,6 +167,16 @@ impl Element {
                         style.height = crate::style::Dimension::Percent(pct);
                     }
                 }
+                "backdrop_blur" | "backdrop-blur" => {
+                    if let Ok(b) = value.parse::<f32>() {
+                        style.backdrop_blur = b;
+                    }
+                }
+                "backdrop_tint" | "backdrop-tint" => {
+                    if let Ok(color) = u32::from_str_radix(value.trim_start_matches('#'), 16) {
+                        style.backdrop_tint = Some(color);
+                    }
+                }
                 _ => return false,
             }
             return true;
