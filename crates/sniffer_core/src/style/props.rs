@@ -279,6 +279,16 @@ impl StyleBuilder {
         self.0.border_gradient = Some((top, bottom));
         self
     }
+    #[must_use]
+    pub fn scale(mut self, scale: f32) -> Self {
+        self.0.transform.scale = scale;
+        self
+    }
+    #[must_use]
+    pub fn transition(mut self, transition: Transition) -> Self {
+        self.0.transition = transition;
+        self
+    }
 }
 
 #[derive(Clone, Default, Debug)]
