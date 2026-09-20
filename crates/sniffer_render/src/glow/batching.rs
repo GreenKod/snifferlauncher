@@ -43,8 +43,14 @@ impl QuadInstanceData {
         let ambient_blur = (elevation * 1.6).max(2.0);
         let ambient_spread = elevation * 0.1;
 
-        let max_blur = ambient_blur.max(key_blur);
-        let pad = max_blur * 2.0 + key_offset_y + ambient_spread;
+        // Effective SDF reach: outside this radius smoothstep is strictly 0.0
+        let key_reach = key_offset_y + key_blur * 1.5;
+        let ambient_reach = ambient_spread + ambient_blur * 1.5;
+        let max_reach = key_reach.max(ambient_reach);
+
+        // Maximum safe shadow padding (64px) to eliminate runaway fill-rate overdraw on mobile
+        const MAX_SHADOW_PADDING: f32 = 64.0;
+        let pad = (max_reach + 1.0).min(MAX_SHADOW_PADDING);
 
         let shadow_rect = Rect {
             x: rect.x - pad,
@@ -493,11 +499,17 @@ impl GlowRenderer {
         spread: f32,
         color: u32,
     ) {
+        if (color & 0xFF00_0000 == 0) || self.global_alpha <= 0.001 {
+            return;
+        }
+
         let mut col = unpack_color(color);
         col[3] *= self.global_alpha;
 
         let blur = spread * 1.5;
-        let padding = blur * 2.0;
+        let reach = offset_y.abs() + spread + blur * 1.5;
+        const MAX_SHADOW_PADDING: f32 = 64.0;
+        let padding = (reach + 1.0).min(MAX_SHADOW_PADDING);
 
         let shadow_rect = Rect {
             x: rect.x - spread - padding,
@@ -505,6 +517,20 @@ impl GlowRenderer {
             width: spread.mul_add(2.0, rect.width) + padding * 2.0,
             height: spread.mul_add(2.0, rect.height) + padding * 2.0,
         };
+
+        // Clip container culling: discard if completely outside active clip
+        if self.transform_stack.is_empty() {
+            if let Some(clip) = self.clip_stack.last() {
+                let clip_rect = clip.rect;
+                if shadow_rect.x > clip_rect.x + clip_rect.width
+                    || shadow_rect.x + shadow_rect.width < clip_rect.x
+                    || shadow_rect.y > clip_rect.y + clip_rect.height
+                    || shadow_rect.y + shadow_rect.height < clip_rect.y
+                {
+                    return;
+                }
+            }
+        }
 
         let shape_size_x = spread.mul_add(2.0, rect.width);
         let shape_size_y = spread.mul_add(2.0, rect.height);
@@ -538,17 +564,37 @@ impl GlowRenderer {
         elevation: f32,
         shadow_color: Option<u32>,
     ) {
-        if elevation <= 0.0 {
+        if elevation <= 0.0 || self.global_alpha <= 0.001 {
             return;
         }
 
-        let (instance, _) = QuadInstanceData::new_dual_shadow(
+        if let Some(c) = shadow_color {
+            if c & 0xFF00_0000 == 0 {
+                return;
+            }
+        }
+
+        let (instance, shadow_rect) = QuadInstanceData::new_dual_shadow(
             rect,
             radius,
             elevation,
             shadow_color,
             self.global_alpha,
         );
+
+        // Clip container culling: discard if completely outside active clip
+        if self.transform_stack.is_empty() {
+            if let Some(clip) = self.clip_stack.last() {
+                let clip_rect = clip.rect;
+                if shadow_rect.x > clip_rect.x + clip_rect.width
+                    || shadow_rect.x + shadow_rect.width < clip_rect.x
+                    || shadow_rect.y > clip_rect.y + clip_rect.height
+                    || shadow_rect.y + shadow_rect.height < clip_rect.y
+                {
+                    return;
+                }
+            }
+        }
 
         if self.shape_batch.is_full() {
             self.flush_shapes();
