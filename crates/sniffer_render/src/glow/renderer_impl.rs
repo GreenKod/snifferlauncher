@@ -22,6 +22,7 @@ impl Renderer for GlowRenderer {
         border_color: Option<u32>,
     ) {
         self.flush_text();
+        self.flush_images();
         self.draw_rect_impl(rect, color, radius, border_width, border_color);
     }
 
@@ -35,6 +36,7 @@ impl Renderer for GlowRenderer {
         border_color: Option<u32>,
     ) {
         self.flush_text();
+        self.flush_images();
         self.draw_rect_gradient_impl(
             rect,
             color_top,
@@ -47,16 +49,19 @@ impl Renderer for GlowRenderer {
 
     fn draw_shadow(&mut self, rect: Rect, radius: f32, offset_y: f32, spread: f32, color: u32) {
         self.flush_text();
+        self.flush_images();
         self.draw_shadow_impl(rect, radius, offset_y, spread, color);
     }
 
     fn draw_circle(&mut self, cx: f32, cy: f32, radius: f32, color: u32) {
         self.flush_text();
+        self.flush_images();
         self.draw_circle_impl(cx, cy, radius, color);
     }
 
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: u32) {
         self.flush_shapes();
+        self.flush_images();
         text::draw_text_impl(self, text, x, y, size, color);
     }
 
@@ -75,6 +80,7 @@ impl Renderer for GlowRenderer {
     fn end_frame(&mut self) {
         self.flush_shapes();
         self.flush_text();
+        self.flush_images();
         unsafe {
             self.ensure_quad_vao();
         }
@@ -83,11 +89,13 @@ impl Renderer for GlowRenderer {
     fn flush(&mut self) {
         self.flush_shapes();
         self.flush_text();
+        self.flush_images();
     }
 
     fn set_clip_rect(&mut self, rect: Rect) {
         self.flush_shapes();
         self.flush_text();
+        self.flush_images();
         self.clip_stack.clear();
         self.push_clip_region(ClipRegion::from_rect(rect));
     }
@@ -95,6 +103,7 @@ impl Renderer for GlowRenderer {
     fn clear_clip_rect(&mut self) {
         self.flush_shapes();
         self.flush_text();
+        self.flush_images();
         self.clip_stack.clear();
         self.apply_current_clip();
     }
@@ -102,6 +111,7 @@ impl Renderer for GlowRenderer {
     fn push_clip_region(&mut self, region: ClipRegion) {
         self.flush_shapes();
         self.flush_text();
+        self.flush_images();
         self.clip_stack.push(region);
         self.apply_current_clip();
     }
@@ -123,6 +133,7 @@ impl Renderer for GlowRenderer {
     fn pop_clip_rect(&mut self) {
         self.flush_shapes();
         self.flush_text();
+        self.flush_images();
         self.clip_stack.pop();
         self.apply_current_clip();
     }
@@ -130,6 +141,7 @@ impl Renderer for GlowRenderer {
     fn push_transform(&mut self, cx: f32, cy: f32, scale: f32, rotate: f32, tx: f32, ty: f32) {
         self.flush_shapes();
         self.flush_text();
+        self.flush_images();
         let p = self
             .transform_stack
             .last()
@@ -166,6 +178,7 @@ impl Renderer for GlowRenderer {
     fn pop_transform(&mut self) {
         self.flush_shapes();
         self.flush_text();
+        self.flush_images();
         if self.transform_stack.len() > 1 {
             self.transform_stack.pop();
         }
@@ -174,6 +187,7 @@ impl Renderer for GlowRenderer {
     fn set_global_alpha(&mut self, alpha: f32) {
         self.flush_shapes();
         self.flush_text();
+        self.flush_images();
         self.global_alpha = alpha;
     }
 

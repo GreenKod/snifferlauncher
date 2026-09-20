@@ -7,7 +7,7 @@ pub use draw::{
     draw_ui, find_clicked_button, find_clicked_button_with_scroll, find_hovered_button,
     find_hovered_button_with_scroll, is_aabb_visible,
 };
-pub use glow::batching::{QuadBatch, TextBatch};
+pub use glow::batching::{ImageBatch, ImageInstanceData, QuadBatch, TextBatch};
 pub use glow::textures::MemoryTrimLevel;
 pub use glow::{BlurPipeline, GlowRenderer, PingPongTarget, SdfClipData};
 pub use sniffer_core::render::{ClipRegion, Renderer};

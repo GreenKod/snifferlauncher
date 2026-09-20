@@ -35,8 +35,14 @@ pub struct GlowRenderer {
     pub(crate) font_atlas: Option<FontAtlas>,
     pub(crate) atlas_width: i32,
     pub(crate) atlas_height: i32,
+    #[allow(dead_code)]
+    pub(crate) image_instance_vao: glow::VertexArray,
+    #[allow(dead_code)]
+    pub(crate) image_instance_vbo: glow::Buffer,
+    pub(crate) image_batch: batching::ImageBatch,
     pub(crate) image_program: glow::Program,
     pub(crate) texture_cache: textures::LruTextureCache,
+    pub(crate) icon_atlas: Option<textures::IconAtlas>,
     pub(crate) global_alpha: f32,
     pub(crate) transform_stack: Vec<[f32; 9]>,
     pub(crate) clip_stack: Vec<ClipRegion>,
@@ -137,6 +143,30 @@ impl GlowRenderer {
             gl.enable_vertex_attrib_array(6);
             gl.vertex_attrib_pointer_f32(6, 4, glow::FLOAT, false, stride, 80);
             gl.vertex_attrib_divisor(6, 1);
+
+            let image_instance_vao = gl.create_vertex_array()?;
+            gl.bind_vertex_array(Some(image_instance_vao));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vertex_buffer));
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+
+            let image_instance_vbo = gl.create_buffer()?;
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(image_instance_vbo));
+
+            let img_stride = i32::try_from(std::mem::size_of::<batching::ImageInstanceData>())
+                .expect("image stride fits in i32");
+
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(1, 4, glow::FLOAT, false, img_stride, 0);
+            gl.vertex_attrib_divisor(1, 1);
+
+            gl.enable_vertex_attrib_array(2);
+            gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, img_stride, 16);
+            gl.vertex_attrib_divisor(2, 1);
+
+            gl.enable_vertex_attrib_array(3);
+            gl.vertex_attrib_pointer_f32(3, 4, glow::FLOAT, false, img_stride, 32);
+            gl.vertex_attrib_divisor(3, 1);
 
             gl.bind_vertex_array(Some(quad_vertex_array));
 
@@ -260,6 +290,7 @@ impl GlowRenderer {
                 u_radius: gl.get_uniform_location(image_program, "u_radius"),
                 u_global_alpha: gl.get_uniform_location(image_program, "u_global_alpha"),
                 u_transform: gl.get_uniform_location(image_program, "u_transform"),
+                u_instanced: gl.get_uniform_location(image_program, "u_instanced"),
                 u_clip_rect: gl.get_uniform_location(image_program, "u_clip_rect"),
                 u_clip_radius: gl.get_uniform_location(image_program, "u_clip_radius"),
                 u_clip_inv_transform: gl
@@ -304,6 +335,12 @@ impl GlowRenderer {
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
             let default_matrix = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+            let icon_atlas = textures::IconAtlas::new(
+                &gl,
+                textures::IconAtlas::DEFAULT_ATLAS_DIM,
+                textures::IconAtlas::DEFAULT_ATLAS_DIM,
+            )
+            .ok();
 
             Ok(Self {
                 gl,
@@ -322,8 +359,12 @@ impl GlowRenderer {
                 font_atlas,
                 atlas_width,
                 atlas_height,
+                image_instance_vao,
+                image_instance_vbo,
+                image_batch: batching::ImageBatch::default(),
                 image_program,
                 texture_cache: textures::LruTextureCache::default(),
+                icon_atlas,
                 global_alpha: 1.0,
                 transform_stack: vec![default_matrix],
                 clip_stack: Vec::new(),
@@ -367,6 +408,17 @@ impl GlowRenderer {
                 self.gl.bind_vertex_array(Some(self.shape_instance_vao));
             }
             self.current_vao = Some(self.shape_instance_vao);
+        }
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub(crate) unsafe fn ensure_image_instance_vao(&mut self) {
+        if self.current_vao != Some(self.image_instance_vao) {
+            unsafe {
+                self.gl.bind_vertex_array(Some(self.image_instance_vao));
+            }
+            self.current_vao = Some(self.image_instance_vao);
         }
     }
 
@@ -424,6 +476,26 @@ impl GlowRenderer {
         self.blur_pipeline
             .as_ref()
             .map_or(0, blur::BlurPipeline::vram_bytes)
+    }
+
+    /// Returns a reference to the GPU icon atlas if initialized.
+    #[must_use]
+    pub fn icon_atlas(&self) -> Option<&textures::IconAtlas> {
+        self.icon_atlas.as_ref()
+    }
+
+    /// Returns the total VRAM bytes currently allocated for the GPU icon atlas texture.
+    #[must_use]
+    pub fn icon_atlas_vram_bytes(&self) -> usize {
+        self.icon_atlas
+            .as_ref()
+            .map_or(0, textures::IconAtlas::vram_bytes)
+    }
+
+    /// Returns a reference to the image batch queue.
+    #[must_use]
+    pub fn image_batch(&self) -> &batching::ImageBatch {
+        &self.image_batch
     }
 
     pub fn warm_up_shaders(&mut self) {
