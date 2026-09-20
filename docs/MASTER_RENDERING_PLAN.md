@@ -61,7 +61,7 @@ _Hedef: Izgara (grid) içerisindeki onlarca uygulama ikonu ve resim için her ka
 - [x] **Aşama 4.2:** `ImageInstanceData` ve instanced image shader (`image_desktop.vs`, `image_android.vs`) altyapısının kurulması.
 - [x] **Aşama 4.3:** `draw_image_impl` çağrılarının atlaslanan resimlerde anında çizim yerine `ImageBatch` tamponuna veri ekleyecek şekilde refactor edilmesi.
 - [x] **Aşama 4.4:** `flush_images()` çağrısının render döngüsüne eklenmesi; doku atlasındaki tüm ikonların tek bir instanced çağrıyla GPU'ya gönderilmesi.
-- [ ] **Aşama 4.5:** 60+ ikon içeren uygulama çekmecesinde (App Drawer) draw call sayısının ve GPU state değişimlerinin dramatik düşüşünün doğrulanması.
+- [x] **Aşama 4.5:** 60+ ikon içeren uygulama çekmecesinde (App Drawer) draw call sayısının ve GPU state değişimlerinin dramatik düşüşünün doğrulanması.
 
 ---
 
