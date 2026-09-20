@@ -19,6 +19,58 @@ pub struct QuadInstanceData {
     pub is_gradient: f32,
 }
 
+impl QuadInstanceData {
+    #[must_use]
+    pub fn new_dual_shadow(
+        rect: Rect,
+        radius: f32,
+        elevation: f32,
+        shadow_color: Option<u32>,
+        global_alpha: f32,
+    ) -> (Self, Rect) {
+        let base_color = shadow_color.unwrap_or(0x4D00_0000);
+        let col = unpack_color(base_color);
+        let base_alpha = col[3] * global_alpha;
+
+        let mut key_col = col;
+        key_col[3] = base_alpha * 0.65;
+        let key_blur = (elevation * 1.2).max(2.0);
+        let key_offset_y = elevation * 0.75;
+
+        let mut ambient_col = col;
+        ambient_col[3] = base_alpha * 0.35;
+        let ambient_blur = (elevation * 1.6).max(2.0);
+        let ambient_spread = elevation * 0.1;
+
+        let max_blur = ambient_blur.max(key_blur);
+        let pad = max_blur * 2.0 + key_offset_y + ambient_spread;
+
+        let shadow_rect = Rect {
+            x: rect.x - pad,
+            y: rect.y - pad,
+            width: rect.width + pad * 2.0,
+            height: rect.height + pad * 2.0,
+        };
+
+        let instance = Self {
+            rect_pos: [shadow_rect.x, shadow_rect.y],
+            rect_size: [shadow_rect.width, shadow_rect.height],
+            color: key_col,
+            border_color: [0.0; 4],
+            color_bottom: ambient_col,
+            shape_size: [rect.width, rect.height],
+            is_circle: 0.0,
+            is_shadow: 2.0,
+            radius,
+            border_width: ambient_blur,
+            shadow_blur: key_blur,
+            is_gradient: key_offset_y,
+        };
+
+        (instance, shadow_rect)
+    }
+}
+
 pub struct QuadBatch {
     pub instances: Vec<QuadInstanceData>,
     pub max_capacity: usize,
@@ -413,66 +465,66 @@ impl GlowRenderer {
         spread: f32,
         color: u32,
     ) {
-        self.flush_shapes();
-
         let mut col = unpack_color(color);
         col[3] *= self.global_alpha;
-        unsafe {
-            self.gl.use_program(Some(self.shape_program));
-            self.ensure_quad_vao();
 
-            let u = &self.shape_uniforms;
-            self.gl.uniform_1_i32(u.u_instanced.as_ref(), 0);
+        let blur = spread * 1.5;
+        let padding = blur * 2.0;
 
-            let blur = spread * 1.5;
-            let padding = blur * 2.0;
+        let shadow_rect = Rect {
+            x: rect.x - spread - padding,
+            y: rect.y + offset_y - spread - padding,
+            width: spread.mul_add(2.0, rect.width) + padding * 2.0,
+            height: spread.mul_add(2.0, rect.height) + padding * 2.0,
+        };
 
-            let shadow_rect = Rect {
-                x: rect.x - spread - padding,
-                y: rect.y + offset_y - spread - padding,
-                width: spread.mul_add(2.0, rect.width) + padding * 2.0,
-                height: spread.mul_add(2.0, rect.height) + padding * 2.0,
-            };
+        let shape_size_x = spread.mul_add(2.0, rect.width);
+        let shape_size_y = spread.mul_add(2.0, rect.height);
 
-            let shape_size_x = spread.mul_add(2.0, rect.width);
-            let shape_size_y = spread.mul_add(2.0, rect.height);
+        let instance = QuadInstanceData {
+            rect_pos: [shadow_rect.x, shadow_rect.y],
+            rect_size: [shadow_rect.width, shadow_rect.height],
+            color: col,
+            border_color: [0.0; 4],
+            color_bottom: col,
+            shape_size: [shape_size_x, shape_size_y],
+            is_circle: 0.0,
+            is_shadow: 1.0,
+            radius: radius + spread,
+            border_width: 0.0,
+            shadow_blur: blur,
+            is_gradient: 0.0,
+        };
 
-            self.gl.uniform_2_f32(
-                u.u_resolution.as_ref(),
-                self.resolution.0,
-                self.resolution.1,
-            );
-            self.gl
-                .uniform_2_f32(u.u_rect_pos.as_ref(), shadow_rect.x, shadow_rect.y);
-            self.gl.uniform_2_f32(
-                u.u_rect_size.as_ref(),
-                shadow_rect.width,
-                shadow_rect.height,
-            );
-            self.gl
-                .uniform_2_f32(u.u_shape_size.as_ref(), shape_size_x, shape_size_y);
-            self.gl
-                .uniform_4_f32(u.u_color.as_ref(), col[0], col[1], col[2], col[3]);
-            self.gl.uniform_1_f32(u.u_radius.as_ref(), radius + spread);
-            self.gl.uniform_1_f32(u.u_is_circle.as_ref(), 0.0);
-            self.gl.uniform_1_f32(u.u_is_shadow.as_ref(), 1.0);
-            self.gl.uniform_1_f32(u.u_shadow_blur.as_ref(), blur);
-
-            let Some(t) = self.transform_stack.last() else {
-                crate::dev_err!("transform_stack empty in draw_shadow — missing push_transform");
-                return;
-            };
-            self.gl
-                .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
-
-            self.upload_clip_uniforms(
-                u.u_clip_rect.as_ref(),
-                u.u_clip_radius.as_ref(),
-                u.u_clip_inv_transform.as_ref(),
-            );
-
-            self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+        if self.shape_batch.is_full() {
+            self.flush_shapes();
         }
+        let _ = self.shape_batch.push_instance(instance);
+    }
+
+    pub(crate) fn draw_elevation_shadow_impl(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        elevation: f32,
+        shadow_color: Option<u32>,
+    ) {
+        if elevation <= 0.0 {
+            return;
+        }
+
+        let (instance, _) = QuadInstanceData::new_dual_shadow(
+            rect,
+            radius,
+            elevation,
+            shadow_color,
+            self.global_alpha,
+        );
+
+        if self.shape_batch.is_full() {
+            self.flush_shapes();
+        }
+        let _ = self.shape_batch.push_instance(instance);
     }
 
     pub(crate) fn draw_circle_impl(&mut self, cx: f32, cy: f32, radius: f32, color: u32) {

@@ -53,6 +53,18 @@ impl Renderer for GlowRenderer {
         self.draw_shadow_impl(rect, radius, offset_y, spread, color);
     }
 
+    fn draw_elevation_shadow(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        elevation: f32,
+        shadow_color: Option<u32>,
+    ) {
+        self.flush_text();
+        self.flush_images();
+        self.draw_elevation_shadow_impl(rect, radius, elevation, shadow_color);
+    }
+
     fn draw_circle(&mut self, cx: f32, cy: f32, radius: f32, color: u32) {
         self.flush_text();
         self.flush_images();

@@ -37,7 +37,25 @@ void main() {
         dist = sdRoundedBox(p, shape_half, v_radius);
     }
 
-    if (v_is_shadow > 0.5) {
+    if (v_is_shadow > 1.5) {
+        vec2 half_size = v_rect_size * 0.5;
+        vec2 shape_half = v_shape_size * 0.5;
+        vec2 p = v_local_pos - half_size;
+
+        float ambient_blur = max(v_border_width, 1.0);
+        float dist_ambient = sdRoundedBox(p, shape_half, v_radius);
+        float ambient_alpha = 1.0 - smoothstep(-ambient_blur, ambient_blur, dist_ambient);
+        vec4 ambient_col = vec4(v_color_bottom.rgb, v_color_bottom.a * ambient_alpha);
+
+        float key_offset_y = v_is_gradient;
+        float dist_key = sdRoundedBox(p - vec2(0.0, key_offset_y), shape_half, v_radius);
+        float key_alpha = 1.0 - smoothstep(-v_shadow_blur, v_shadow_blur, dist_key);
+        vec4 key_col = vec4(v_color.rgb, v_color.a * key_alpha);
+
+        float out_a = ambient_col.a + key_col.a * (1.0 - ambient_col.a);
+        vec3 out_rgb = (ambient_col.rgb * ambient_col.a + key_col.rgb * key_col.a * (1.0 - ambient_col.a)) / max(out_a, 0.0001);
+        FragColor = vec4(out_rgb, out_a);
+    } else if (v_is_shadow > 0.5) {
         float alpha = 1.0 - smoothstep(-v_shadow_blur, v_shadow_blur, dist);
         FragColor = vec4(v_color.rgb, v_color.a * alpha);
     } else {
