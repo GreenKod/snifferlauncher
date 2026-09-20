@@ -128,7 +128,14 @@ pub(crate) fn draw_ui_node(
 
     renderer.set_global_alpha(final_alpha);
 
-    if let Some(shadow_color) = base_style.shadow_color {
+    if base_style.elevation > 0.0 {
+        renderer.draw_elevation_shadow(
+            rect,
+            base_style.border_radius,
+            base_style.elevation,
+            base_style.shadow_color,
+        );
+    } else if let Some(shadow_color) = base_style.shadow_color {
         renderer.draw_shadow(
             rect,
             base_style.border_radius,
