@@ -144,6 +144,10 @@ impl GlowRenderer {
             gl.vertex_attrib_pointer_f32(6, 4, glow::FLOAT, false, stride, 80);
             gl.vertex_attrib_divisor(6, 1);
 
+            gl.enable_vertex_attrib_array(7);
+            gl.vertex_attrib_pointer_f32(7, 4, glow::FLOAT, false, stride, 96);
+            gl.vertex_attrib_divisor(7, 1);
+
             let image_instance_vao = gl.create_vertex_array()?;
             gl.bind_vertex_array(Some(image_instance_vao));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vertex_buffer));
@@ -267,6 +271,8 @@ impl GlowRenderer {
                 u_radius: gl.get_uniform_location(shape_program, "u_radius"),
                 u_border_width: gl.get_uniform_location(shape_program, "u_border_width"),
                 u_border_color: gl.get_uniform_location(shape_program, "u_border_color"),
+                u_border_color_bottom: gl
+                    .get_uniform_location(shape_program, "u_border_color_bottom"),
                 u_is_circle: gl.get_uniform_location(shape_program, "u_is_circle"),
                 u_is_shadow: gl.get_uniform_location(shape_program, "u_is_shadow"),
                 u_shadow_blur: gl.get_uniform_location(shape_program, "u_shadow_blur"),

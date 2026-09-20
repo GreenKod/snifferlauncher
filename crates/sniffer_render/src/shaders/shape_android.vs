@@ -7,10 +7,12 @@ layout(location = 3) in vec4 a_border_color; // border color
 layout(location = 4) in vec4 a_color_bottom; // bottom gradient color
 layout(location = 5) in vec4 a_shape_info;   // shape_size.xy, is_circle, is_shadow
 layout(location = 6) in vec4 a_params;       // radius, border_width, shadow_blur, is_gradient
+layout(location = 7) in vec4 a_border_color_bottom; // bottom border color
 
 out vec2 v_local_pos;
 out vec4 v_color;
 out vec4 v_border_color;
+out vec4 v_border_color_bottom;
 out vec4 v_color_bottom;
 out vec2 v_rect_size;
 out vec2 v_shape_size;
@@ -34,6 +36,7 @@ uniform vec4 u_color;
 uniform float u_radius;
 uniform float u_border_width;
 uniform vec4 u_border_color;
+uniform vec4 u_border_color_bottom;
 uniform float u_is_circle;
 uniform float u_is_shadow;
 uniform float u_shadow_blur;
@@ -51,6 +54,7 @@ void main() {
     
     v_color = (u_instanced == 1) ? a_color : u_color;
     v_border_color = (u_instanced == 1) ? a_border_color : u_border_color;
+    v_border_color_bottom = (u_instanced == 1) ? a_border_color_bottom : u_border_color_bottom;
     v_color_bottom = (u_instanced == 1) ? a_color_bottom : u_color_bottom;
     v_rect_size = rect_size;
     v_shape_size = (u_instanced == 1) ? a_shape_info.xy : u_shape_size;

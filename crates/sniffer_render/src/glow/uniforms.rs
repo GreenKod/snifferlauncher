@@ -7,6 +7,7 @@ pub struct ShapeUniforms {
     pub u_radius: Option<glow::UniformLocation>,
     pub u_border_width: Option<glow::UniformLocation>,
     pub u_border_color: Option<glow::UniformLocation>,
+    pub u_border_color_bottom: Option<glow::UniformLocation>,
     pub u_is_circle: Option<glow::UniformLocation>,
     pub u_is_shadow: Option<glow::UniformLocation>,
     pub u_shadow_blur: Option<glow::UniformLocation>,

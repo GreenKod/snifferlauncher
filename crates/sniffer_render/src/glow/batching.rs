@@ -17,6 +17,7 @@ pub struct QuadInstanceData {
     pub border_width: f32,
     pub shadow_blur: f32,
     pub is_gradient: f32,
+    pub border_color_bottom: [f32; 4],
 }
 
 impl QuadInstanceData {
@@ -65,6 +66,7 @@ impl QuadInstanceData {
             border_width: ambient_blur,
             shadow_blur: key_blur,
             is_gradient: key_offset_y,
+            border_color_bottom: [0.0; 4],
         };
 
         (instance, shadow_rect)
@@ -292,7 +294,7 @@ impl Default for TextBatch {
     }
 }
 
-pub(crate) fn unpack_color(color: u32) -> [f32; 4] {
+pub fn unpack_color(color: u32) -> [f32; 4] {
     let a =
         f32::from(u8::try_from((color >> 24) & 0xff).expect("alpha channel fits in u8")) / 255.0;
     let r = f32::from(u8::try_from((color >> 16) & 0xff).expect("red channel fits in u8")) / 255.0;
@@ -421,6 +423,27 @@ impl GlowRenderer {
         border_width: f32,
         border_color: Option<u32>,
     ) {
+        self.draw_rect_gradient_border_impl(
+            rect,
+            color_top,
+            color_bottom,
+            radius,
+            border_width,
+            border_color,
+            border_color,
+        );
+    }
+
+    pub(crate) fn draw_rect_gradient_border_impl(
+        &mut self,
+        rect: Rect,
+        color_top: u32,
+        color_bottom: u32,
+        radius: f32,
+        border_width: f32,
+        border_top: Option<u32>,
+        border_bottom: Option<u32>,
+    ) {
         if self.shape_batch.is_full() {
             self.flush_shapes();
         }
@@ -430,10 +453,14 @@ impl GlowRenderer {
         col_top[3] *= self.global_alpha;
         col_bot[3] *= self.global_alpha;
 
-        let mut b_col = unpack_color(border_color.unwrap_or(0));
-        b_col[3] *= self.global_alpha;
+        let b_top = border_top.or(border_bottom).unwrap_or(0);
+        let b_bot = border_bottom.or(border_top).unwrap_or(0);
+        let mut b_col_top = unpack_color(b_top);
+        let mut b_col_bot = unpack_color(b_bot);
+        b_col_top[3] *= self.global_alpha;
+        b_col_bot[3] *= self.global_alpha;
 
-        let is_gradient = if color_top == color_bottom {
+        let is_gradient = if color_top == color_bottom && b_top == b_bot {
             0.0f32
         } else {
             1.0f32
@@ -443,7 +470,7 @@ impl GlowRenderer {
             rect_pos: [rect.x, rect.y],
             rect_size: [rect.width, rect.height],
             color: col_top,
-            border_color: b_col,
+            border_color: b_col_top,
             color_bottom: col_bot,
             shape_size: [rect.width, rect.height],
             is_circle: 0.0,
@@ -452,6 +479,7 @@ impl GlowRenderer {
             border_width,
             shadow_blur: 0.0,
             is_gradient,
+            border_color_bottom: b_col_bot,
         };
 
         let _ = self.shape_batch.push_instance(instance);
@@ -494,6 +522,7 @@ impl GlowRenderer {
             border_width: 0.0,
             shadow_blur: blur,
             is_gradient: 0.0,
+            border_color_bottom: [0.0; 4],
         };
 
         if self.shape_batch.is_full() {
@@ -586,13 +615,13 @@ mod tests {
 
     #[test]
     fn test_quad_instance_data_layout() {
-        assert_eq!(std::mem::size_of::<QuadInstanceData>(), 96);
+        assert_eq!(std::mem::size_of::<QuadInstanceData>(), 112);
         assert_eq!(std::mem::align_of::<QuadInstanceData>(), 4);
 
         let data = QuadInstanceData::default();
         let base = &raw const data as usize;
 
-        // Verify that 6 attribute blocks (each vec4 = 16 bytes) align perfectly:
+        // Verify that 7 attribute blocks (each vec4 = 16 bytes) align perfectly:
         // 1. a_bounds: rect_pos (8B) + rect_size (8B) = 16B at offset 0
         assert_eq!(&raw const data.rect_pos as usize - base, 0);
         assert_eq!(&raw const data.rect_size as usize - base, 8);
@@ -616,6 +645,9 @@ mod tests {
         assert_eq!(&raw const data.border_width as usize - base, 84);
         assert_eq!(&raw const data.shadow_blur as usize - base, 88);
         assert_eq!(&raw const data.is_gradient as usize - base, 92);
+
+        // 7. a_border_color_bottom: border_color_bottom (16B) at offset 96
+        assert_eq!(&raw const data.border_color_bottom as usize - base, 96);
     }
 
     #[test]
@@ -638,8 +670,8 @@ mod tests {
         assert!(!batch.push_instance(inst));
         assert_eq!(batch.len(), 4);
 
-        // Raw byte representation size check: 4 instances * 96 bytes = 384 bytes
-        assert_eq!(batch.as_bytes().len(), 4 * 96);
+        // Raw byte representation size check: 4 instances * 112 bytes = 448 bytes
+        assert_eq!(batch.as_bytes().len(), 4 * 112);
 
         // Clear preserves buffer allocation
         batch.clear();
@@ -675,6 +707,7 @@ mod tests {
             border_width,
             shadow_blur: 0.0,
             is_gradient: 1.0,
+            border_color_bottom: b_col,
         };
 
         assert_eq!(instance.rect_pos, [10.0, 20.0]);
