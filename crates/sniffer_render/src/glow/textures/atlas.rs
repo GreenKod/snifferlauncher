@@ -213,6 +213,11 @@ impl IconAtlas {
     }
 
     #[inline]
+    pub fn insert_region(&mut self, id: impl Into<String>, region: AtlasRegion) {
+        self.regions.insert(id.into(), region);
+    }
+
+    #[inline]
     #[must_use]
     pub fn get(&self, id: &str) -> Option<&AtlasRegion> {
         self.regions.get(id)
