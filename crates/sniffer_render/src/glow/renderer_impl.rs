@@ -47,6 +47,29 @@ impl Renderer for GlowRenderer {
         );
     }
 
+    fn draw_rect_gradient_border(
+        &mut self,
+        rect: Rect,
+        color_top: u32,
+        color_bottom: u32,
+        radius: f32,
+        border_width: f32,
+        border_top: u32,
+        border_bottom: u32,
+    ) {
+        self.flush_text();
+        self.flush_images();
+        self.draw_rect_gradient_border_impl(
+            rect,
+            color_top,
+            color_bottom,
+            radius,
+            border_width,
+            Some(border_top),
+            Some(border_bottom),
+        );
+    }
+
     fn draw_shadow(&mut self, rect: Rect, radius: f32, offset_y: f32, spread: f32, color: u32) {
         self.flush_text();
         self.flush_images();

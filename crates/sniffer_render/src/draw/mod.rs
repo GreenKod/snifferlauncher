@@ -145,6 +145,14 @@ pub(crate) fn draw_ui_node(
         );
     }
 
+    let (border_top, border_bottom) = if let Some((t, b)) = base_style.border_gradient {
+        (Some(t), Some(b))
+    } else if let Some(c) = base_style.border_color {
+        (Some(c), Some(c))
+    } else {
+        (None, None)
+    };
+
     if base_style.backdrop_blur > 0.0 {
         renderer.draw_backdrop_blur(
             rect,
@@ -152,32 +160,113 @@ pub(crate) fn draw_ui_node(
             base_style.backdrop_blur,
             base_style.backdrop_tint.or(base_style.background_color),
         );
-        if base_style.border_width > 0.0 && base_style.border_color.is_some() {
+        if base_style.border_width > 0.0 {
+            if let (Some(bt), Some(bb)) = (border_top, border_bottom) {
+                if bt != bb {
+                    renderer.draw_rect_gradient_border(
+                        rect,
+                        0x0000_0000,
+                        0x0000_0000,
+                        base_style.border_radius,
+                        base_style.border_width,
+                        bt,
+                        bb,
+                    );
+                } else {
+                    renderer.draw_rect(
+                        rect,
+                        0x0000_0000,
+                        base_style.border_radius,
+                        base_style.border_width,
+                        Some(bt),
+                    );
+                }
+            }
+        }
+    } else if let Some((color_top, color_bottom)) = base_style.background_gradient {
+        if let (Some(bt), Some(bb)) = (border_top, border_bottom) {
+            if bt != bb {
+                renderer.draw_rect_gradient_border(
+                    rect,
+                    color_top,
+                    color_bottom,
+                    base_style.border_radius,
+                    base_style.border_width,
+                    bt,
+                    bb,
+                );
+            } else {
+                renderer.draw_rect_gradient(
+                    rect,
+                    color_top,
+                    color_bottom,
+                    base_style.border_radius,
+                    base_style.border_width,
+                    Some(bt),
+                );
+            }
+        } else {
+            renderer.draw_rect_gradient(
+                rect,
+                color_top,
+                color_bottom,
+                base_style.border_radius,
+                base_style.border_width,
+                None,
+            );
+        }
+    } else if let Some(bg_color) = base_style.background_color {
+        if let (Some(bt), Some(bb)) = (border_top, border_bottom) {
+            if bt != bb {
+                renderer.draw_rect_gradient_border(
+                    rect,
+                    bg_color,
+                    bg_color,
+                    base_style.border_radius,
+                    base_style.border_width,
+                    bt,
+                    bb,
+                );
+            } else {
+                renderer.draw_rect(
+                    rect,
+                    bg_color,
+                    base_style.border_radius,
+                    base_style.border_width,
+                    Some(bt),
+                );
+            }
+        } else {
+            renderer.draw_rect(
+                rect,
+                bg_color,
+                base_style.border_radius,
+                base_style.border_width,
+                None,
+            );
+        }
+    } else if let (Some(bt), Some(bb)) = (border_top, border_bottom)
+        && base_style.border_width > 0.0
+    {
+        if bt != bb {
+            renderer.draw_rect_gradient_border(
+                rect,
+                0x0000_0000,
+                0x0000_0000,
+                base_style.border_radius,
+                base_style.border_width,
+                bt,
+                bb,
+            );
+        } else {
             renderer.draw_rect(
                 rect,
                 0x0000_0000,
                 base_style.border_radius,
                 base_style.border_width,
-                base_style.border_color,
+                Some(bt),
             );
         }
-    } else if let Some((color_top, color_bottom)) = base_style.background_gradient {
-        renderer.draw_rect_gradient(
-            rect,
-            color_top,
-            color_bottom,
-            base_style.border_radius,
-            base_style.border_width,
-            base_style.border_color,
-        );
-    } else if let Some(bg_color) = base_style.background_color {
-        renderer.draw_rect(
-            rect,
-            bg_color,
-            base_style.border_radius,
-            base_style.border_width,
-            base_style.border_color,
-        );
     }
 
     if let Some(w_id) = widget_id
