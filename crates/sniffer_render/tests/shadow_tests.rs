@@ -103,3 +103,28 @@ fn test_batching_multiple_shadows_and_cards() {
     assert_eq!(batch.len(), 40);
     assert!(!batch.is_full());
 }
+
+#[test]
+fn test_shadow_overdraw_bounding_and_clamping() {
+    let rect = Rect::new(100.0, 100.0, 200.0, 100.0);
+
+    // 1. Reasonable elevation (8.0): padding should be bounded to reach (~21.4px)
+    let (_, shadow_rect_normal) = QuadInstanceData::new_dual_shadow(rect, 8.0, 8.0, None, 1.0);
+    let pad_normal = (shadow_rect_normal.width - rect.width) * 0.5;
+    assert!(
+        pad_normal < 30.0,
+        "padding should be tightly bounded to SDF reach, got {pad_normal}"
+    );
+
+    // 2. Extreme elevation (120.0): without bounding this would add > 400px of overdraw!
+    // With MAX_SHADOW_PADDING (64.0), padding must be clamped at exactly 64.0px.
+    let (_, shadow_rect_extreme) = QuadInstanceData::new_dual_shadow(rect, 8.0, 120.0, None, 1.0);
+    let pad_extreme = (shadow_rect_extreme.width - rect.width) * 0.5;
+    assert!(
+        (pad_extreme - 64.0).abs() < 1e-4,
+        "extreme elevation shadow padding must be clamped to MAX_SHADOW_PADDING (64.0px), got {pad_extreme}"
+    );
+
+    assert_eq!(shadow_rect_extreme.width, rect.width + 128.0);
+    assert_eq!(shadow_rect_extreme.height, rect.height + 128.0);
+}

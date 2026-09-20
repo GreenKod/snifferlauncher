@@ -73,7 +73,7 @@ _Hedef: Basit tek katmanlı gölge yerine gerçekçi yükseklik (elevation) hiss
 - [x] **Aşama 5.2:** `QuadInstanceData` struct'ına ve `shape` fragment shader'ına analitik SDF çift gölge (ambient occlusion + key light) hesaplamasının eklenmesi.
 - [x] **Aşama 5.3:** Kenarlık (border) için doğrusal degrade (gradient border) ve kesintisiz kenar antialiasing desteğinin SDF shader'a eklenmesi.
 - [x] **Aşama 5.4:** Kartlara basıldığında (pressed / active state) gölgenin ve boyutun dinamik olarak yumuşak bir biçimde değiştiği (elevation transition) animasyon entegrasyonu.
-- [ ] **Aşama 5.5:** Gölgelerin GPU fill-rate maliyetinin optimize edilmesi; aşırı geniş gölgelerde aşırı çizimin (overdraw) sınırlandırılması.
+- [x] **Aşama 5.5:** Gölgelerin GPU fill-rate maliyetinin optimize edilmesi; aşırı geniş gölgelerde aşırı çizimin (overdraw) sınırlandırılması.
 
 ---
 
