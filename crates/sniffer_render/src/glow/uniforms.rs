@@ -30,6 +30,7 @@ pub struct ImageUniforms {
     pub u_radius: Option<glow::UniformLocation>,
     pub u_global_alpha: Option<glow::UniformLocation>,
     pub u_transform: Option<glow::UniformLocation>,
+    pub u_instanced: Option<glow::UniformLocation>,
     pub u_clip_rect: Option<glow::UniformLocation>,
     pub u_clip_radius: Option<glow::UniformLocation>,
     pub u_clip_inv_transform: Option<glow::UniformLocation>,
