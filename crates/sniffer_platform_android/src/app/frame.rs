@@ -135,15 +135,19 @@ pub fn update_and_render_state(
     let kinetic_active = !state.kinetic_scrolls.is_empty();
     state.kinetic_scrolls.retain_mut(|k| {
         if k.velocity_x.abs() > 0.5 || k.velocity_y.abs() > 0.5 {
+            let (step_x, next_vx) =
+                sniffer_core::physics::step_momentum_decay(k.velocity_x, 7.62, dt);
+            let (step_y, next_vy) =
+                sniffer_core::physics::step_momentum_decay(k.velocity_y, 7.62, dt);
             state.event_bus.push(UiEvent::Scroll(
                 Some(k.sv_id),
-                k.velocity_x,
-                k.velocity_y,
+                step_x,
+                step_y,
                 999_999.0,
                 get_max_scroll(Some(k.sv_id)),
             ));
-            k.velocity_x *= 0.88;
-            k.velocity_y *= 0.88;
+            k.velocity_x = next_vx;
+            k.velocity_y = next_vy;
             true
         } else {
             false

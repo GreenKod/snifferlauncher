@@ -1,3 +1,6 @@
+pub mod spring;
+pub use spring::{SpringConfig, SpringSimulation};
+
 use crate::style::{Easing, Style};
 use std::collections::HashMap;
 
@@ -102,24 +105,55 @@ impl AnimState {
             return;
         }
 
-        // Clamp dt step to 24ms (approx 40 FPS minimum step) to prevent heavy frame-initialization spikes
+        // Clamp dt step to 64ms (approx 15 FPS minimum step) to prevent heavy frame-initialization spikes
         // from skipping the beginning of the animation.
-        let dt_clamped = dt.clamp(0.0, 0.024);
+        let dt_clamped = dt.clamp(0.0, 0.064);
         self.time_elapsed += dt_clamped;
-        let duration = self.target_style.transition.duration;
 
-        let mut t = if duration > 0.0 {
-            self.time_elapsed / duration
+        let trans = &self.target_style.transition;
+        let effective_delay = trans
+            .delay
+            .mul_add(1.0, (trans.stagger_index as f32) * trans.stagger_interval);
+
+        let eased_t = if self.time_elapsed < effective_delay {
+            0.0
         } else {
-            1.0
+            let active_time = self.time_elapsed - effective_delay;
+            match &trans.easing {
+                Easing::Spring { stiffness, damping } => {
+                    let config = SpringConfig {
+                        mass: 1.0,
+                        stiffness: *stiffness,
+                        damping: *damping,
+                        position_tolerance: 0.002,
+                        velocity_tolerance: 0.005,
+                    };
+                    let mut sim = SpringSimulation::new(config, 0.0, 1.0);
+                    sim.step(active_time);
+                    if sim.is_at_rest() {
+                        self.is_active = false;
+                        1.0
+                    } else {
+                        sim.position()
+                    }
+                }
+                _ => {
+                    let duration = trans.duration;
+                    let mut t = if duration > 0.0 {
+                        active_time / duration
+                    } else {
+                        1.0
+                    };
+
+                    if t >= 1.0 {
+                        t = 1.0;
+                        self.is_active = false;
+                    }
+
+                    evaluate_easing(&trans.easing, t)
+                }
+            }
         };
-
-        if t >= 1.0 {
-            t = 1.0;
-            self.is_active = false;
-        }
-
-        let eased_t = evaluate_easing(&self.target_style.transition.easing, t);
 
         // Copy everything from target_style so non-animated properties (e.g. text_size, layout) update instantly
         self.current_style = self.target_style.clone();
@@ -200,7 +234,14 @@ impl TransitionManager {
                 state.start_style = state.current_style.clone();
                 state.target_style = new_style.clone();
                 state.time_elapsed = 0.0;
-                if new_style.transition.duration > 0.0 {
+                let trans = &new_style.transition;
+                let effective_delay = trans
+                    .delay
+                    .mul_add(1.0, (trans.stagger_index as f32) * trans.stagger_interval);
+                if trans.duration > 0.0
+                    || effective_delay > 0.0
+                    || matches!(trans.easing, Easing::Spring { .. })
+                {
                     state.is_active = true;
                 } else {
                     // Instant apply

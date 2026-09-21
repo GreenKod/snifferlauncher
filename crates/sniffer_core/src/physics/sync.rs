@@ -31,6 +31,8 @@ pub fn sync_scroll_physics_from_tree<S: BuildHasher>(
                 entry.vel_x = 0.0;
                 entry.vel_y = 0.0;
                 entry.snap_target_x = None;
+                entry.spring_sim_x = None;
+                entry.spring_sim_y = None;
             }
         }
 
