@@ -84,19 +84,19 @@ fn test_spring_dynamic_retarget_smooth_continuation() {
         sim.step(1.0 / 60.0);
     }
 
-    let pos_interm = sim.position();
-    let vel_interm = sim.velocity();
-    assert!(pos_interm > 0.0);
-    assert!(vel_interm > 0.0);
+    let pos_interim = sim.position();
+    let vel_interim = sim.velocity();
+    assert!(pos_interim > 0.0);
+    assert!(vel_interim > 0.0);
 
     // Retarget to 200.0 mid-motion
     sim.set_target(200.0);
     assert_eq!(sim.target(), 200.0);
     assert!(!sim.is_at_rest());
 
-    // Next step must be continuous from pos_interm and vel_interm
+    // Next step must be continuous from pos_interim and vel_interim
     let next_pos = sim.step(1.0 / 60.0);
-    assert!(next_pos > pos_interm);
+    assert!(next_pos > pos_interim);
 
     // Finish simulation
     while !sim.is_at_rest() {
