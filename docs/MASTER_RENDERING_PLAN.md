@@ -85,4 +85,4 @@ _Hedef: Kullanıcı parmağını kaydırıp bıraktığında (fling) veya elasti
 - [x] **Aşama 6.2:** `ScrollView` bileşenindeki rubber-band ve snap mekanizmasının zaman bazlı interpolasyondan doğrudan `SpringSimulation` çözücüsüne bağlanması.
 - [x] **Aşama 6.3:** Dokunma bırakma anındaki fırlatma hızı (fling velocity) hesaplayıcısının entegrasyonu ve momentum kaydırmasının pürüzsüzleştirilmesi.
 - [x] **Aşama 6.4:** Sayfa geçişleri ve uygulama çekmecesi açılışında yay dalgalanması (staggered cascade animation) desteğinin eklenmesi.
-- [ ] **Aşama 6.5:** 120 Hz ekranlarda girişten çizime (touch-to-render) gecikmenin ve frame drop (jank) durumlarının profiler ile test edilip doğrulanması.
+- [x] **Aşama 6.5:** 120 Hz ekranlarda girişten çizime (touch-to-render) gecikmenin ve frame drop (jank) durumlarının profiler ile test edilip doğrulanması.
