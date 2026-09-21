@@ -15,43 +15,11 @@ pub fn handle_mouse_release(
     scaled_last_mouse_pos: Point,
 ) {
     let now = std::time::Instant::now();
-    let cutoff = now
-        .checked_sub(std::time::Duration::from_millis(150))
-        .unwrap_or(now);
-    let mut recent_count = 0;
-    let mut total_dx = 0.0;
-    let mut total_dy = 0.0;
-    let mut first_time = None;
-    let mut last_time = None;
-
+    let mut tracker = sniffer_core::physics::FlingVelocityTracker::new();
     for &(dx, dy, t) in &app.drag_history {
-        if t >= cutoff {
-            if first_time.is_none() {
-                first_time = Some(t);
-            }
-            last_time = Some(t);
-            total_dx += dx;
-            total_dy += dy;
-            recent_count += 1;
-        }
+        tracker.add_movement(dx, dy, t);
     }
-
-    let (vel_x, vel_y) = if recent_count >= 2 {
-        let dt_recent = last_time
-            .unwrap()
-            .duration_since(first_time.unwrap())
-            .as_secs_f32()
-            .max(0.001);
-        (total_dx / dt_recent, total_dy / dt_recent)
-    } else if let Some(last) = last_time {
-        let dt_recent = now.duration_since(last).as_secs_f32().max(0.001);
-        (
-            app.last_drag_delta.0 / dt_recent,
-            app.last_drag_delta.1 / dt_recent,
-        )
-    } else {
-        (0.0, 0.0)
-    };
+    let (vel_x, vel_y) = tracker.compute_velocity(now);
 
     if let Some(sv_id) = app.active_scrollview_drag {
         if let Some(phys) = app.scroll_physics.get_mut(&sv_id) {
