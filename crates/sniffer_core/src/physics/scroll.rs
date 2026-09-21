@@ -116,10 +116,9 @@ impl ScrollPhysics {
                 self.spring_sim_x = Some(sim);
             }
         } else if self.vel_x.abs() > 0.5 {
-            let lambda = 7.62_f32;
-            let decay = (-lambda * dt).exp();
-            self.pos_x += self.vel_x * dt;
-            self.vel_x *= decay;
+            let (step_x, next_vx) = super::velocity::step_momentum_decay(self.vel_x, 7.62, dt);
+            self.pos_x += step_x;
+            self.vel_x = next_vx;
             active = true;
 
             if self.pos_x < 0.0 {
@@ -173,10 +172,9 @@ impl ScrollPhysics {
                 self.spring_sim_y = None;
             }
         } else if self.vel_y.abs() > 0.5 {
-            let lambda = 7.62_f32;
-            let decay = (-lambda * dt).exp();
-            self.pos_y += self.vel_y * dt;
-            self.vel_y *= decay;
+            let (step_y, next_vy) = super::velocity::step_momentum_decay(self.vel_y, 7.62, dt);
+            self.pos_y += step_y;
+            self.vel_y = next_vy;
             active = true;
 
             if self.pos_y < 0.0 {

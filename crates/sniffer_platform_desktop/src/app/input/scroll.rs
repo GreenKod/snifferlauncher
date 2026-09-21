@@ -92,19 +92,24 @@ pub fn handle_scroll_events(
 
 /// Ticks active kinetic scrolls across frames.
 pub fn tick_kinetic_scrolls(app: &mut AppState, root_element: &Element, layout_tree: &LayoutNode) {
+    let dt = 1.0 / 60.0;
     app.kinetic_scrolls.retain_mut(|k| {
         if k.velocity_x.abs() > 0.1 || k.velocity_y.abs() > 0.1 {
             let max_scroll = find_first_scrollview(root_element, layout_tree)
                 .map_or((0.0, 0.0), |(_, lay)| get_max_scroll_for_lay(lay));
+            let (step_x, next_vx) =
+                sniffer_core::physics::step_momentum_decay(k.velocity_x, 5.0, dt);
+            let (step_y, next_vy) =
+                sniffer_core::physics::step_momentum_decay(k.velocity_y, 5.0, dt);
             app.event_bus.push(UiEvent::Scroll(
                 Some(k.sv_id),
-                k.velocity_x,
-                k.velocity_y,
+                step_x,
+                step_y,
                 max_scroll.0,
                 max_scroll.1,
             ));
-            k.velocity_x *= 0.92;
-            k.velocity_y *= 0.92;
+            k.velocity_x = next_vx;
+            k.velocity_y = next_vy;
             true
         } else {
             false
