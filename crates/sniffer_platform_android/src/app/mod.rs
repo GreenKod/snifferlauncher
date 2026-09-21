@@ -116,12 +116,10 @@ pub fn android_main(app: AndroidApp) {
         let ui_changed = state.layout_dirty || (current_ui_version != state.last_ui_version);
 
         let has_active_physics = !state.kinetic_scrolls.is_empty()
-            || state.scroll_physics.values().any(|p| {
-                p.is_dragging
-                    || p.snap_target_x.is_some()
-                    || p.vel_x.abs() > 0.5
-                    || p.vel_y.abs() > 0.5
-            });
+            || state
+                .scroll_physics
+                .values()
+                .any(ScrollPhysics::is_animating);
 
         let has_active_transitions = state.transition_manager.is_animating();
         let is_dragging = state.active_scrollview_drag.is_some();
@@ -179,12 +177,10 @@ pub fn android_main(app: AndroidApp) {
         let has_active_animation_after = !state.kinetic_scrolls.is_empty()
             || state.transition_manager.is_animating()
             || state.active_scrollview_drag.is_some()
-            || state.scroll_physics.values().any(|p| {
-                p.is_dragging
-                    || p.snap_target_x.is_some()
-                    || p.vel_x.abs() > 0.5
-                    || p.vel_y.abs() > 0.5
-            });
+            || state
+                .scroll_physics
+                .values()
+                .any(ScrollPhysics::is_animating);
 
         let elapsed = frame_start.elapsed();
         let target_frame_duration = state.target_frame_duration(has_active_animation_after);
