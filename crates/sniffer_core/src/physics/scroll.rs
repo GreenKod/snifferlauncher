@@ -1,3 +1,5 @@
+use crate::anim::{SpringConfig, SpringSimulation};
+
 pub const RUBBER_BAND_COEFF: f32 = 0.55;
 
 #[derive(Clone, Debug)]
@@ -12,6 +14,9 @@ pub struct ScrollPhysics {
     pub spring_start_x: f32,
     pub spring_start_vel_x: f32,
     pub spring_time: f32,
+
+    pub spring_sim_x: Option<SpringSimulation>,
+    pub spring_sim_y: Option<SpringSimulation>,
 
     pub last_snap_page: i32,
     pub snap_just_completed: bool,
@@ -35,6 +40,8 @@ impl Default for ScrollPhysics {
             spring_start_x: 0.0,
             spring_start_vel_x: 0.0,
             spring_time: 0.0,
+            spring_sim_x: None,
+            spring_sim_y: None,
             last_snap_page: 0,
             snap_just_completed: false,
             snap_x: None,
@@ -55,6 +62,16 @@ pub fn rubber_band_clamp(overscroll: f32, dimension: f32, coeff: f32) -> f32 {
 }
 
 impl ScrollPhysics {
+    #[must_use]
+    pub fn is_animating(&self) -> bool {
+        self.is_dragging
+            || self.snap_target_x.is_some()
+            || self.spring_sim_x.as_ref().is_some_and(|s| !s.is_at_rest())
+            || self.spring_sim_y.as_ref().is_some_and(|s| !s.is_at_rest())
+            || self.vel_x.abs() > 0.5
+            || self.vel_y.abs() > 0.5
+    }
+
     pub fn tick(&mut self, dt: f32) -> bool {
         let mut active = false;
         self.snap_just_completed = false;
@@ -64,29 +81,39 @@ impl ScrollPhysics {
             .zip(self.page_count)
             .map_or(f32::MAX, |(s, n)| s * (n as f32 - 1.0));
 
-        if let Some(target) = self.snap_target_x {
-            self.spring_time += dt;
-            let t = self.spring_time;
-            let y0 = self.spring_start_x - target;
-            let v0 = self.spring_start_vel_x;
-
-            let omega = 16.0_f32;
-            let exp_term = (-omega * t).exp();
-
-            let pos = target + (y0 + (v0 + omega * y0) * t) * exp_term;
-            let vel = (v0 - omega * (y0 + (v0 + omega * y0) * t)) * exp_term;
-
-            self.pos_x = pos;
-            self.vel_x = vel;
+        // 1. Horizontal Motion: Spring Snapping & Rubber-Band Recovery
+        if let Some(ref mut sim) = self.spring_sim_x {
+            self.pos_x = sim.step(dt);
+            self.vel_x = sim.velocity();
             active = true;
 
-            if exp_term < 0.001 || (self.pos_x - target).abs() < 0.5 {
+            if sim.is_at_rest() {
+                self.pos_x = sim.target();
+                self.vel_x = 0.0;
+                let was_snap = self.snap_target_x.is_some();
+                self.snap_target_x = None;
+                self.spring_sim_x = None;
+                self.spring_time = 0.0;
+                if was_snap {
+                    self.snap_just_completed = true;
+                }
+                active = false;
+            }
+        } else if let Some(target) = self.snap_target_x {
+            let mut sim = SpringSimulation::new(SpringConfig::snappy(), self.pos_x, target)
+                .with_initial_velocity(self.vel_x);
+            self.pos_x = sim.step(dt);
+            self.vel_x = sim.velocity();
+            active = true;
+            if sim.is_at_rest() {
                 self.pos_x = target;
                 self.vel_x = 0.0;
                 self.snap_target_x = None;
-                self.spring_time = 0.0;
+                self.spring_sim_x = None;
                 self.snap_just_completed = true;
                 active = false;
+            } else {
+                self.spring_sim_x = Some(sim);
             }
         } else if self.vel_x.abs() > 0.5 {
             let lambda = 7.62_f32;
@@ -96,49 +123,95 @@ impl ScrollPhysics {
             active = true;
 
             if self.pos_x < 0.0 {
-                self.pos_x = 0.0;
-                self.vel_x = 0.0;
+                if !self.is_dragging {
+                    self.spring_sim_x = Some(
+                        SpringSimulation::new(SpringConfig::rubber_band(), self.pos_x, 0.0)
+                            .with_initial_velocity(self.vel_x),
+                    );
+                } else {
+                    self.pos_x = 0.0;
+                    self.vel_x = 0.0;
+                }
             } else if max_limit < f32::MAX && self.pos_x > max_limit {
-                self.pos_x = max_limit;
-                self.vel_x = 0.0;
+                if !self.is_dragging {
+                    self.spring_sim_x = Some(
+                        SpringSimulation::new(SpringConfig::rubber_band(), self.pos_x, max_limit)
+                            .with_initial_velocity(self.vel_x),
+                    );
+                } else {
+                    self.pos_x = max_limit;
+                    self.vel_x = 0.0;
+                }
+            }
+        } else if !self.is_dragging {
+            if self.pos_x < -0.1 {
+                self.spring_sim_x = Some(
+                    SpringSimulation::new(SpringConfig::rubber_band(), self.pos_x, 0.0)
+                        .with_initial_velocity(self.vel_x),
+                );
+                active = true;
+            } else if max_limit < f32::MAX && self.pos_x > max_limit + 0.1 {
+                self.spring_sim_x = Some(
+                    SpringSimulation::new(SpringConfig::rubber_band(), self.pos_x, max_limit)
+                        .with_initial_velocity(self.vel_x),
+                );
+                active = true;
             }
         }
 
+        // 2. Vertical Motion: Rubber-Band Springs & Kinetic Decay
         let max_limit_y = self.max_y.unwrap_or(0.0);
 
-        if self.vel_y.abs() > 0.5 {
+        if let Some(ref mut sim) = self.spring_sim_y {
+            self.pos_y = sim.step(dt);
+            self.vel_y = sim.velocity();
+            active = true;
+
+            if sim.is_at_rest() {
+                self.pos_y = sim.target();
+                self.vel_y = 0.0;
+                self.spring_sim_y = None;
+            }
+        } else if self.vel_y.abs() > 0.5 {
             let lambda = 7.62_f32;
             let decay = (-lambda * dt).exp();
             self.pos_y += self.vel_y * dt;
             self.vel_y *= decay;
-            if self.pos_y < 0.0 {
-                self.pos_y = 0.0;
-                self.vel_y = 0.0;
-            } else if self.pos_y > max_limit_y {
-                self.pos_y = max_limit_y;
-                self.vel_y = 0.0;
-            }
             active = true;
-        }
 
-        if !self.is_dragging {
-            if self.pos_y < -0.1 {
-                let spring_k = 18.0_f32;
-                let step = -self.pos_y * (1.0 - (-spring_k * dt).exp());
-                self.pos_y += step;
-                self.vel_y = 0.0;
-                if self.pos_y >= -0.5 {
+            if self.pos_y < 0.0 {
+                if !self.is_dragging {
+                    self.spring_sim_y = Some(
+                        SpringSimulation::new(SpringConfig::rubber_band(), self.pos_y, 0.0)
+                            .with_initial_velocity(self.vel_y),
+                    );
+                } else {
                     self.pos_y = 0.0;
+                    self.vel_y = 0.0;
                 }
+            } else if self.pos_y > max_limit_y {
+                if !self.is_dragging {
+                    self.spring_sim_y = Some(
+                        SpringSimulation::new(SpringConfig::rubber_band(), self.pos_y, max_limit_y)
+                            .with_initial_velocity(self.vel_y),
+                    );
+                } else {
+                    self.pos_y = max_limit_y;
+                    self.vel_y = 0.0;
+                }
+            }
+        } else if !self.is_dragging {
+            if self.pos_y < -0.1 {
+                self.spring_sim_y = Some(
+                    SpringSimulation::new(SpringConfig::rubber_band(), self.pos_y, 0.0)
+                        .with_initial_velocity(self.vel_y),
+                );
                 active = true;
             } else if self.pos_y > max_limit_y + 0.1 {
-                let spring_k = 18.0_f32;
-                let step = (self.pos_y - max_limit_y) * (1.0 - (-spring_k * dt).exp());
-                self.pos_y -= step;
-                self.vel_y = 0.0;
-                if self.pos_y <= max_limit_y + 0.5 {
-                    self.pos_y = max_limit_y;
-                }
+                self.spring_sim_y = Some(
+                    SpringSimulation::new(SpringConfig::rubber_band(), self.pos_y, max_limit_y)
+                        .with_initial_velocity(self.vel_y),
+                );
                 active = true;
             }
         }
@@ -147,6 +220,9 @@ impl ScrollPhysics {
     }
 
     pub fn apply_drag(&mut self, delta_x: f32) {
+        self.snap_target_x = None;
+        self.spring_sim_x = None;
+
         let max_x = self
             .snap_x
             .zip(self.page_count)
@@ -169,6 +245,7 @@ impl ScrollPhysics {
     }
 
     pub fn apply_drag_y(&mut self, delta_y: f32) {
+        self.spring_sim_y = None;
         let max_limit_y = self.max_y.unwrap_or(0.0);
         let coeff = self.rubber_band.unwrap_or(RUBBER_BAND_COEFF);
         let new_pos = self.pos_y + delta_y;
@@ -184,8 +261,18 @@ impl ScrollPhysics {
     pub fn release_drag_y(&mut self, vel_y: f32) {
         self.is_dragging = false;
         let max_limit_y = self.max_y.unwrap_or(0.0);
-        if (self.pos_y <= 0.0 && vel_y < 0.0) || (self.pos_y >= max_limit_y && vel_y > 0.0) {
+        if self.pos_y < 0.0 {
             self.vel_y = 0.0;
+            self.spring_sim_y = Some(
+                SpringSimulation::new(SpringConfig::rubber_band(), self.pos_y, 0.0)
+                    .with_initial_velocity(vel_y),
+            );
+        } else if self.pos_y > max_limit_y {
+            self.vel_y = 0.0;
+            self.spring_sim_y = Some(
+                SpringSimulation::new(SpringConfig::rubber_band(), self.pos_y, max_limit_y)
+                    .with_initial_velocity(vel_y),
+            );
         } else {
             self.vel_y = vel_y;
         }
@@ -223,7 +310,23 @@ impl ScrollPhysics {
                 }
                 self.spring_start_vel_x = init_vel;
                 self.spring_time = 0.0;
+
+                // Analytical spring simulation for page snap
+                self.spring_sim_x = Some(
+                    SpringSimulation::new(SpringConfig::snappy(), self.pos_x, target_x)
+                        .with_initial_velocity(init_vel),
+                );
             }
+        } else if self.pos_x < 0.0 {
+            self.spring_sim_x = Some(
+                SpringSimulation::new(SpringConfig::rubber_band(), self.pos_x, 0.0)
+                    .with_initial_velocity(vel_x),
+            );
+        } else if max_x < f32::MAX && self.pos_x > max_x {
+            self.spring_sim_x = Some(
+                SpringSimulation::new(SpringConfig::rubber_band(), self.pos_x, max_x)
+                    .with_initial_velocity(vel_x),
+            );
         }
     }
 }

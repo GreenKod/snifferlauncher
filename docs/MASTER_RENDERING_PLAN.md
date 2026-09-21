@@ -82,7 +82,7 @@ _Hedef: Basit tek katmanlı gölge yerine gerçekçi yükseklik (elevation) hiss
 _Hedef: Kullanıcı parmağını kaydırıp bıraktığında (fling) veya elastik kenara çarptığında (rubber-band) JS thread'ini uyandırmadan 120 FPS akıcı fizik hareketleri üretmek._
 
 - [x] **Aşama 6.1:** `sniffer_core::anim` içine analitik ikinci derece yay fiziği çözücüsü (`SpringSimulation`: kütle, sertlik, sönümleme katsayıları) eklenmesi.
-- [ ] **Aşama 6.2:** `ScrollView` bileşenindeki rubber-band ve snap mekanizmasının zaman bazlı interpolasyondan doğrudan `SpringSimulation` çözücüsüne bağlanması.
+- [x] **Aşama 6.2:** `ScrollView` bileşenindeki rubber-band ve snap mekanizmasının zaman bazlı interpolasyondan doğrudan `SpringSimulation` çözücüsüne bağlanması.
 - [ ] **Aşama 6.3:** Dokunma bırakma anındaki fırlatma hızı (fling velocity) hesaplayıcısının entegrasyonu ve momentum kaydırmasının pürüzsüzleştirilmesi.
 - [ ] **Aşama 6.4:** Sayfa geçişleri ve uygulama çekmecesi açılışında yay dalgalanması (staggered cascade animation) desteğinin eklenmesi.
 - [ ] **Aşama 6.5:** 120 Hz ekranlarda girişten çizime (touch-to-render) gecikmenin ve frame drop (jank) durumlarının profiler ile test edilip doğrulanması.
