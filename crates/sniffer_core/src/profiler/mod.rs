@@ -13,6 +13,7 @@ pub struct TouchTelemetry {
     pub target_element: String,
     pub touch_x: f32,
     pub touch_y: f32,
+    pub touch_to_render_us: f32,
 }
 
 #[cfg(feature = "devkit")]
@@ -111,6 +112,11 @@ impl FrameProfiler {
             0.0
         }
     }
+
+    #[must_use]
+    pub fn jank_count_120hz(&self) -> usize {
+        self.frame_times.iter().filter(|&&t| t > 8.333).count()
+    }
 }
 
 #[cfg(feature = "devkit")]
@@ -181,6 +187,12 @@ impl FrameProfiler {
     #[must_use]
     pub fn current_fps(&self) -> f32 {
         0.0
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn jank_count_120hz(&self) -> usize {
+        0
     }
 }
 
