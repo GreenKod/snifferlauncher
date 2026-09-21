@@ -1,3 +1,6 @@
+pub mod spring;
+pub use spring::{SpringConfig, SpringSimulation};
+
 use crate::style::{Easing, Style};
 use std::collections::HashMap;
 
