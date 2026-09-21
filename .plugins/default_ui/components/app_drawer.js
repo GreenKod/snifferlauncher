@@ -3,7 +3,7 @@
 // En üstte SearchBar, altında A-Z alfabetik dizilmiş dikey kaydırılabilir liste
 // =============================================================================
 
-function AppDrawerCardComponent(app, index, isLandscape) {
+function AppDrawerCardComponent(app, index, isLandscape, isBottomFloor) {
     const letter = app.name ? app.name.charAt(0).toUpperCase() : "?";
     const gradient = GRID_COLORS[index % GRID_COLORS.length];
 
@@ -26,6 +26,8 @@ function AppDrawerCardComponent(app, index, isLandscape) {
     }
 
     const uniqueId = "drawer_card_" + index;
+    const cardTranslateY = isBottomFloor ? 0.0 : vh(6.0);
+    const cardOpacity = isBottomFloor ? 1.0 : 0.0;
 
     return Container(uniqueId, {
         width: px(cardW),
@@ -38,7 +40,17 @@ function AppDrawerCardComponent(app, index, isLandscape) {
         align_items: "Center",
         justify_content: "Center",
         gap: cardH * 0.05,
-        transition: { duration: 0.20 },
+        opacity: cardOpacity,
+        transform: {
+            translate_y: cardTranslateY,
+            scale: 1.0,
+        },
+        transition: {
+            duration: 0.35,
+            easing: { spring: { stiffness: 240, damping: 22 } },
+            stagger_index: index % 24,
+            stagger_interval: 0.018,
+        },
     }, [
         Container("drawer_icon_" + index, {
             width: px(iconSize),
@@ -75,7 +87,7 @@ function AppDrawerComponent() {
 
     const cardItems = [];
     for (let i = 0; i < apps.length; i++) {
-        cardItems.push(AppDrawerCardComponent(apps[i], i, isLandscape));
+        cardItems.push(AppDrawerCardComponent(apps[i], i, isLandscape, isBottomFloor));
     }
 
     // SearchBar Container (Sleek Modern Frosted Glass Pill)
@@ -231,8 +243,8 @@ function AppDrawerComponent() {
             scale: 1.0,
         },
         transition: {
-            duration: 0.32,
-            easing: "ease_out"
+            duration: 0.36,
+            easing: { spring: { stiffness: 220, damping: 24 } }
         }
     }, drawerChildren);
 }
