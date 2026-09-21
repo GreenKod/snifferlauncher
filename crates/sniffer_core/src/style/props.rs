@@ -28,6 +28,9 @@ pub enum Easing {
 pub struct Transition {
     pub duration: f32, // in seconds
     pub easing: Easing,
+    pub delay: f32,            // in seconds
+    pub stagger_index: u32,    // index in cascade wave
+    pub stagger_interval: f32, // delay interval per index in seconds
 }
 
 impl Default for Transition {
@@ -35,6 +38,9 @@ impl Default for Transition {
         Self {
             duration: 0.0, // 0 means instant
             easing: Easing::Linear,
+            delay: 0.0,
+            stagger_index: 0,
+            stagger_interval: 0.0,
         }
     }
 }
