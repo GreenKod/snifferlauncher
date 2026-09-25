@@ -16,6 +16,7 @@ function getDockContainer(isLandscape) {
             border_radius: vmin(4.0),
             border_width: px(1.0),
             border_color: hex("#33FFFFFF"),
+            border_gradient: [hex("#66FFFFFF"), hex("#15FFFFFF")],
             flex_direction: "Column",
             justify_content: "Center",
             align_items: "Center",
@@ -41,6 +42,7 @@ function getDockContainer(isLandscape) {
                     border_radius: iconRadius,
                     border_width: px(1.0),
                     border_color: hex("#5538BDF8"),
+                    border_gradient: [hex("#6638BDF8"), hex("#1A38BDF8")],
                     justify_content: "Center",
                     align_items: "Center",
                 }, [
@@ -97,6 +99,7 @@ function getDockContainer(isLandscape) {
             border_radius: vmin(8.75),
             border_width: px(1.0),
             border_color: hex("#33FFFFFF"),
+            border_gradient: [hex("#66FFFFFF"), hex("#15FFFFFF")],
             flex_direction: "Row",
             justify_content: "SpaceAround",
             align_items: "Center",
@@ -121,6 +124,7 @@ function getDockContainer(isLandscape) {
                     border_radius: visualRadius,
                     border_width: px(1.0),
                     border_color: hex("#5538BDF8"),
+                    border_gradient: [hex("#6638BDF8"), hex("#1A38BDF8")],
                     justify_content: "Center",
                     align_items: "Center",
                 }, [
