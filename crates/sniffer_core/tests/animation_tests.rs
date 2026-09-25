@@ -213,3 +213,66 @@ fn test_border_gradient_interpolation() {
     assert_eq!(final_top, top_end);
     assert_eq!(final_bot, bot_end);
 }
+
+#[test]
+fn test_spring_transition_json_roundtrip_and_pressed_state() {
+    let json_input = r#"{
+        "elevation": 2.0,
+        "shadow_blur": 4.0,
+        "transform": {
+            "scale": 0.88
+        },
+        "transition": {
+            "duration": 0.22,
+            "easing": {
+                "spring": {
+                    "stiffness": 320.0,
+                    "damping": 22.0
+                }
+            }
+        }
+    }"#;
+
+    let style: sniffer_core::style::Style = serde_json::from_str(json_input).expect("parse json");
+    assert_eq!(style.elevation, 2.0);
+    assert_eq!(style.shadow_blur, 4.0);
+    assert_eq!(style.transform.scale, 0.88);
+    match &style.transition.easing {
+        Easing::Spring { stiffness, damping } => {
+            assert_eq!(*stiffness, 320.0);
+            assert_eq!(*damping, 22.0);
+        }
+        other => panic!("expected Spring easing, got {other:?}"),
+    }
+
+    let mut manager = TransitionManager::default();
+    let card_id = "dock_app_circle_phone";
+    let resting_style = sniffer_core::style::Style {
+        elevation: 6.0,
+        shadow_blur: 10.0,
+        transform: sniffer_core::style::Transform {
+            scale: 1.0,
+            ..Default::default()
+        },
+        transition: style.transition.clone(),
+        ..Default::default()
+    };
+    manager.update_target(card_id, &resting_style);
+
+    // Apply pressed target
+    manager.update_target(card_id, &style);
+    assert!(manager.is_animating());
+
+    // Advance 120 FPS frames until spring settles
+    let dt = 1.0 / 120.0;
+    let mut steps = 0;
+    while manager.is_animating() && steps < 600 {
+        manager.tick(dt);
+        steps += 1;
+    }
+
+    assert!(!manager.is_animating());
+    let settled = manager.get_current_style(card_id).unwrap();
+    assert!((settled.elevation - 2.0).abs() < 1e-3);
+    assert!((settled.transform.scale - 0.88).abs() < 1e-3);
+}

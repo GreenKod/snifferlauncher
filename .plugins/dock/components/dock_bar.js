@@ -27,6 +27,7 @@ function getDockContainer(isLandscape) {
             const iconRadius = iconSize / 2.0;
             const touchW = vmin(12.5);
             const touchH = vmin(12.5);
+            const isPressed = dockState.pressedAppId === app.id;
             
             return Container("dock_app_btn_" + (app.package_name || app.id), {
                 width: px(touchW),
@@ -43,6 +44,23 @@ function getDockContainer(isLandscape) {
                     border_width: px(1.0),
                     border_color: hex("#5538BDF8"),
                     border_gradient: [hex("#6638BDF8"), hex("#1A38BDF8")],
+                    elevation: isPressed ? 2.0 : 6.0,
+                    shadow_blur: isPressed ? 4.0 : 10.0,
+                    shadow_spread: isPressed ? 0.5 : 1.0,
+                    shadow_offset_y: isPressed ? 1.0 : 3.0,
+                    shadow_color: hex("#40000000"),
+                    transform: {
+                        scale: isPressed ? 0.88 : 1.0
+                    },
+                    transition: {
+                        duration: 0.22,
+                        easing: {
+                            spring: {
+                                stiffness: 320.0,
+                                damping: 22.0
+                            }
+                        }
+                    },
                     justify_content: "Center",
                     align_items: "Center",
                 }, [
@@ -109,6 +127,7 @@ function getDockContainer(isLandscape) {
             const visualRadius = visualSize / 2.0;
             const touchW = vmin(17.0);
             const touchH = vmin(17.5);
+            const isPressed = dockState.pressedAppId === app.id;
 
             return Container("dock_app_btn_" + (app.package_name || app.id), {
                 width: px(touchW),
@@ -125,6 +144,23 @@ function getDockContainer(isLandscape) {
                     border_width: px(1.0),
                     border_color: hex("#5538BDF8"),
                     border_gradient: [hex("#6638BDF8"), hex("#1A38BDF8")],
+                    elevation: isPressed ? 2.0 : 6.0,
+                    shadow_blur: isPressed ? 4.0 : 10.0,
+                    shadow_spread: isPressed ? 0.5 : 1.0,
+                    shadow_offset_y: isPressed ? 1.0 : 3.0,
+                    shadow_color: hex("#40000000"),
+                    transform: {
+                        scale: isPressed ? 0.88 : 1.0
+                    },
+                    transition: {
+                        duration: 0.22,
+                        easing: {
+                            spring: {
+                                stiffness: 320.0,
+                                damping: 22.0
+                            }
+                        }
+                    },
                     justify_content: "Center",
                     align_items: "Center",
                 }, [
@@ -152,3 +188,4 @@ function getDockContainer(isLandscape) {
         }))
     ]);
 }
+

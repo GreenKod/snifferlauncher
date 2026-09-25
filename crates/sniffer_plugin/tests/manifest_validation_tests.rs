@@ -252,3 +252,136 @@ fn test_plugin_loader_normalizes_crlf_checksum() {
 
     let _ = fs::remove_dir_all(&temp_dir);
 }
+
+#[test]
+fn test_dock_plugin_spring_pressed_and_elevation_damping() {
+    use rquickjs::{Context, Runtime};
+
+    let plugins_dir = get_plugins_dir();
+    let dock_dir = plugins_dir.join("dock");
+    let framework_path = plugins_dir.join("framework/sniffer_ui.js");
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    ctx.with(|c| {
+        // Setup mock environment
+        let setup = r"
+            globalThis.host_log = function() {};
+            globalThis.host_screen_width = function() { return 1080; };
+            globalThis.host_screen_height = function() { return 2400; };
+            globalThis.requestPermissions = function(p) { return p; };
+            globalThis.registeredApis = {};
+            globalThis.registerApi = function(name, fn) { globalThis.registeredApis[name] = fn; };
+            globalThis.callApi = function(name, payload) { return globalThis.registeredApis[name](payload); };
+            globalThis.broadcastEvent = function() {};
+            globalThis.subscribeChannel = function() {};
+            globalThis.host_hash = function(s) {
+                let h = 0x811c9dc5;
+                for (let i = 0; i < s.length; i++) {
+                    h ^= s.charCodeAt(i);
+                    h = Math.imul(h, 0x01000193);
+                }
+                return (h >>> 0);
+            };
+        ";
+        c.eval::<(), _>(setup).unwrap();
+
+        // Evaluate framework
+        let fw_code = fs::read_to_string(&framework_path).unwrap();
+        c.eval::<(), _>(fw_code).unwrap();
+
+        // Evaluate dock files
+        let apps_code = fs::read_to_string(dock_dir.join("services/apps.js")).unwrap();
+        c.eval::<(), _>(apps_code).unwrap();
+
+        let dock_bar_code = fs::read_to_string(dock_dir.join("components/dock_bar.js")).unwrap();
+        c.eval::<(), _>(dock_bar_code).unwrap();
+
+        let main_code = fs::read_to_string(dock_dir.join("main.js")).unwrap();
+        c.eval::<(), _>(main_code).unwrap();
+
+        // 1. Get resting dock UI
+        let ui_json_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: false }))")
+            .unwrap();
+        let ui: sniffer_core::types::Element = serde_json::from_str(&ui_json_str).unwrap();
+
+
+        fn find_circle(
+            el: &sniffer_core::types::Element,
+            target_id: &str,
+        ) -> Option<sniffer_core::style::Style> {
+            match el {
+                sniffer_core::types::Element::Container {
+                    id,
+                    style,
+                    children,
+                } => {
+                    if id.as_deref() == Some(target_id) {
+                        return Some(style.clone());
+                    }
+                    for child in children {
+                        if let Some(s) = find_circle(child, target_id) {
+                            return Some(s);
+                        }
+                    }
+                    None
+                }
+                _ => None,
+            }
+        }
+
+        let phone_style =
+            find_circle(&ui, "dock_app_circle_phone").expect("dock_app_circle_phone found");
+        assert_eq!(phone_style.elevation, 6.0);
+        assert_eq!(phone_style.transform.scale, 1.0);
+        assert_eq!(phone_style.shadow_blur, 10.0);
+        match &phone_style.transition.easing {
+            sniffer_core::style::Easing::Spring { stiffness, damping } => {
+                assert_eq!(*stiffness, 320.0);
+                assert_eq!(*damping, 22.0);
+            }
+            other => panic!("expected Spring easing, got {other:?}"),
+        }
+
+        // 2. Trigger PointerDown on phone button
+        c.eval::<(), _>(
+            "globalThis.onEvent(JSON.stringify({ type: 'PointerDown', id: String(host_hash('dock_app_btn_phone')) }));",
+        )
+        .unwrap();
+
+        // UI in pressed state
+        let ui_pressed_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: false }))")
+            .unwrap();
+        let ui_pressed: sniffer_core::types::Element =
+            serde_json::from_str(&ui_pressed_str).unwrap();
+        let phone_pressed_style = find_circle(&ui_pressed, "dock_app_circle_phone")
+            .expect("dock_app_circle_phone found in pressed state");
+        assert_eq!(phone_pressed_style.elevation, 2.0);
+        assert_eq!(phone_pressed_style.transform.scale, 0.88);
+        assert_eq!(phone_pressed_style.shadow_blur, 4.0);
+
+        // Messages icon should remain unpressed
+        let messages_style =
+            find_circle(&ui_pressed, "dock_app_circle_messages").expect("messages found");
+        assert_eq!(messages_style.elevation, 6.0);
+        assert_eq!(messages_style.transform.scale, 1.0);
+
+        // 3. Trigger PointerUp
+        c.eval::<(), _>(
+            "globalThis.onEvent(JSON.stringify({ type: 'PointerUp', id: null }));",
+        )
+        .unwrap();
+        let ui_released_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: false }))")
+            .unwrap();
+        let ui_released: sniffer_core::types::Element =
+            serde_json::from_str(&ui_released_str).unwrap();
+        let phone_released_style = find_circle(&ui_released, "dock_app_circle_phone")
+            .expect("dock_app_circle_phone found in released state");
+        assert_eq!(phone_released_style.elevation, 6.0);
+        assert_eq!(phone_released_style.transform.scale, 1.0);
+    });
+}

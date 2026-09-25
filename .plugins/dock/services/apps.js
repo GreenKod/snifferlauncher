@@ -20,8 +20,60 @@ const DEFAULT_ESSENTIAL_APPS = ESSENTIAL_APPS_CONFIG.map(function(cfg) {
 const dockState = {
     essentialApps: DEFAULT_ESSENTIAL_APPS.slice(),
     detectedPackages: {},
-    hashMap: {}
+    hashMap: {},
+    appMap: {},
+    pressedAppId: null
 };
+
+function rebuildDockIdMaps() {
+    const map = {};
+    const appMap = {};
+    const apps = dockState.essentialApps || [];
+
+    for (let i = 0; i < apps.length; i++) {
+        const app = apps[i];
+        const appId = app.id;
+        const btnId = "dock_app_btn_" + (app.package_name || app.id);
+        const circleBoxId = "dock_app_circle_" + app.id;
+        const imgId = "dock_img_" + app.id;
+        const circleId = "dock_circle_" + app.id;
+        const iconId = "dock_app_icon_" + app.id;
+
+        if (typeof host_hash === "function") {
+            if (app.package_name) {
+                map[String(host_hash(btnId))] = app.package_name;
+                map[String(host_hash(circleBoxId))] = app.package_name;
+                map[String(host_hash(imgId))] = app.package_name;
+                map[String(host_hash(circleId))] = app.package_name;
+                map[String(host_hash(iconId))] = app.package_name;
+            }
+            appMap[String(host_hash(btnId))] = appId;
+            appMap[String(host_hash(circleBoxId))] = appId;
+            appMap[String(host_hash(imgId))] = appId;
+            appMap[String(host_hash(circleId))] = appId;
+            appMap[String(host_hash(iconId))] = appId;
+        }
+
+        if (app.package_name) {
+            map[btnId] = app.package_name;
+            map[circleBoxId] = app.package_name;
+            map[imgId] = app.package_name;
+            map[circleId] = app.package_name;
+            map[iconId] = app.package_name;
+        }
+        appMap[btnId] = appId;
+        appMap[circleBoxId] = appId;
+        appMap[imgId] = appId;
+        appMap[circleId] = appId;
+        appMap[iconId] = appId;
+    }
+
+    dockState.hashMap = map;
+    dockState.appMap = appMap;
+}
+
+// Initial ID map build
+rebuildDockIdMaps();
 
 function refreshEssentialApps() {
     let allApps = [];
@@ -38,6 +90,7 @@ function refreshEssentialApps() {
     }
 
     if (allApps.length === 0) {
+        rebuildDockIdMaps();
         return;
     }
 
@@ -87,32 +140,9 @@ function refreshEssentialApps() {
         dockState.essentialApps = matched;
         dockState.detectedPackages = detected;
 
-        // Build ID and Hash map for click hit testing
-        const map = {};
-        for (let i = 0; i < matched.length; i++) {
-            const app = matched[i];
-            if (!app.package_name) continue;
-            const btnId = "dock_app_btn_" + (app.package_name || app.id);
-            const circleBoxId = "dock_app_circle_" + app.id;
-            const imgId = "dock_img_" + app.id;
-            const circleId = "dock_circle_" + app.id;
-            const iconId = "dock_app_icon_" + app.id;
-
-            if (typeof host_hash === "function") {
-                map[String(host_hash(btnId))] = app.package_name;
-                map[String(host_hash(circleBoxId))] = app.package_name;
-                map[String(host_hash(imgId))] = app.package_name;
-                map[String(host_hash(circleId))] = app.package_name;
-                map[String(host_hash(iconId))] = app.package_name;
-            }
-            map[btnId] = app.package_name;
-            map[circleBoxId] = app.package_name;
-            map[imgId] = app.package_name;
-            map[circleId] = app.package_name;
-            map[iconId] = app.package_name;
-        }
-        dockState.hashMap = map;
+        rebuildDockIdMaps();
     } catch (e) {
         host_log("[Dock Plugin] Error matching apps: " + e);
     }
 }
+
