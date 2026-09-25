@@ -17,6 +17,66 @@ pub struct QuadInstanceData {
     pub border_width: f32,
     pub shadow_blur: f32,
     pub is_gradient: f32,
+    pub border_color_bottom: [f32; 4],
+}
+
+impl QuadInstanceData {
+    #[must_use]
+    pub fn new_dual_shadow(
+        rect: Rect,
+        radius: f32,
+        elevation: f32,
+        shadow_color: Option<u32>,
+        global_alpha: f32,
+    ) -> (Self, Rect) {
+        let base_color = shadow_color.unwrap_or(0x4D00_0000);
+        let col = unpack_color(base_color);
+        let base_alpha = col[3] * global_alpha;
+
+        let mut key_col = col;
+        key_col[3] = base_alpha * 0.65;
+        let key_blur = (elevation * 1.2).max(2.0);
+        let key_offset_y = elevation * 0.75;
+
+        let mut ambient_col = col;
+        ambient_col[3] = base_alpha * 0.35;
+        let ambient_blur = (elevation * 1.6).max(2.0);
+        let ambient_spread = elevation * 0.1;
+
+        // Effective SDF reach: outside this radius smoothstep is strictly 0.0
+        let key_reach = key_offset_y + key_blur * 1.5;
+        let ambient_reach = ambient_spread + ambient_blur * 1.5;
+        let max_reach = key_reach.max(ambient_reach);
+
+        // Maximum safe shadow padding (64px) to eliminate runaway fill-rate overdraw on mobile
+        const MAX_SHADOW_PADDING: f32 = 64.0;
+        let pad = (max_reach + 1.0).min(MAX_SHADOW_PADDING);
+
+        let shadow_rect = Rect {
+            x: rect.x - pad,
+            y: rect.y - pad,
+            width: rect.width + pad * 2.0,
+            height: rect.height + pad * 2.0,
+        };
+
+        let instance = Self {
+            rect_pos: [shadow_rect.x, shadow_rect.y],
+            rect_size: [shadow_rect.width, shadow_rect.height],
+            color: key_col,
+            border_color: [0.0; 4],
+            color_bottom: ambient_col,
+            shape_size: [rect.width, rect.height],
+            is_circle: 0.0,
+            is_shadow: 2.0,
+            radius,
+            border_width: ambient_blur,
+            shadow_blur: key_blur,
+            is_gradient: key_offset_y,
+            border_color_bottom: [0.0; 4],
+        };
+
+        (instance, shadow_rect)
+    }
 }
 
 pub struct QuadBatch {
@@ -240,7 +300,7 @@ impl Default for TextBatch {
     }
 }
 
-pub(crate) fn unpack_color(color: u32) -> [f32; 4] {
+pub fn unpack_color(color: u32) -> [f32; 4] {
     let a =
         f32::from(u8::try_from((color >> 24) & 0xff).expect("alpha channel fits in u8")) / 255.0;
     let r = f32::from(u8::try_from((color >> 16) & 0xff).expect("red channel fits in u8")) / 255.0;
@@ -369,6 +429,27 @@ impl GlowRenderer {
         border_width: f32,
         border_color: Option<u32>,
     ) {
+        self.draw_rect_gradient_border_impl(
+            rect,
+            color_top,
+            color_bottom,
+            radius,
+            border_width,
+            border_color,
+            border_color,
+        );
+    }
+
+    pub(crate) fn draw_rect_gradient_border_impl(
+        &mut self,
+        rect: Rect,
+        color_top: u32,
+        color_bottom: u32,
+        radius: f32,
+        border_width: f32,
+        border_top: Option<u32>,
+        border_bottom: Option<u32>,
+    ) {
         if self.shape_batch.is_full() {
             self.flush_shapes();
         }
@@ -378,10 +459,14 @@ impl GlowRenderer {
         col_top[3] *= self.global_alpha;
         col_bot[3] *= self.global_alpha;
 
-        let mut b_col = unpack_color(border_color.unwrap_or(0));
-        b_col[3] *= self.global_alpha;
+        let b_top = border_top.or(border_bottom).unwrap_or(0);
+        let b_bot = border_bottom.or(border_top).unwrap_or(0);
+        let mut b_col_top = unpack_color(b_top);
+        let mut b_col_bot = unpack_color(b_bot);
+        b_col_top[3] *= self.global_alpha;
+        b_col_bot[3] *= self.global_alpha;
 
-        let is_gradient = if color_top == color_bottom {
+        let is_gradient = if color_top == color_bottom && b_top == b_bot {
             0.0f32
         } else {
             1.0f32
@@ -391,7 +476,7 @@ impl GlowRenderer {
             rect_pos: [rect.x, rect.y],
             rect_size: [rect.width, rect.height],
             color: col_top,
-            border_color: b_col,
+            border_color: b_col_top,
             color_bottom: col_bot,
             shape_size: [rect.width, rect.height],
             is_circle: 0.0,
@@ -400,6 +485,7 @@ impl GlowRenderer {
             border_width,
             shadow_blur: 0.0,
             is_gradient,
+            border_color_bottom: b_col_bot,
         };
 
         let _ = self.shape_batch.push_instance(instance);
@@ -413,66 +499,107 @@ impl GlowRenderer {
         spread: f32,
         color: u32,
     ) {
-        self.flush_shapes();
+        if (color & 0xFF00_0000 == 0) || self.global_alpha <= 0.001 {
+            return;
+        }
 
         let mut col = unpack_color(color);
         col[3] *= self.global_alpha;
-        unsafe {
-            self.gl.use_program(Some(self.shape_program));
-            self.ensure_quad_vao();
 
-            let u = &self.shape_uniforms;
-            self.gl.uniform_1_i32(u.u_instanced.as_ref(), 0);
+        let blur = spread * 1.5;
+        let reach = offset_y.abs() + spread + blur * 1.5;
+        const MAX_SHADOW_PADDING: f32 = 64.0;
+        let padding = (reach + 1.0).min(MAX_SHADOW_PADDING);
 
-            let blur = spread * 1.5;
-            let padding = blur * 2.0;
+        let shadow_rect = Rect {
+            x: rect.x - spread - padding,
+            y: rect.y + offset_y - spread - padding,
+            width: spread.mul_add(2.0, rect.width) + padding * 2.0,
+            height: spread.mul_add(2.0, rect.height) + padding * 2.0,
+        };
 
-            let shadow_rect = Rect {
-                x: rect.x - spread - padding,
-                y: rect.y + offset_y - spread - padding,
-                width: spread.mul_add(2.0, rect.width) + padding * 2.0,
-                height: spread.mul_add(2.0, rect.height) + padding * 2.0,
-            };
-
-            let shape_size_x = spread.mul_add(2.0, rect.width);
-            let shape_size_y = spread.mul_add(2.0, rect.height);
-
-            self.gl.uniform_2_f32(
-                u.u_resolution.as_ref(),
-                self.resolution.0,
-                self.resolution.1,
-            );
-            self.gl
-                .uniform_2_f32(u.u_rect_pos.as_ref(), shadow_rect.x, shadow_rect.y);
-            self.gl.uniform_2_f32(
-                u.u_rect_size.as_ref(),
-                shadow_rect.width,
-                shadow_rect.height,
-            );
-            self.gl
-                .uniform_2_f32(u.u_shape_size.as_ref(), shape_size_x, shape_size_y);
-            self.gl
-                .uniform_4_f32(u.u_color.as_ref(), col[0], col[1], col[2], col[3]);
-            self.gl.uniform_1_f32(u.u_radius.as_ref(), radius + spread);
-            self.gl.uniform_1_f32(u.u_is_circle.as_ref(), 0.0);
-            self.gl.uniform_1_f32(u.u_is_shadow.as_ref(), 1.0);
-            self.gl.uniform_1_f32(u.u_shadow_blur.as_ref(), blur);
-
-            let Some(t) = self.transform_stack.last() else {
-                crate::dev_err!("transform_stack empty in draw_shadow — missing push_transform");
-                return;
-            };
-            self.gl
-                .uniform_matrix_3_f32_slice(u.u_transform.as_ref(), false, t);
-
-            self.upload_clip_uniforms(
-                u.u_clip_rect.as_ref(),
-                u.u_clip_radius.as_ref(),
-                u.u_clip_inv_transform.as_ref(),
-            );
-
-            self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+        // Clip container culling: discard if completely outside active clip
+        if self.transform_stack.is_empty() {
+            if let Some(clip) = self.clip_stack.last() {
+                let clip_rect = clip.rect;
+                if shadow_rect.x > clip_rect.x + clip_rect.width
+                    || shadow_rect.x + shadow_rect.width < clip_rect.x
+                    || shadow_rect.y > clip_rect.y + clip_rect.height
+                    || shadow_rect.y + shadow_rect.height < clip_rect.y
+                {
+                    return;
+                }
+            }
         }
+
+        let shape_size_x = spread.mul_add(2.0, rect.width);
+        let shape_size_y = spread.mul_add(2.0, rect.height);
+
+        let instance = QuadInstanceData {
+            rect_pos: [shadow_rect.x, shadow_rect.y],
+            rect_size: [shadow_rect.width, shadow_rect.height],
+            color: col,
+            border_color: [0.0; 4],
+            color_bottom: col,
+            shape_size: [shape_size_x, shape_size_y],
+            is_circle: 0.0,
+            is_shadow: 1.0,
+            radius: radius + spread,
+            border_width: 0.0,
+            shadow_blur: blur,
+            is_gradient: 0.0,
+            border_color_bottom: [0.0; 4],
+        };
+
+        if self.shape_batch.is_full() {
+            self.flush_shapes();
+        }
+        let _ = self.shape_batch.push_instance(instance);
+    }
+
+    pub(crate) fn draw_elevation_shadow_impl(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        elevation: f32,
+        shadow_color: Option<u32>,
+    ) {
+        if elevation <= 0.0 || self.global_alpha <= 0.001 {
+            return;
+        }
+
+        if let Some(c) = shadow_color {
+            if c & 0xFF00_0000 == 0 {
+                return;
+            }
+        }
+
+        let (instance, shadow_rect) = QuadInstanceData::new_dual_shadow(
+            rect,
+            radius,
+            elevation,
+            shadow_color,
+            self.global_alpha,
+        );
+
+        // Clip container culling: discard if completely outside active clip
+        if self.transform_stack.is_empty() {
+            if let Some(clip) = self.clip_stack.last() {
+                let clip_rect = clip.rect;
+                if shadow_rect.x > clip_rect.x + clip_rect.width
+                    || shadow_rect.x + shadow_rect.width < clip_rect.x
+                    || shadow_rect.y > clip_rect.y + clip_rect.height
+                    || shadow_rect.y + shadow_rect.height < clip_rect.y
+                {
+                    return;
+                }
+            }
+        }
+
+        if self.shape_batch.is_full() {
+            self.flush_shapes();
+        }
+        let _ = self.shape_batch.push_instance(instance);
     }
 
     pub(crate) fn draw_circle_impl(&mut self, cx: f32, cy: f32, radius: f32, color: u32) {
@@ -534,13 +661,13 @@ mod tests {
 
     #[test]
     fn test_quad_instance_data_layout() {
-        assert_eq!(std::mem::size_of::<QuadInstanceData>(), 96);
+        assert_eq!(std::mem::size_of::<QuadInstanceData>(), 112);
         assert_eq!(std::mem::align_of::<QuadInstanceData>(), 4);
 
         let data = QuadInstanceData::default();
         let base = &raw const data as usize;
 
-        // Verify that 6 attribute blocks (each vec4 = 16 bytes) align perfectly:
+        // Verify that 7 attribute blocks (each vec4 = 16 bytes) align perfectly:
         // 1. a_bounds: rect_pos (8B) + rect_size (8B) = 16B at offset 0
         assert_eq!(&raw const data.rect_pos as usize - base, 0);
         assert_eq!(&raw const data.rect_size as usize - base, 8);
@@ -564,6 +691,9 @@ mod tests {
         assert_eq!(&raw const data.border_width as usize - base, 84);
         assert_eq!(&raw const data.shadow_blur as usize - base, 88);
         assert_eq!(&raw const data.is_gradient as usize - base, 92);
+
+        // 7. a_border_color_bottom: border_color_bottom (16B) at offset 96
+        assert_eq!(&raw const data.border_color_bottom as usize - base, 96);
     }
 
     #[test]
@@ -586,8 +716,8 @@ mod tests {
         assert!(!batch.push_instance(inst));
         assert_eq!(batch.len(), 4);
 
-        // Raw byte representation size check: 4 instances * 96 bytes = 384 bytes
-        assert_eq!(batch.as_bytes().len(), 4 * 96);
+        // Raw byte representation size check: 4 instances * 112 bytes = 448 bytes
+        assert_eq!(batch.as_bytes().len(), 4 * 112);
 
         // Clear preserves buffer allocation
         batch.clear();
@@ -623,6 +753,7 @@ mod tests {
             border_width,
             shadow_blur: 0.0,
             is_gradient: 1.0,
+            border_color_bottom: b_col,
         };
 
         assert_eq!(instance.rect_pos, [10.0, 20.0]);

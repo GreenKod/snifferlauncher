@@ -75,6 +75,7 @@ where
     #[serde(untagged)]
     enum F32OrDimension {
         Float(f32),
+        Str(String),
         Dim(Dimension),
     }
 
@@ -82,6 +83,18 @@ where
         F32OrDimension::Float(f) | F32OrDimension::Dim(Dimension::Pixels(f)) => Ok(f),
         F32OrDimension::Dim(Dimension::Percent(p)) => Ok(p),
         F32OrDimension::Dim(Dimension::Auto) => Ok(0.0),
+        F32OrDimension::Str(s) => {
+            let trimmed = s.trim();
+            if let Some(num) = trimmed.strip_suffix("px") {
+                num.trim().parse::<f32>().map_err(serde::de::Error::custom)
+            } else if let Some(num) = trimmed.strip_suffix('%') {
+                num.trim().parse::<f32>().map_err(serde::de::Error::custom)
+            } else if trimmed == "auto" {
+                Ok(0.0)
+            } else {
+                trimmed.parse::<f32>().map_err(serde::de::Error::custom)
+            }
+        }
     }
 }
 
@@ -126,12 +139,19 @@ pub struct Style {
     #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
     pub border_radius: f32,
     pub border_color: Option<u32>,
+    pub border_gradient: Option<(u32, u32)>,
     #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
     pub border_width: f32,
 
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
+    pub elevation: f32,
     pub shadow_color: Option<u32>,
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
     pub shadow_offset_y: f32,
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
     pub shadow_spread: f32,
+    #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
+    pub shadow_blur: f32,
 
     pub text_color: Option<u32>,
     #[serde(default, deserialize_with = "deserialize_f32_or_dimension")]
@@ -181,10 +201,13 @@ impl Default for Style {
             background_gradient: None,
             border_radius: 0.0,
             border_color: None,
+            border_gradient: None,
             border_width: 0.0,
+            elevation: 0.0,
             shadow_color: None,
             shadow_offset_y: 0.0,
             shadow_spread: 0.0,
+            shadow_blur: 0.0,
             text_color: None,
             text_size: 16.0,
             overflow_hidden: false,
@@ -226,6 +249,46 @@ impl StyleBuilder {
         self.0.backdrop_tint = Some(tint);
         self
     }
+    #[must_use]
+    pub fn elevation(mut self, elevation: f32) -> Self {
+        self.0.elevation = elevation;
+        self
+    }
+    #[must_use]
+    pub fn shadow_blur(mut self, blur: f32) -> Self {
+        self.0.shadow_blur = blur;
+        self
+    }
+    #[must_use]
+    pub fn shadow_spread(mut self, spread: f32) -> Self {
+        self.0.shadow_spread = spread;
+        self
+    }
+    #[must_use]
+    pub fn shadow_offset_y(mut self, offset_y: f32) -> Self {
+        self.0.shadow_offset_y = offset_y;
+        self
+    }
+    #[must_use]
+    pub fn shadow_color(mut self, color: u32) -> Self {
+        self.0.shadow_color = Some(color);
+        self
+    }
+    #[must_use]
+    pub fn border_gradient(mut self, top: u32, bottom: u32) -> Self {
+        self.0.border_gradient = Some((top, bottom));
+        self
+    }
+    #[must_use]
+    pub fn scale(mut self, scale: f32) -> Self {
+        self.0.transform.scale = scale;
+        self
+    }
+    #[must_use]
+    pub fn transition(mut self, transition: Transition) -> Self {
+        self.0.transition = transition;
+        self
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -233,8 +296,13 @@ pub struct StyleOverride {
     pub background_color: Option<u32>,
     pub text_color: Option<u32>,
     pub border_color: Option<u32>,
+    pub border_gradient: Option<(u32, u32)>,
     pub backdrop_blur: Option<f32>,
     pub backdrop_tint: Option<u32>,
+    pub elevation: Option<f32>,
+    pub shadow_blur: Option<f32>,
+    pub shadow_spread: Option<f32>,
+    pub shadow_color: Option<u32>,
 }
 
 impl StyleOverride {
@@ -249,11 +317,26 @@ impl StyleOverride {
         if let Some(c) = self.border_color {
             base.border_color = Some(c);
         }
+        if let Some(bg) = self.border_gradient {
+            base.border_gradient = Some(bg);
+        }
         if let Some(b) = self.backdrop_blur {
             base.backdrop_blur = b;
         }
         if let Some(t) = self.backdrop_tint {
             base.backdrop_tint = Some(t);
+        }
+        if let Some(e) = self.elevation {
+            base.elevation = e;
+        }
+        if let Some(sb) = self.shadow_blur {
+            base.shadow_blur = sb;
+        }
+        if let Some(ss) = self.shadow_spread {
+            base.shadow_spread = ss;
+        }
+        if let Some(sc) = self.shadow_color {
+            base.shadow_color = Some(sc);
         }
         base
     }

@@ -51,6 +51,12 @@ interface Style {
     overflowHidden?: boolean;
     backdropBlur?: number;
     backdropTint?: number | string;
+    elevation?: number;
+    shadowColor?: number | string;
+    shadowOffsetY?: number;
+    shadowSpread?: number;
+    shadowBlur?: number;
+    borderGradient?: [number, number];
 }
 
 type UIElement =

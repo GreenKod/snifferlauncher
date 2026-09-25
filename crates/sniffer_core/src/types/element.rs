@@ -177,6 +177,31 @@ impl Element {
                         style.backdrop_tint = Some(color);
                     }
                 }
+                "elevation" => {
+                    if let Ok(e) = value.parse::<f32>() {
+                        style.elevation = e;
+                    }
+                }
+                "shadow_blur" | "shadow-blur" => {
+                    if let Ok(b) = value.parse::<f32>() {
+                        style.shadow_blur = b;
+                    }
+                }
+                "shadow_spread" | "shadow-spread" => {
+                    if let Ok(s) = value.parse::<f32>() {
+                        style.shadow_spread = s;
+                    }
+                }
+                "shadow_offset_y" | "shadow-offset-y" => {
+                    if let Ok(y) = value.parse::<f32>() {
+                        style.shadow_offset_y = y;
+                    }
+                }
+                "shadow_color" | "shadow-color" => {
+                    if let Ok(color) = u32::from_str_radix(value.trim_start_matches('#'), 16) {
+                        style.shadow_color = Some(color);
+                    }
+                }
                 _ => return false,
             }
             return true;

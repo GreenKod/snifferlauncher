@@ -191,6 +191,62 @@ impl AnimState {
             self.target_style.backdrop_tint,
             eased_t,
         );
+        self.current_style.border_width = lerp(
+            self.start_style.border_width,
+            self.target_style.border_width,
+            eased_t,
+        );
+        self.current_style.elevation = lerp(
+            self.start_style.elevation,
+            self.target_style.elevation,
+            eased_t,
+        );
+        self.current_style.shadow_blur = lerp(
+            self.start_style.shadow_blur,
+            self.target_style.shadow_blur,
+            eased_t,
+        );
+        self.current_style.shadow_spread = lerp(
+            self.start_style.shadow_spread,
+            self.target_style.shadow_spread,
+            eased_t,
+        );
+        self.current_style.shadow_offset_y = lerp(
+            self.start_style.shadow_offset_y,
+            self.target_style.shadow_offset_y,
+            eased_t,
+        );
+        self.current_style.shadow_color = lerp_opt_color(
+            self.start_style.shadow_color,
+            self.target_style.shadow_color,
+            eased_t,
+        );
+        self.current_style.border_gradient = match (
+            self.start_style.border_gradient,
+            self.target_style.border_gradient,
+        ) {
+            (Some((s_top, s_bot)), Some((e_top, e_bot))) => Some((
+                lerp_color(s_top, e_top, eased_t),
+                lerp_color(s_bot, e_bot, eased_t),
+            )),
+            (Some((s_top, s_bot)), None) => {
+                let trans_top = s_top & 0x00FF_FFFF;
+                let trans_bot = s_bot & 0x00FF_FFFF;
+                Some((
+                    lerp_color(s_top, trans_top, eased_t),
+                    lerp_color(s_bot, trans_bot, eased_t),
+                ))
+            }
+            (None, Some((e_top, e_bot))) => {
+                let trans_top = e_top & 0x00FF_FFFF;
+                let trans_bot = e_bot & 0x00FF_FFFF;
+                Some((
+                    lerp_color(trans_top, e_top, eased_t),
+                    lerp_color(trans_bot, e_bot, eased_t),
+                ))
+            }
+            (None, None) => None,
+        };
 
         // Transforms
         self.current_style.transform.scale = lerp(

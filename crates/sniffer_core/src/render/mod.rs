@@ -122,7 +122,39 @@ pub trait Renderer {
         border_width: f32,
         border_color: Option<u32>,
     );
+    fn draw_rect_gradient_border(
+        &mut self,
+        rect: Rect,
+        color_top: u32,
+        color_bottom: u32,
+        radius: f32,
+        border_width: f32,
+        border_top: u32,
+        _border_bottom: u32,
+    ) {
+        self.draw_rect_gradient(
+            rect,
+            color_top,
+            color_bottom,
+            radius,
+            border_width,
+            Some(border_top),
+        );
+    }
     fn draw_shadow(&mut self, rect: Rect, radius: f32, offset_y: f32, spread: f32, color: u32);
+    fn draw_elevation_shadow(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        elevation: f32,
+        shadow_color: Option<u32>,
+    ) {
+        if elevation <= 0.0 {
+            return;
+        }
+        let color = shadow_color.unwrap_or(0x4D00_0000);
+        self.draw_shadow(rect, radius, elevation * 0.75, elevation * 0.3, color);
+    }
     fn draw_circle(&mut self, cx: f32, cy: f32, radius: f32, color: u32);
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: u32);
     fn begin_frame(&mut self, width: f32, height: f32);

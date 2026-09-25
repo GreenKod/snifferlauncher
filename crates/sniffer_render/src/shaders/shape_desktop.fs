@@ -2,6 +2,7 @@
 in vec2 v_local_pos;
 in vec4 v_color;
 in vec4 v_border_color;
+in vec4 v_border_color_bottom;
 in vec4 v_color_bottom;
 in vec2 v_rect_size;
 in vec2 v_shape_size;
@@ -37,11 +38,29 @@ void main() {
         dist = sdRoundedBox(p, shape_half, v_radius);
     }
 
-    if (v_is_shadow > 0.5) {
+    if (v_is_shadow > 1.5) {
+        vec2 half_size = v_rect_size * 0.5;
+        vec2 shape_half = v_shape_size * 0.5;
+        vec2 p = v_local_pos - half_size;
+
+        float ambient_blur = max(v_border_width, 1.0);
+        float dist_ambient = sdRoundedBox(p, shape_half, v_radius);
+        float ambient_alpha = 1.0 - smoothstep(-ambient_blur, ambient_blur, dist_ambient);
+        vec4 ambient_col = vec4(v_color_bottom.rgb, v_color_bottom.a * ambient_alpha);
+
+        float key_offset_y = v_is_gradient;
+        float dist_key = sdRoundedBox(p - vec2(0.0, key_offset_y), shape_half, v_radius);
+        float key_alpha = 1.0 - smoothstep(-v_shadow_blur, v_shadow_blur, dist_key);
+        vec4 key_col = vec4(v_color.rgb, v_color.a * key_alpha);
+
+        float out_a = ambient_col.a + key_col.a * (1.0 - ambient_col.a);
+        vec3 out_rgb = (ambient_col.rgb * ambient_col.a + key_col.rgb * key_col.a * (1.0 - ambient_col.a)) / max(out_a, 0.0001);
+        FragColor = vec4(out_rgb, out_a);
+    } else if (v_is_shadow > 0.5) {
         float alpha = 1.0 - smoothstep(-v_shadow_blur, v_shadow_blur, dist);
         FragColor = vec4(v_color.rgb, v_color.a * alpha);
     } else {
-        float alpha = 1.0 - smoothstep(-1.0, 1.0, dist);
+        float alpha = 1.0 - smoothstep(-0.5, 0.5, dist);
         vec4 col = v_color;
         if (v_is_gradient > 0.5) {
             float gradient_factor = v_local_pos.y / max(v_rect_size.y, 1.0);
@@ -49,8 +68,10 @@ void main() {
         }
         if (v_border_width > 0.0) {
             float border_dist = dist + v_border_width;
-            float border_alpha = smoothstep(-1.0, 1.0, border_dist);
-            col = mix(col, v_border_color, border_alpha);
+            float border_alpha = smoothstep(-0.5, 0.5, border_dist);
+            float border_grad_factor = v_local_pos.y / max(v_rect_size.y, 1.0);
+            vec4 b_col = mix(v_border_color, v_border_color_bottom, border_grad_factor);
+            col = mix(col, b_col, border_alpha);
         }
         FragColor = vec4(col.rgb, col.a * alpha);
     }
