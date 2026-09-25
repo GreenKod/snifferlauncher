@@ -11,6 +11,7 @@ fn test_elevation_pressed_state_transition() {
         .transition(Transition {
             duration: 0.15, // 150ms press animation
             easing: Easing::EaseOut,
+            ..Default::default()
         })
         .build();
 
@@ -22,6 +23,7 @@ fn test_elevation_pressed_state_transition() {
         .transition(Transition {
             duration: 0.15,
             easing: Easing::EaseOut,
+            ..Default::default()
         })
         .build();
 
@@ -118,6 +120,7 @@ fn test_transition_manager_elevation_lifecycle() {
         .transition(Transition {
             duration: 0.1,
             easing: Easing::Linear,
+            ..Default::default()
         })
         .build();
 
@@ -165,6 +168,7 @@ fn test_border_gradient_interpolation() {
         .transition(Transition {
             duration: 0.1,
             easing: Easing::Linear,
+            ..Default::default()
         })
         .build();
 
@@ -173,6 +177,7 @@ fn test_border_gradient_interpolation() {
         .transition(Transition {
             duration: 0.1,
             easing: Easing::Linear,
+            ..Default::default()
         })
         .build();
 
