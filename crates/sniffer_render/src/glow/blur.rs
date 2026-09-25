@@ -283,7 +283,7 @@ impl BlurPipeline {
     pub unsafe fn render_kawase_pass(
         &self,
         gl: &glow::Context,
-        quad_vao: glow::VertexArray,
+        _quad_vao: glow::VertexArray,
         program: glow::Program,
         uniforms: &crate::glow::uniforms::BlurUniforms,
         source_tex: glow::Texture,
@@ -295,7 +295,6 @@ impl BlurPipeline {
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target_fbo));
             gl.viewport(0, 0, self.width, self.height);
             gl.use_program(Some(program));
-            gl.bind_vertex_array(Some(quad_vao));
 
             gl.active_texture(glow::TEXTURE0);
             gl.bind_texture(glow::TEXTURE_2D, Some(source_tex));

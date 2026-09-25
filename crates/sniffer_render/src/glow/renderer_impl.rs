@@ -258,20 +258,31 @@ impl Renderer for GlowRenderer {
             return;
         }
 
-        if self.ensure_blur_pipeline(screen_w, screen_h, 0.5).is_ok()
+        unsafe {
+            self.ensure_quad_vao();
+        }
+
+        let blurred_tex = if self.ensure_blur_pipeline(screen_w, screen_h, 0.5).is_ok()
             && let Some(ref pipeline) = self.blur_pipeline
         {
             unsafe {
                 pipeline.capture_screen(&self.gl, screen_w, screen_h);
                 let passes = super::blur::BlurPipeline::optimal_pass_count(blur_radius);
-                let blurred_tex = pipeline.execute_kawase_blur(
+                Some(pipeline.execute_kawase_blur(
                     &self.gl,
                     self.quad_vertex_array,
                     self.blur_program,
                     &self.blur_uniforms,
                     passes,
                     blur_radius,
-                );
+                ))
+            }
+        } else {
+            None
+        };
+
+        if let Some(blurred_tex) = blurred_tex {
+            unsafe {
                 self.gl.viewport(0, 0, screen_w, screen_h);
                 self.ensure_quad_vao();
 
