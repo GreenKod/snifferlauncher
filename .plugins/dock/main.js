@@ -28,6 +28,26 @@ if (typeof subscribeChannel === "function") {
             broadcastEvent("dock.stateChanged", {});
         }
     });
+    subscribeChannel("system.notifications", function(payload) {
+        if (payload && payload.package_name && dockState.essentialApps) {
+            const pkg = payload.package_name;
+            const app = dockState.essentialApps.find(function(a) { return a.package_name === pkg; });
+            if (app) {
+                if (payload.count > 0 || payload.dot) {
+                    dockState.badges[app.id] = {
+                        count: payload.count || 0,
+                        dot: !!payload.dot
+                    };
+                } else {
+                    delete dockState.badges[app.id];
+                }
+                if (typeof broadcastEvent === "function") {
+                    broadcastEvent("dock.badgeChanged", { id: app.id, badge: dockState.badges[app.id] || null });
+                    broadcastEvent("dock.stateChanged", {});
+                }
+            }
+        }
+    });
 } else if (typeof Vault !== "undefined" && typeof Vault.subscribe === "function") {
     Vault.subscribe("system.apps", function() {
         refreshEssentialApps();
@@ -54,6 +74,71 @@ registerApi("dock.setOrientation", function(payload) {
         }
     }
     return { success: true, isLandscape: dockState.isLandscape };
+});
+
+registerApi("dock.setBadge", function(payload) {
+    const id = payload && payload.id;
+    if (id) {
+        const idStr = String(id);
+        const appId = (dockState.appMap && dockState.appMap[idStr]) || idStr;
+        if (payload.count === 0 && !payload.dot) {
+            delete dockState.badges[appId];
+        } else {
+            dockState.badges[appId] = {
+                count: typeof payload.count === "number" ? payload.count : 0,
+                dot: Boolean(payload.dot || (payload.count === undefined && payload.dot !== false))
+            };
+        }
+        if (typeof broadcastEvent === "function") {
+            broadcastEvent("dock.badgeChanged", { id: appId, badge: dockState.badges[appId] || null });
+            broadcastEvent("dock.stateChanged", {});
+        }
+        return { success: true, badge: dockState.badges[appId] || null };
+    }
+    return { success: false };
+});
+
+registerApi("dock.clearBadge", function(payload) {
+    const id = payload && payload.id;
+    if (id) {
+        const idStr = String(id);
+        const appId = (dockState.appMap && dockState.appMap[idStr]) || idStr;
+        delete dockState.badges[appId];
+        if (typeof broadcastEvent === "function") {
+            broadcastEvent("dock.badgeChanged", { id: appId, badge: null });
+            broadcastEvent("dock.stateChanged", {});
+        }
+        return { success: true };
+    }
+    return { success: false };
+});
+
+registerApi("dock.triggerLongPress", function(payload) {
+    const id = payload && payload.id;
+    if (id) {
+        const idStr = String(id);
+        const appId = (dockState.appMap && dockState.appMap[idStr]) || idStr;
+        dockState.activePreviewAppId = appId;
+        dockState.pressedAppId = null;
+        if (typeof broadcastEvent === "function") {
+            broadcastEvent("dock.longPress", { id: appId });
+            broadcastEvent("dock.stateChanged", { activePreviewAppId: appId });
+        }
+        return { success: true, activePreviewAppId: appId };
+    }
+    return { success: false };
+});
+
+registerApi("dock.dismissPreview", function() {
+    if (dockState.activePreviewAppId) {
+        dockState.activePreviewAppId = null;
+        if (typeof broadcastEvent === "function") {
+            broadcastEvent("dock.previewDismissed", {});
+            broadcastEvent("dock.stateChanged", { activePreviewAppId: null });
+        }
+        return { success: true };
+    }
+    return { success: false };
 });
 
 registerApi("dock.handleClick", function(payload) {
@@ -119,6 +204,11 @@ globalThis.onEvent = function(eventJsonString) {
             }
         }
     } else if (e.type === "PointerDown") {
+        if (dockState.longPressTimer) {
+            clearTimeout(dockState.longPressTimer);
+            dockState.longPressTimer = null;
+        }
+
         const idStr = String(e.id || "");
         const appId = dockState.appMap ? dockState.appMap[idStr] : null;
         if (appId) {
@@ -126,8 +216,25 @@ globalThis.onEvent = function(eventJsonString) {
             if (typeof broadcastEvent === "function") {
                 broadcastEvent("dock.stateChanged", { pressedAppId: appId });
             }
+            if (typeof setTimeout === "function") {
+                dockState.longPressTimer = setTimeout(function() {
+                    dockState.longPressTimer = null;
+                    if (dockState.pressedAppId === appId) {
+                        dockState.pressedAppId = null;
+                        dockState.activePreviewAppId = appId;
+                        if (typeof broadcastEvent === "function") {
+                            broadcastEvent("dock.longPress", { id: appId });
+                            broadcastEvent("dock.stateChanged", { activePreviewAppId: appId });
+                        }
+                    }
+                }, 400);
+            }
         }
     } else if (e.type === "PointerUp") {
+        if (dockState.longPressTimer) {
+            clearTimeout(dockState.longPressTimer);
+            dockState.longPressTimer = null;
+        }
         if (dockState.pressedAppId) {
             dockState.pressedAppId = null;
             if (typeof broadcastEvent === "function") {
@@ -135,7 +242,45 @@ globalThis.onEvent = function(eventJsonString) {
             }
         }
     } else if (e.type === "Click") {
+        if (dockState.longPressTimer) {
+            clearTimeout(dockState.longPressTimer);
+            dockState.longPressTimer = null;
+        }
+
         const idStr = String(e.id || "");
+
+        // Handle preview close button click
+        if (idStr === "dock_preview_close_btn" || idStr === "dock_preview_close_txt") {
+            dockState.activePreviewAppId = null;
+            if (typeof broadcastEvent === "function") {
+                broadcastEvent("dock.stateChanged", { activePreviewAppId: null });
+            }
+            return "[]";
+        }
+
+        // Handle preview bubble card click to launch
+        if (idStr === "dock_preview_bubble" || idStr === "dock_preview_title" || idStr === "dock_preview_action") {
+            if (dockState.activePreviewAppId) {
+                const previewApp = dockState.essentialApps.find(function(a) { return a.id === dockState.activePreviewAppId; });
+                dockState.activePreviewAppId = null;
+                if (previewApp && previewApp.package_name && typeof launchApp === "function") {
+                    launchApp(previewApp.package_name);
+                }
+                if (typeof broadcastEvent === "function") {
+                    broadcastEvent("dock.stateChanged", { activePreviewAppId: null });
+                }
+            }
+            return "[]";
+        }
+
+        // Dismiss preview if clicking anywhere else
+        if (dockState.activePreviewAppId) {
+            dockState.activePreviewAppId = null;
+            if (typeof broadcastEvent === "function") {
+                broadcastEvent("dock.stateChanged", { activePreviewAppId: null });
+            }
+        }
+
         const appId = dockState.appMap ? dockState.appMap[idStr] : null;
         if (appId) {
             dockState.pressedAppId = appId;

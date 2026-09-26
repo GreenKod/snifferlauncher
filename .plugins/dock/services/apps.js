@@ -23,7 +23,10 @@ const dockState = {
     hashMap: {},
     appMap: {},
     pressedAppId: null,
-    isLandscape: false
+    isLandscape: false,
+    badges: {},
+    activePreviewAppId: null,
+    longPressTimer: null
 };
 
 function rebuildDockIdMaps() {
@@ -39,6 +42,8 @@ function rebuildDockIdMaps() {
         const imgId = "dock_img_" + app.id;
         const circleId = "dock_circle_" + app.id;
         const iconId = "dock_app_icon_" + app.id;
+        const badgeCounterId = "dock_badge_counter_" + app.id;
+        const badgeDotId = "dock_badge_dot_" + app.id;
 
         if (typeof host_hash === "function") {
             if (app.package_name) {
@@ -47,12 +52,16 @@ function rebuildDockIdMaps() {
                 map[String(host_hash(imgId))] = app.package_name;
                 map[String(host_hash(circleId))] = app.package_name;
                 map[String(host_hash(iconId))] = app.package_name;
+                map[String(host_hash(badgeCounterId))] = app.package_name;
+                map[String(host_hash(badgeDotId))] = app.package_name;
             }
             appMap[String(host_hash(btnId))] = appId;
             appMap[String(host_hash(circleBoxId))] = appId;
             appMap[String(host_hash(imgId))] = appId;
             appMap[String(host_hash(circleId))] = appId;
             appMap[String(host_hash(iconId))] = appId;
+            appMap[String(host_hash(badgeCounterId))] = appId;
+            appMap[String(host_hash(badgeDotId))] = appId;
         }
 
         if (app.package_name) {
@@ -61,12 +70,16 @@ function rebuildDockIdMaps() {
             map[imgId] = app.package_name;
             map[circleId] = app.package_name;
             map[iconId] = app.package_name;
+            map[badgeCounterId] = app.package_name;
+            map[badgeDotId] = app.package_name;
         }
         appMap[btnId] = appId;
         appMap[circleBoxId] = appId;
         appMap[imgId] = appId;
         appMap[circleId] = appId;
         appMap[iconId] = appId;
+        appMap[badgeCounterId] = appId;
+        appMap[badgeDotId] = appId;
     }
 
     dockState.hashMap = map;

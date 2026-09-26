@@ -1,4 +1,5 @@
 #version 300 es
+precision mediump float;
 layout(location = 0) in vec2 position;
 out vec2 v_screen_pos;
 out vec2 v_local_pos;

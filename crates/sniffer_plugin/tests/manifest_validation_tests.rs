@@ -528,3 +528,267 @@ fn test_dock_plugin_landscape_portrait_orientation_transition() {
         assert!((settled_style.border_radius - land_radius).abs() < 1e-3);
     });
 }
+
+#[test]
+fn test_dock_plugin_badge_dot_and_counter_rendering() {
+    use rquickjs::{Context, Runtime};
+
+    let plugins_dir = get_plugins_dir();
+    let dock_dir = plugins_dir.join("dock");
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    ctx.with(|c| {
+        c.eval::<(), _>(
+            r"
+            globalThis.host_log = function() {};
+            globalThis.host_screen_width = function() { return 1080; };
+            globalThis.host_screen_height = function() { return 2400; };
+            globalThis.requestPermissions = function(p) { return p; };
+            globalThis.registeredApis = {};
+            globalThis.registerApi = function(name, fn) { globalThis.registeredApis[name] = fn; };
+            globalThis.callApi = function(name, payload) { return globalThis.registeredApis[name](payload); };
+            globalThis.broadcastEvent = function() {};
+            globalThis.subscribeChannel = function() {};
+            globalThis.host_hash = function(str) {
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                    hash |= 0;
+                }
+                return Math.abs(hash);
+            };
+            globalThis.launchApp = function(pkg) {};
+        ",
+        )
+        .unwrap();
+
+        let framework_code =
+            fs::read_to_string(plugins_dir.join("framework/sniffer_ui.js")).unwrap();
+        c.eval::<(), _>(framework_code).unwrap();
+
+        let apps_code = fs::read_to_string(dock_dir.join("services/apps.js")).unwrap();
+        c.eval::<(), _>(apps_code).unwrap();
+
+        let dock_bar_code = fs::read_to_string(dock_dir.join("components/dock_bar.js")).unwrap();
+        c.eval::<(), _>(dock_bar_code).unwrap();
+
+        let main_code = fs::read_to_string(dock_dir.join("main.js")).unwrap();
+        c.eval::<(), _>(main_code).unwrap();
+
+        fn find_element<'a>(
+            el: &'a sniffer_core::types::Element,
+            target_id: &str,
+        ) -> Option<&'a sniffer_core::types::Element> {
+            match el {
+                sniffer_core::types::Element::Container { id, children, .. } => {
+                    if id.as_deref() == Some(target_id) {
+                        return Some(el);
+                    }
+                    for child in children {
+                        if let Some(found) = find_element(child, target_id) {
+                            return Some(found);
+                        }
+                    }
+                    None
+                }
+                sniffer_core::types::Element::Label { id, .. }
+                | sniffer_core::types::Element::Image { id, .. } => {
+                    if id.as_deref() == Some(target_id) {
+                        Some(el)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        }
+
+        // 1. Initial UI without badges
+        let initial_ui_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: false }))")
+            .unwrap();
+        let initial_ui: sniffer_core::types::Element = serde_json::from_str(&initial_ui_str).unwrap();
+        assert!(find_element(&initial_ui, "dock_badge_counter_messages").is_none());
+        assert!(find_element(&initial_ui, "dock_badge_dot_phone").is_none());
+
+        // 2. Set numeric counter badge for messages (3 unread) and dot badge for phone
+        c.eval::<(), _>(
+            "globalThis.registeredApis['dock.setBadge']({ id: 'messages', count: 3 });",
+        )
+        .unwrap();
+        c.eval::<(), _>(
+            "globalThis.registeredApis['dock.setBadge']({ id: 'phone', dot: true });",
+        )
+        .unwrap();
+
+        let badged_ui_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: false }))")
+            .unwrap();
+        let badged_ui: sniffer_core::types::Element = serde_json::from_str(&badged_ui_str).unwrap();
+
+        // Verify Counter Badge
+        let msg_counter = find_element(&badged_ui, "dock_badge_counter_messages")
+            .expect("dock_badge_counter_messages should be rendered");
+        assert_eq!(msg_counter.style().background_color, Some(0xFFEF_4444));
+        assert_eq!(msg_counter.style().elevation, 4.0);
+
+        let msg_label = find_element(&badged_ui, "dock_badge_label_messages")
+            .expect("dock_badge_label_messages should be rendered");
+        match msg_label {
+            sniffer_core::types::Element::Label { text, .. } => assert_eq!(text, "3"),
+            other => panic!("expected Label element, got {other:?}"),
+        }
+
+        // Verify Dot Badge
+        let phone_dot = find_element(&badged_ui, "dock_badge_dot_phone")
+            .expect("dock_badge_dot_phone should be rendered");
+        assert_eq!(phone_dot.style().background_color, Some(0xFFEF_4444));
+        assert_eq!(phone_dot.style().elevation, 4.0);
+
+        // 3. Clear message badge
+        c.eval::<(), _>(
+            "globalThis.registeredApis['dock.clearBadge']({ id: 'messages' });",
+        )
+        .unwrap();
+
+        let cleared_ui_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: false }))")
+            .unwrap();
+        let cleared_ui: sniffer_core::types::Element = serde_json::from_str(&cleared_ui_str).unwrap();
+        assert!(find_element(&cleared_ui, "dock_badge_counter_messages").is_none());
+        assert!(find_element(&cleared_ui, "dock_badge_dot_phone").is_some());
+    });
+}
+
+#[test]
+fn test_dock_plugin_long_press_preview_lifecycle() {
+    use rquickjs::{Context, Runtime};
+
+    let plugins_dir = get_plugins_dir();
+    let dock_dir = plugins_dir.join("dock");
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    ctx.with(|c| {
+        c.eval::<(), _>(
+            r"
+            globalThis.host_log = function() {};
+            globalThis.host_screen_width = function() { return 1080; };
+            globalThis.host_screen_height = function() { return 2400; };
+            globalThis.requestPermissions = function(p) { return p; };
+            globalThis.registeredApis = {};
+            globalThis.registerApi = function(name, fn) { globalThis.registeredApis[name] = fn; };
+            globalThis.callApi = function(name, payload) { return globalThis.registeredApis[name](payload); };
+            globalThis.broadcastEvent = function() {};
+            globalThis.subscribeChannel = function() {};
+            globalThis.host_hash = function(str) {
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                    hash |= 0;
+                }
+                return Math.abs(hash);
+            };
+            globalThis.launchApp = function(pkg) {};
+        ",
+        )
+        .unwrap();
+
+        let framework_code =
+            fs::read_to_string(plugins_dir.join("framework/sniffer_ui.js")).unwrap();
+        c.eval::<(), _>(framework_code).unwrap();
+
+        let apps_code = fs::read_to_string(dock_dir.join("services/apps.js")).unwrap();
+        c.eval::<(), _>(apps_code).unwrap();
+
+        let dock_bar_code = fs::read_to_string(dock_dir.join("components/dock_bar.js")).unwrap();
+        c.eval::<(), _>(dock_bar_code).unwrap();
+
+        let main_code = fs::read_to_string(dock_dir.join("main.js")).unwrap();
+        c.eval::<(), _>(main_code).unwrap();
+
+        fn find_element<'a>(
+            el: &'a sniffer_core::types::Element,
+            target_id: &str,
+        ) -> Option<&'a sniffer_core::types::Element> {
+            match el {
+                sniffer_core::types::Element::Container { id, children, .. } => {
+                    if id.as_deref() == Some(target_id) {
+                        return Some(el);
+                    }
+                    for child in children {
+                        if let Some(found) = find_element(child, target_id) {
+                            return Some(found);
+                        }
+                    }
+                    None
+                }
+                sniffer_core::types::Element::Label { id, .. }
+                | sniffer_core::types::Element::Image { id, .. } => {
+                    if id.as_deref() == Some(target_id) {
+                        Some(el)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        }
+
+        // 1. Initial resting state: no preview bubble
+        let initial_ui_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: false }))")
+            .unwrap();
+        let initial_ui: sniffer_core::types::Element = serde_json::from_str(&initial_ui_str).unwrap();
+        assert!(find_element(&initial_ui, "dock_preview_bubble").is_none());
+
+        // 2. Trigger Long-Press on 'phone' app
+        c.eval::<(), _>(
+            "globalThis.registeredApis['dock.triggerLongPress']({ id: 'phone' });",
+        )
+        .unwrap();
+
+        let preview_ui_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: false }))")
+            .unwrap();
+        let preview_ui: sniffer_core::types::Element = serde_json::from_str(&preview_ui_str).unwrap();
+
+        let bubble = find_element(&preview_ui, "dock_preview_bubble")
+            .expect("dock_preview_bubble must be rendered on long press");
+        let bubble_style = bubble.style();
+        assert_eq!(bubble_style.backdrop_blur, 20.0);
+        assert_eq!(bubble_style.elevation, 12.0);
+        assert_eq!(bubble_style.shadow_blur, 24.0);
+        match &bubble_style.transition.easing {
+            sniffer_core::style::Easing::Spring { stiffness, damping } => {
+                assert_eq!(*stiffness, 320.0);
+                assert_eq!(*damping, 24.0);
+            }
+            other => panic!("expected Spring easing on preview bubble, got {other:?}"),
+        }
+
+        let title_el = find_element(&preview_ui, "dock_preview_title")
+            .expect("dock_preview_title should be present in preview");
+        match title_el {
+            sniffer_core::types::Element::Label { text, .. } => assert_eq!(text, "Telefon"),
+            other => panic!("expected Label element, got {other:?}"),
+        }
+
+        assert!(find_element(&preview_ui, "dock_preview_close_btn").is_some());
+
+        // 3. Dismiss preview via API
+        c.eval::<(), _>(
+            "globalThis.registeredApis['dock.dismissPreview']();",
+        )
+        .unwrap();
+
+        let dismissed_ui_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: false }))")
+            .unwrap();
+        let dismissed_ui: sniffer_core::types::Element = serde_json::from_str(&dismissed_ui_str).unwrap();
+        assert!(find_element(&dismissed_ui, "dock_preview_bubble").is_none());
+    });
+}
