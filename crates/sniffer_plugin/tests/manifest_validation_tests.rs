@@ -385,3 +385,146 @@ fn test_dock_plugin_spring_pressed_and_elevation_damping() {
         assert_eq!(phone_released_style.transform.scale, 1.0);
     });
 }
+
+#[test]
+fn test_dock_plugin_landscape_portrait_orientation_transition() {
+    use rquickjs::{Context, Runtime};
+
+    let plugins_dir = get_plugins_dir();
+    let dock_dir = plugins_dir.join("dock");
+
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    ctx.with(|c| {
+        c.eval::<(), _>(
+            r"
+            globalThis.host_log = function() {};
+            globalThis.host_screen_width = function() { return 1080; };
+            globalThis.host_screen_height = function() { return 2400; };
+            globalThis.requestPermissions = function(p) { return p; };
+            globalThis.registeredApis = {};
+            globalThis.registerApi = function(name, fn) { globalThis.registeredApis[name] = fn; };
+            globalThis.callApi = function(name, payload) { return globalThis.registeredApis[name](payload); };
+            globalThis.broadcastEvent = function() {};
+            globalThis.subscribeChannel = function() {};
+            globalThis.host_hash = function(str) {
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                    hash |= 0;
+                }
+                return Math.abs(hash);
+            };
+            globalThis.launchApp = function(pkg) {};
+        ",
+        )
+        .unwrap();
+
+        // Evaluate framework and dock files
+        let framework_code =
+            fs::read_to_string(plugins_dir.join("framework/sniffer_ui.js")).unwrap();
+        c.eval::<(), _>(framework_code).unwrap();
+
+        let apps_code = fs::read_to_string(dock_dir.join("services/apps.js")).unwrap();
+        c.eval::<(), _>(apps_code).unwrap();
+
+        let dock_bar_code = fs::read_to_string(dock_dir.join("components/dock_bar.js")).unwrap();
+        c.eval::<(), _>(dock_bar_code).unwrap();
+
+        let main_code = fs::read_to_string(dock_dir.join("main.js")).unwrap();
+        c.eval::<(), _>(main_code).unwrap();
+
+        fn find_element<'a>(
+            el: &'a sniffer_core::types::Element,
+            target_id: &str,
+        ) -> Option<&'a sniffer_core::types::Element> {
+            match el {
+                sniffer_core::types::Element::Container {
+                    id,
+                    children,
+                    ..
+                } => {
+                    if id.as_deref() == Some(target_id) {
+                        return Some(el);
+                    }
+                    for child in children {
+                        if let Some(found) = find_element(child, target_id) {
+                            return Some(found);
+                        }
+                    }
+                    None
+                }
+                _ => None,
+            }
+        }
+
+        // 1. Get Portrait Dock UI
+        let ui_port_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: false }))")
+            .unwrap();
+        let ui_port: sniffer_core::types::Element = serde_json::from_str(&ui_port_str).unwrap();
+
+        let port_pill_el = find_element(&ui_port, "dock_bar_pill").expect("dock_bar_pill in portrait");
+        let port_pill_style = port_pill_el.style();
+        assert_eq!(port_pill_style.flex_direction, sniffer_core::style::FlexDirection::Row);
+        assert_eq!(port_pill_style.justify_content, sniffer_core::style::JustifyContent::SpaceAround);
+        assert_eq!(port_pill_style.backdrop_blur, 24.0);
+        assert_eq!(port_pill_style.elevation, 8.0);
+        match &port_pill_style.transition.easing {
+            sniffer_core::style::Easing::Spring { stiffness, damping } => {
+                assert_eq!(*stiffness, 280.0);
+                assert_eq!(*damping, 24.0);
+            }
+            other => panic!("expected Spring easing on dock_bar_pill, got {other:?}"),
+        }
+        let port_radius = port_pill_style.border_radius;
+
+        // 2. Switch orientation to Landscape via API
+        let set_res_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.setOrientation']({ isLandscape: true }))")
+            .unwrap();
+        assert!(set_res_str.contains("\"isLandscape\":true"));
+
+        let ui_land_str: String = c
+            .eval("JSON.stringify(globalThis.registeredApis['dock.getUI']({ isLandscape: true }))")
+            .unwrap();
+        let ui_land: sniffer_core::types::Element = serde_json::from_str(&ui_land_str).unwrap();
+
+        let land_pill_el = find_element(&ui_land, "dock_bar_pill").expect("dock_bar_pill in landscape");
+        let land_pill_style = land_pill_el.style();
+        assert_eq!(land_pill_style.flex_direction, sniffer_core::style::FlexDirection::Column);
+        assert_eq!(land_pill_style.justify_content, sniffer_core::style::JustifyContent::Center);
+        assert_eq!(land_pill_style.backdrop_blur, 24.0);
+        assert_eq!(land_pill_style.elevation, 8.0);
+        let land_radius = land_pill_style.border_radius;
+        assert_ne!(port_radius, land_radius, "portrait and landscape border radius should adapt ergonomically");
+
+        // 3. Verify TransitionManager handles smooth orientation transition
+        let mut manager = sniffer_core::anim::TransitionManager::default();
+        manager.sync_tree(&ui_port);
+        assert!(!manager.is_animating());
+        assert_eq!(manager.get_current_style("dock_bar_pill").unwrap().border_radius, port_radius);
+
+        // Sync with landscape tree (simulates screen rotation in frame engine)
+        manager.sync_tree(&ui_land);
+        assert!(manager.is_animating(), "TransitionManager should activate upon orientation style change");
+
+        // Step animation halfway
+        manager.tick(0.05);
+        assert!(manager.is_animating());
+        let mid_style = manager.get_current_style("dock_bar_pill").unwrap();
+        assert_ne!(mid_style.border_radius, port_radius);
+        assert_ne!(mid_style.border_radius, land_radius);
+
+        // Settle animation
+        let mut steps = 0;
+        while manager.is_animating() && steps < 600 {
+            manager.tick(0.016);
+            steps += 1;
+        }
+        assert!(!manager.is_animating(), "dock spring transition must settle");
+        let settled_style = manager.get_current_style("dock_bar_pill").unwrap();
+        assert!((settled_style.border_radius - land_radius).abs() < 1e-3);
+    });
+}

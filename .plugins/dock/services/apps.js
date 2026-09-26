@@ -22,7 +22,8 @@ const dockState = {
     detectedPackages: {},
     hashMap: {},
     appMap: {},
-    pressedAppId: null
+    pressedAppId: null,
+    isLandscape: false
 };
 
 function rebuildDockIdMaps() {

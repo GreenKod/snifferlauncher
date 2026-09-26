@@ -19,9 +19,9 @@
   "maxMemoryMb": 8,
   "checksums": {
     "../framework/sniffer_ui.js": "9312df96787ae123bbe0665dbb0351956b7ce88ad8fe892584f08e03a188051f",
-    "services/apps.js": "ef51dd25bce30d070e1e306f83af0bb4837662b0ef35200cd19248a3f28d7665",
-    "components/dock_bar.js": "61883a4cadd7a689cb53e17a0a2f85820bd2a99c9c068900d78f7c0f9cd43c84",
-    "main.js": "15151d7c029686fc2605c5f1b536c296592b1f8342f75624040bdbf7ca9e31a6"
+    "services/apps.js": "820c750947e908d12466fe5a08978b8639d84acb0fb11aee9201871a99150c30",
+    "components/dock_bar.js": "e101fb6ed5c2f658c911b4285a16e0eeb7b3ac598e5f7cd967ff172c66f3221f",
+    "main.js": "4fece22d381ca892611964bd06d8efe68823c442ec545cfbd734a9054471c6d3"
   }
 }
 

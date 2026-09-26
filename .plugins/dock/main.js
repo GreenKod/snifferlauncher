@@ -39,8 +39,21 @@ if (typeof subscribeChannel === "function") {
 
 // 2. Inter-Plugin API Registrations
 registerApi("dock.getUI", function(payload) {
-    const isLandscape = payload && payload.isLandscape;
+    const isLandscape = Boolean(payload && payload.isLandscape);
+    dockState.isLandscape = isLandscape;
     return getDockContainer(isLandscape);
+});
+
+registerApi("dock.setOrientation", function(payload) {
+    const isLandscape = Boolean(payload && payload.isLandscape);
+    if (dockState.isLandscape !== isLandscape) {
+        dockState.isLandscape = isLandscape;
+        if (typeof broadcastEvent === "function") {
+            broadcastEvent("dock.orientationChanged", { isLandscape: isLandscape });
+            broadcastEvent("dock.stateChanged", { isLandscape: isLandscape });
+        }
+    }
+    return { success: true, isLandscape: dockState.isLandscape };
 });
 
 registerApi("dock.handleClick", function(payload) {
@@ -96,7 +109,16 @@ broadcastEvent("dock.ready", { ready: true });
 globalThis.onEvent = function(eventJsonString) {
     const e = typeof eventJsonString === "string" ? JSON.parse(eventJsonString) : eventJsonString;
 
-    if (e.type === "PointerDown") {
+    if (e.type === "OrientationChange" || e.type === "Resize") {
+        const isLandscape = Boolean(e.isLandscape !== undefined ? e.isLandscape : (e.width && e.height && e.width > e.height));
+        if (dockState.isLandscape !== isLandscape) {
+            dockState.isLandscape = isLandscape;
+            if (typeof broadcastEvent === "function") {
+                broadcastEvent("dock.orientationChanged", { isLandscape: isLandscape });
+                broadcastEvent("dock.stateChanged", { isLandscape: isLandscape });
+            }
+        }
+    } else if (e.type === "PointerDown") {
         const idStr = String(e.id || "");
         const appId = dockState.appMap ? dockState.appMap[idStr] : null;
         if (appId) {
@@ -146,4 +168,3 @@ globalThis.onEvent = function(eventJsonString) {
 
     return "[]";
 };
-
