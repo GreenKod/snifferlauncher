@@ -127,9 +127,16 @@ fn build_taffy_tree(taffy: &mut TaffyTree, element: &Element, measurer: &TextMea
             }
             taffy.new_leaf(style).unwrap()
         }
-        Element::TextInput { value, focused, .. } => {
+        Element::TextInput {
+            value,
+            focused,
+            placeholder,
+            ..
+        } => {
             let display_text = if *focused {
                 format!("{value}_")
+            } else if value.is_empty() {
+                placeholder.as_deref().unwrap_or("").to_string()
             } else {
                 value.clone()
             };

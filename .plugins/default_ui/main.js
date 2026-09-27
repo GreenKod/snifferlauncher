@@ -2,6 +2,16 @@
 // Uses Rust scroll physics engine.
 // JS does not need to manually track isDragging / dragOffset / kinetic scroll.
 
+if (typeof requestPermissions === "function") {
+    requestPermissions([
+        "plugin.permission.UI",
+        "plugin.permission.IPC",
+        "plugin.permission.INPUT",
+        "android.permission.QUERY_ALL_PACKAGES",
+        "android.permission.LAUNCH_APP"
+    ]);
+}
+
 function getDockElement(isLandscape) {
     let dockUI = null;
     if (typeof callApi === "function") {
@@ -256,12 +266,14 @@ globalThis.onEvent = function (eventJsonString) {
         if (
             idStr === "drawer_search_input" ||
             idStr === "drawer_search_container" ||
-            idStr === "drawer_search_left_group"
+            idStr === "drawer_search_left_group" ||
+            idStr === "drawer_search_icon"
         ) {
             state.isSearchFocused = true;
             if (typeof focusInput === "function") {
                 focusInput("drawer_search_input");
             }
+            SnifferUI.forceUpdate();
             return "[]";
         }
 

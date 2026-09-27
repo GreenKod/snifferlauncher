@@ -24,6 +24,8 @@ pub enum Element {
     TextInput {
         id: Option<String>,
         value: String,
+        #[serde(default)]
+        placeholder: Option<String>,
         focused: bool,
         style: Style,
     },

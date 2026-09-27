@@ -176,21 +176,42 @@ pub(crate) fn draw_element_contents(
                 base_style.object_fit,
             );
         }
-        Element::TextInput { value, focused, .. } => {
+        Element::TextInput {
+            value,
+            focused,
+            placeholder,
+            ..
+        } => {
             renderer.push_clip_rect(rect, base_style.border_radius);
 
-            let display_text = if *focused {
-                format!("{value}_")
+            let (display_text, color) = if *focused {
+                (
+                    format!("{value}_"),
+                    base_style.text_color.unwrap_or(DEFAULT_TEXT_COLOR),
+                )
+            } else if value.is_empty() {
+                if let Some(ph) = placeholder.as_ref().filter(|s| !s.is_empty()) {
+                    (ph.clone(), 0x8894_A3B8)
+                } else {
+                    (
+                        String::new(),
+                        base_style.text_color.unwrap_or(DEFAULT_TEXT_COLOR),
+                    )
+                }
             } else {
-                value.clone()
+                (
+                    value.clone(),
+                    base_style.text_color.unwrap_or(DEFAULT_TEXT_COLOR),
+                )
             };
-            let color = base_style.text_color.unwrap_or(DEFAULT_TEXT_COLOR);
-            let ts = base_style.text_size;
 
+            let ts = base_style.text_size;
             let draw_y = rect.y + (rect.height - ts) / 2.0;
             let draw_x = rect.x + base_style.padding.left;
 
-            renderer.draw_text(&display_text, draw_x, draw_y, ts, color);
+            if !display_text.is_empty() {
+                renderer.draw_text(&display_text, draw_x, draw_y, ts, color);
+            }
 
             renderer.pop_clip_rect();
         }
