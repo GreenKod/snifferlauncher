@@ -192,7 +192,7 @@ pub fn spawn_render_thread(
                         needs_draw = true;
                     }
 
-                    const MAX_APP_ICONS_PER_FRAME: usize = 4;
+                    const MAX_APP_ICONS_PER_FRAME: usize = 16;
                     let mut icon_uploads = 0;
                     while icon_uploads < MAX_APP_ICONS_PER_FRAME
                         && let Some(res) = crate::jni::bridge::poll_async_app_icon()

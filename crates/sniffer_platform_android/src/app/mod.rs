@@ -105,6 +105,8 @@ pub fn android_main(app: AndroidApp) {
 
         if crate::jni::bridge::apps::take_app_list_updated() {
             if let Ok(apps) = crate::jni::get_application_list() {
+                let pkg_names: Vec<String> = apps.iter().map(|a| a.package_name.clone()).collect();
+                crate::jni::bridge::prefetch_app_icons(&pkg_names);
                 let _ = state
                     .plugin_registry
                     .vault()

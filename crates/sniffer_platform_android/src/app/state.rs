@@ -76,6 +76,8 @@ impl AppState {
 
         if let Ok(apps) = crate::jni::get_application_list() {
             if !apps.is_empty() {
+                let pkg_names: Vec<String> = apps.iter().map(|a| a.package_name.clone()).collect();
+                crate::jni::bridge::prefetch_app_icons(&pkg_names);
                 let _ = plugin_registry
                     .vault()
                     .set_json("system.apps", &apps, "system");

@@ -168,6 +168,16 @@ function onPageChanged(pageData) {
     }
 }
 
+function matchTargetId(idStr, targets) {
+    if (!idStr) return false;
+    for (let i = 0; i < targets.length; i++) {
+        const t = targets[i];
+        if (idStr === t) return true;
+        if (typeof host_hash === "function" && idStr === String(host_hash(t))) return true;
+    }
+    return false;
+}
+
 globalThis.onEvent = function (eventJsonString) {
     if (!_hasInitialRefreshed) {
         _hasInitialRefreshed = true;
@@ -235,40 +245,40 @@ globalThis.onEvent = function (eventJsonString) {
         const idStr = String(e.id || "");
 
         // Close App Drawer -> Go to Top Floor
-        if (
-            idStr === "drawer_close_btn" ||
-            idStr === "drawer_close_icon" ||
-            idStr === "drawer_handle" ||
-            idStr === "drawer_handle_pill_wrapper"
-        ) {
+        if (matchTargetId(idStr, [
+            "drawer_close_btn",
+            "drawer_close_icon",
+            "drawer_handle",
+            "drawer_handle_pill_wrapper"
+        ])) {
             state.goToTopFloor();
             return "[]";
         }
 
         // Open App Drawer -> Go to Bottom Floor
-        if (
-            idStr === "open_drawer_hint" ||
-            idStr === "drawer_hint_icon" ||
-            idStr === "drawer_hint_text"
-        ) {
+        if (matchTargetId(idStr, [
+            "open_drawer_hint",
+            "drawer_hint_icon",
+            "drawer_hint_text"
+        ])) {
             state.goToBottomFloor();
             return "[]";
         }
 
         // Clear Search Query in App Drawer
-        if (idStr === "drawer_search_clear" || idStr === "drawer_clear_label") {
+        if (matchTargetId(idStr, ["drawer_search_clear", "drawer_clear_label"])) {
             state.drawerSearchQuery = "";
             state.rebuildCardHashCache();
             SnifferUI.forceUpdate();
             return "[]";
         }
 
-        if (
-            idStr === "drawer_search_input" ||
-            idStr === "drawer_search_container" ||
-            idStr === "drawer_search_left_group" ||
-            idStr === "drawer_search_icon"
-        ) {
+        if (matchTargetId(idStr, [
+            "drawer_search_input",
+            "drawer_search_container",
+            "drawer_search_left_group",
+            "drawer_search_icon"
+        ])) {
             state.isSearchFocused = true;
             if (typeof focusInput === "function") {
                 focusInput("drawer_search_input");

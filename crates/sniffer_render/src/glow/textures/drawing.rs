@@ -207,9 +207,10 @@ impl GlowRenderer {
                     if let Some(mut pipeline) = self.blur_pipeline.take() {
                         pipeline.destroy(&self.gl);
                     }
-                    if let Some(ref mut atlas) = self.icon_atlas {
-                        atlas.clear();
-                    }
+                    // Keep icon_atlas intact! IconAtlas is a single fixed-size texture (2048x2048)
+                    // whose VRAM footprint is constant. Clearing it only wipes the region metadata
+                    // without releasing GL memory, causing needless visual pop-in when returning
+                    // from background apps like YouTube.
                 }
             }
         }

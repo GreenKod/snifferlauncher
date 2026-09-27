@@ -41,7 +41,7 @@ pub fn vm() -> Arc<JavaVM> {
 }
 
 /// Returns the Android context as a `JObject` tied to the given `Env` lifetime.
-pub(super) fn context<'local>(env: &Env<'local>) -> JObject<'local> {
+pub(crate) fn context<'local>(env: &Env<'local>) -> JObject<'local> {
     let android_context = ndk_context::android_context();
     let raw = android_context.context().cast::<jni::sys::_jobject>();
     if raw.is_null() {
