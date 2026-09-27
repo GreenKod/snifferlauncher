@@ -36,6 +36,8 @@ pub(crate) fn draw_element_contents(
     final_alpha: f32,
     accumulated_scroll_x: f32,
     accumulated_scroll_y: f32,
+    accumulated_tx: f32,
+    accumulated_ty: f32,
     base_style: &sniffer_core::style::Style,
     rect: Rect,
     widget_id: Option<u64>,
@@ -56,6 +58,8 @@ pub(crate) fn draw_element_contents(
                     final_alpha,
                     accumulated_scroll_x,
                     accumulated_scroll_y,
+                    accumulated_tx,
+                    accumulated_ty,
                     is_animating,
                 );
             }
@@ -104,6 +108,8 @@ pub(crate) fn draw_element_contents(
                     final_alpha,
                     accumulated_scroll_x + safe_scroll_x,
                     accumulated_scroll_y + safe_scroll_y,
+                    accumulated_tx,
+                    accumulated_ty,
                     is_animating,
                 );
             }
@@ -159,12 +165,8 @@ pub(crate) fn draw_element_contents(
             if !renderer.has_image(img_id) {
                 if let Some(pkg_name) = src.strip_prefix("app-icon://") {
                     request_async_icon(pkg_name);
-                    let dummy_pixel = [0u8, 0u8, 0u8, 0u8];
-                    renderer.load_image(img_id, &dummy_pixel, 1, 1);
-                } else {
-                    let dummy_pixel = [0u8, 0u8, 0u8, 0u8];
-                    renderer.load_image(img_id, &dummy_pixel, 1, 1);
                 }
+                return 0;
             }
 
             renderer.draw_image(

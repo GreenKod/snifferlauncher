@@ -16,6 +16,9 @@ use std::sync::{Arc, RwLock};
 
 #[allow(clippy::pedantic, clippy::too_many_lines)]
 pub fn android_main(app: AndroidApp) {
+    unsafe {
+        std::env::set_var("RUST_BACKTRACE", "full");
+    }
     sniffer_render::draw::elements::set_icon_loader(crate::jni::bridge::request_async_app_icon);
     sniffer_plugin::js::host_bridge::set_host_bridge(Box::new(AndroidHostBridge));
 
@@ -76,6 +79,7 @@ pub fn android_main(app: AndroidApp) {
         data_map: state.data_map.clone(),
         transition_manager: state.transition_manager.clone(),
         shaders_warmed_up: false,
+        version: 0,
     })));
 
     let (render_tx, render_rx) = crossbeam_channel::unbounded::<RenderMessage>();
@@ -93,7 +97,10 @@ pub fn android_main(app: AndroidApp) {
 
     while state.running {
         let frame_start = std::time::Instant::now();
-        let dt = frame_start.duration_since(last_frame_time).as_secs_f32();
+        let dt = frame_start
+            .duration_since(last_frame_time)
+            .as_secs_f32()
+            .clamp(0.001, 0.033);
         last_frame_time = frame_start;
 
         if crate::jni::bridge::apps::take_app_list_updated() {
@@ -172,6 +179,7 @@ pub fn android_main(app: AndroidApp) {
                 ui_changed,
                 current_ui_version,
             );
+            let _ = render_tx.send(RenderMessage::RequestRedraw);
         }
 
         let has_active_animation_after = !state.kinetic_scrolls.is_empty()
@@ -182,11 +190,18 @@ pub fn android_main(app: AndroidApp) {
                 .values()
                 .any(ScrollPhysics::is_animating);
 
-        let elapsed = frame_start.elapsed();
-        let target_frame_duration = state.target_frame_duration(has_active_animation_after);
+        // When active UI updates or animations are in progress, pacing is governed directly
+        // by the render thread's hardware VSync (eglSwapBuffers) and the kernel epoll in poll_events.
+        // Artificially sleeping the main thread here causes phase misalignment with VSync,
+        // which pushes 16.6ms frames into 33.3ms jank.
+        // We only sleep if no update was performed and the application is in an idle state.
+        if !should_update && !has_active_animation_after && state.is_idle() {
+            let elapsed = frame_start.elapsed();
+            let target_frame_duration = state.target_frame_duration(false);
 
-        if elapsed < target_frame_duration {
-            std::thread::sleep(target_frame_duration - elapsed);
+            if elapsed < target_frame_duration {
+                std::thread::sleep(target_frame_duration - elapsed);
+            }
         }
     }
 

@@ -2,6 +2,7 @@ use super::cache::MemoryTrimLevel;
 use crate::glow::GlowRenderer;
 use glow::HasContext;
 use sniffer_core::math::Rect;
+#[allow(unused_imports)]
 use sniffer_core::render::Renderer;
 
 impl GlowRenderer {
@@ -26,7 +27,9 @@ impl GlowRenderer {
             && id != "__system_wallpaper__"
         {
             if let Some(ref mut atlas) = self.icon_atlas {
-                let _ = unsafe { atlas.upload(&self.gl, id, rgba_pixels, width, height) };
+                if unsafe { atlas.upload(&self.gl, id, rgba_pixels, width, height) }.is_ok() {
+                    return;
+                }
             }
         }
 
@@ -130,7 +133,8 @@ impl GlowRenderer {
     }
 
     pub(crate) fn has_image_impl(&self, id: &str) -> bool {
-        self.texture_cache.contains_key(id)
+        self.icon_atlas.as_ref().is_some_and(|a| a.contains(id))
+            || self.texture_cache.contains_key(id)
     }
 
     pub fn trim_memory_level(&mut self, level: MemoryTrimLevel) {
@@ -241,19 +245,33 @@ impl GlowRenderer {
 
     pub(crate) fn draw_wallpaper_impl(&mut self, width: f32, height: f32) {
         let full_rect = Rect::new(0.0, 0.0, width, height);
-        if self.has_image_impl("__system_wallpaper__") {
-            self.draw_image(
-                "__system_wallpaper__",
-                full_rect,
-                0.0,
-                sniffer_core::style::ObjectFit::Cover,
-            );
-            // Frosted dark overlay tint for enhanced contrast and readability
-            self.draw_rect(full_rect, 0x4D0B_0F19, 0.0, 0.0, None);
-        } else {
-            // Translucent frosted glass tint allowing system wallpaper (blurred by SurfaceFlinger
-            // FLAG_BLUR_BEHIND) to shine through without blocking window transparency.
-            self.draw_rect_gradient_impl(full_rect, 0x330F_172A, 0x4D05_070D, 0.0, 0.0, None);
+
+        #[cfg(target_os = "android")]
+        {
+            // On Android, SurfaceFlinger hardware composites the live system wallpaper
+            // directly behind the transparent NativeWindow surface (via FLAG_SHOW_WALLPAPER).
+            // Drawing a redundant 1080p opaque texture on top wastes ~10MB/frame bandwidth
+            // and causes severe fillrate stalls on TBDR mobile GPUs.
+            // Instead, we only render a subtle translucent tint gradient for optimal contrast.
+            self.draw_rect_gradient_impl(full_rect, 0x1A0F_172A, 0x3305_070D, 0.0, 0.0, None);
+        }
+
+        #[cfg(not(target_os = "android"))]
+        {
+            if self.has_image_impl("__system_wallpaper__") {
+                self.draw_image(
+                    "__system_wallpaper__",
+                    full_rect,
+                    0.0,
+                    sniffer_core::style::ObjectFit::Cover,
+                );
+                // Frosted dark overlay tint for enhanced contrast and readability
+                self.draw_rect(full_rect, 0x4D0B_0F19, 0.0, 0.0, None);
+            } else {
+                // Translucent frosted glass tint allowing system wallpaper (blurred by SurfaceFlinger
+                // FLAG_BLUR_BEHIND) to shine through without blocking window transparency.
+                self.draw_rect_gradient_impl(full_rect, 0x330F_172A, 0x4D05_070D, 0.0, 0.0, None);
+            }
         }
     }
 

@@ -71,7 +71,8 @@ opt-level = 3
 
 [profile.release]
 opt-level = 3
-strip = true
+strip = false
+debug = 1
 lto = "fat"
 codegen-units = 1
 panic = "abort"

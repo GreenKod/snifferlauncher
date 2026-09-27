@@ -26,8 +26,8 @@
     "../framework/sniffer_ui.js": "9312df96787ae123bbe0665dbb0351956b7ce88ad8fe892584f08e03a188051f",
     "state.js": "a45ac2b379f3f948597371c54cadc1d78191729936c544d43c9a107aabf73ba3",
     "components/layout.js": "b75a27b3e7741863a2b01d3c9a20f94fde9dae2f3e4280d0077bc4162f7d17a7",
-    "components/app_grid.js": "c209a00b81f5e50523505ea8df80e71ecf7e56663c3b4e7a9766e7842dcae016",
+    "components/app_grid.js": "b5a188116d8202bcebb32a72c74ad6626323216d7b3e0963a78263e7347ae8b8",
     "components/app_drawer.js": "899b1016d2823955de382af5bf0ea5e96fa84da71a7d7e6715b000944f6cad4b",
-    "main.js": "a09f6e240929659c424910b2f323936a0086298c0170accce858a9a9ba07d6b0"
+    "main.js": "e7e0797b78cd9b7e98b93222cf58606e58a93ed967924a1c0c0c59c44100a5da"
   }
 }

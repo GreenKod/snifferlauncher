@@ -101,7 +101,6 @@ impl EglContextState {
         self.unbind();
 
         let surface = unsafe {
-            ndk_sys::ANativeWindow_acquire(native_window_ptr.cast());
             // 1 = WINDOW_FORMAT_RGBA_8888 (enables hardware alpha channel blending with system wallpaper)
             ndk_sys::ANativeWindow_setBuffersGeometry(native_window_ptr.cast(), 0, 0, 1_i32);
 
@@ -146,11 +145,7 @@ impl EglContextState {
             let _ = self.egl.make_current(self.display, None, None, None);
             let _ = self.egl.destroy_surface(self.display, surface);
         }
-        if let Some(win) = self.window.take() {
-            unsafe {
-                ndk_sys::ANativeWindow_release(win.cast());
-            }
-        }
+        self.window = None;
     }
 
     pub fn swap_buffers(&self) {

@@ -222,86 +222,113 @@ pub fn poll_async_wallpaper() -> Option<WallpaperLoadResult> {
 pub fn get_system_wallpaper_pixels(target_w: u32, target_h: u32) -> Option<(Vec<u8>, u32, u32)> {
     let jvm = vm();
 
-    jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
-        if let Some(cached) = load_wallpaper_from_disk(env) {
-            return Ok(cached);
-        }
-
-        let ctx = context(env);
-
-        let wp_mgr_cls = match env.find_class(jni_str!("android/app/WallpaperManager")) {
-            Ok(cls) => cls,
-            Err(e) => {
-                env.exception_clear();
-                return Err(e);
+    jvm.attach_current_thread_for_scope::<_, _, JniError>(
+        |env: &mut Env| -> Result<Option<(Vec<u8>, u32, u32)>, JniError> {
+            if let Some(cached) = load_wallpaper_from_disk(env) {
+                return Ok(Some(cached));
             }
-        };
 
-        let wp_mgr = match env.call_static_method(
-            wp_mgr_cls,
-            jni_str!("getInstance"),
-            jni_sig!("(Landroid/content/Context;)Landroid/app/WallpaperManager;"),
-            &[JValue::Object(&ctx)],
-        ) {
-            Ok(val) => val.l()?,
-            Err(e) => {
-                env.exception_clear();
-                return Err(e);
+            let ctx = context(env);
+            if ctx.is_null() {
+                return Ok(None);
             }
-        };
 
-        let drawable = match env.call_method(
-            &wp_mgr,
-            jni_str!("getDrawable"),
-            jni_sig!("()Landroid/graphics/drawable/Drawable;"),
-            &[],
-        ) {
-            Ok(val) => val.l()?,
-            Err(_) => {
-                env.exception_clear();
-                match env.call_method(
-                    &wp_mgr,
-                    jni_str!("peekDrawable"),
-                    jni_sig!("()Landroid/graphics/drawable/Drawable;"),
-                    &[],
-                ) {
-                    Ok(val) => val.l()?,
-                    Err(e2) => {
-                        env.exception_clear();
-                        return Err(e2);
-                    }
-                }
-            }
-        };
-
-        if drawable.is_null() {
-            env.exception_clear();
-            return Err(JniError::JavaException);
-        }
-
-        let w = if target_w == 0 {
-            540
-        } else {
-            (target_w / 2).clamp(360, 720)
-        };
-        let h = if target_h == 0 {
-            960
-        } else {
-            (target_h / 2).clamp(640, 1280)
-        };
-
-        let rgba_bytes =
-            match extract_drawable_pixels(env, &drawable, w.cast_signed(), h.cast_signed()) {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    env.exception_clear();
-                    return Err(e);
+            let wp_mgr_cls = match env.find_class(jni_str!("android/app/WallpaperManager")) {
+                Ok(cls) => cls,
+                Err(_) => {
+                    let _ = env.exception_clear();
+                    return Ok(None);
                 }
             };
 
-        save_wallpaper_to_disk(env, &rgba_bytes, w, h);
+            let wp_mgr = match env.call_static_method(
+                wp_mgr_cls,
+                jni_str!("getInstance"),
+                jni_sig!("(Landroid/content/Context;)Landroid/app/WallpaperManager;"),
+                &[JValue::Object(&ctx)],
+            ) {
+                Ok(val) => match val.l() {
+                    Ok(obj) if !obj.is_null() => obj,
+                    _ => return Ok(None),
+                },
+                Err(_) => {
+                    let _ = env.exception_clear();
+                    return Ok(None);
+                }
+            };
 
-        Ok((rgba_bytes, w, h))
-    })
+            let drawable = match env.call_method(
+                &wp_mgr,
+                jni_str!("getDrawable"),
+                jni_sig!("()Landroid/graphics/drawable/Drawable;"),
+                &[],
+            ) {
+                Ok(val) => match val.l() {
+                    Ok(obj) if !obj.is_null() => obj,
+                    _ => {
+                        let _ = env.exception_clear();
+                        match env.call_method(
+                            &wp_mgr,
+                            jni_str!("peekDrawable"),
+                            jni_sig!("()Landroid/graphics/drawable/Drawable;"),
+                            &[],
+                        ) {
+                            Ok(v2) => match v2.l() {
+                                Ok(obj2) if !obj2.is_null() => obj2,
+                                _ => return Ok(None),
+                            },
+                            Err(_) => {
+                                let _ = env.exception_clear();
+                                return Ok(None);
+                            }
+                        }
+                    }
+                },
+                Err(_) => {
+                    let _ = env.exception_clear();
+                    match env.call_method(
+                        &wp_mgr,
+                        jni_str!("peekDrawable"),
+                        jni_sig!("()Landroid/graphics/drawable/Drawable;"),
+                        &[],
+                    ) {
+                        Ok(val) => match val.l() {
+                            Ok(obj) if !obj.is_null() => obj,
+                            _ => return Ok(None),
+                        },
+                        Err(_) => {
+                            let _ = env.exception_clear();
+                            return Ok(None);
+                        }
+                    }
+                }
+            };
+
+            let w = if target_w == 0 {
+                540
+            } else {
+                (target_w / 2).clamp(360, 720)
+            };
+            let h = if target_h == 0 {
+                960
+            } else {
+                (target_h / 2).clamp(640, 1280)
+            };
+
+            let rgba_bytes =
+                match extract_drawable_pixels(env, &drawable, w.cast_signed(), h.cast_signed()) {
+                    Ok(bytes) => bytes,
+                    Err(_) => {
+                        let _ = env.exception_clear();
+                        return Ok(None);
+                    }
+                };
+
+            save_wallpaper_to_disk(env, &rgba_bytes, w, h);
+
+            Ok(Some((rgba_bytes, w, h)))
+        },
+    )
     .ok()
+    .flatten()
 }

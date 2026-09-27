@@ -115,32 +115,22 @@ impl ScrollPhysics {
             } else {
                 self.spring_sim_x = Some(sim);
             }
-        } else if self.vel_x.abs() > 0.5 {
+        } else if !self.is_dragging && self.vel_x.abs() > 0.5 {
             let (step_x, next_vx) = super::velocity::step_momentum_decay(self.vel_x, 7.62, dt);
             self.pos_x += step_x;
             self.vel_x = next_vx;
             active = true;
 
             if self.pos_x < 0.0 {
-                if !self.is_dragging {
-                    self.spring_sim_x = Some(
-                        SpringSimulation::new(SpringConfig::rubber_band(), self.pos_x, 0.0)
-                            .with_initial_velocity(self.vel_x),
-                    );
-                } else {
-                    self.pos_x = 0.0;
-                    self.vel_x = 0.0;
-                }
+                self.spring_sim_x = Some(
+                    SpringSimulation::new(SpringConfig::rubber_band(), self.pos_x, 0.0)
+                        .with_initial_velocity(self.vel_x),
+                );
             } else if max_limit < f32::MAX && self.pos_x > max_limit {
-                if !self.is_dragging {
-                    self.spring_sim_x = Some(
-                        SpringSimulation::new(SpringConfig::rubber_band(), self.pos_x, max_limit)
-                            .with_initial_velocity(self.vel_x),
-                    );
-                } else {
-                    self.pos_x = max_limit;
-                    self.vel_x = 0.0;
-                }
+                self.spring_sim_x = Some(
+                    SpringSimulation::new(SpringConfig::rubber_band(), self.pos_x, max_limit)
+                        .with_initial_velocity(self.vel_x),
+                );
             }
         } else if !self.is_dragging {
             if self.pos_x < -0.1 {
@@ -171,32 +161,22 @@ impl ScrollPhysics {
                 self.vel_y = 0.0;
                 self.spring_sim_y = None;
             }
-        } else if self.vel_y.abs() > 0.5 {
+        } else if !self.is_dragging && self.vel_y.abs() > 0.5 {
             let (step_y, next_vy) = super::velocity::step_momentum_decay(self.vel_y, 7.62, dt);
             self.pos_y += step_y;
             self.vel_y = next_vy;
             active = true;
 
             if self.pos_y < 0.0 {
-                if !self.is_dragging {
-                    self.spring_sim_y = Some(
-                        SpringSimulation::new(SpringConfig::rubber_band(), self.pos_y, 0.0)
-                            .with_initial_velocity(self.vel_y),
-                    );
-                } else {
-                    self.pos_y = 0.0;
-                    self.vel_y = 0.0;
-                }
+                self.spring_sim_y = Some(
+                    SpringSimulation::new(SpringConfig::rubber_band(), self.pos_y, 0.0)
+                        .with_initial_velocity(self.vel_y),
+                );
             } else if self.pos_y > max_limit_y {
-                if !self.is_dragging {
-                    self.spring_sim_y = Some(
-                        SpringSimulation::new(SpringConfig::rubber_band(), self.pos_y, max_limit_y)
-                            .with_initial_velocity(self.vel_y),
-                    );
-                } else {
-                    self.pos_y = max_limit_y;
-                    self.vel_y = 0.0;
-                }
+                self.spring_sim_y = Some(
+                    SpringSimulation::new(SpringConfig::rubber_band(), self.pos_y, max_limit_y)
+                        .with_initial_velocity(self.vel_y),
+                );
             }
         } else if !self.is_dragging {
             if self.pos_y < -0.1 {
@@ -218,6 +198,8 @@ impl ScrollPhysics {
     }
 
     pub fn apply_drag(&mut self, delta_x: f32) {
+        self.is_dragging = true;
+        self.vel_x = 0.0;
         self.snap_target_x = None;
         self.spring_sim_x = None;
 
@@ -243,6 +225,8 @@ impl ScrollPhysics {
     }
 
     pub fn apply_drag_y(&mut self, delta_y: f32) {
+        self.is_dragging = true;
+        self.vel_y = 0.0;
         self.spring_sim_y = None;
         let max_limit_y = self.max_y.unwrap_or(0.0);
         let coeff = self.rubber_band.unwrap_or(RUBBER_BAND_COEFF);
@@ -302,7 +286,7 @@ impl ScrollPhysics {
                 self.snap_target_x = Some(target_x);
                 self.spring_start_x = self.pos_x;
 
-                let mut init_vel = self.vel_x;
+                let mut init_vel = self.vel_x.clamp(-1200.0, 1200.0);
                 if (target_x >= max_x && init_vel > 0.0) || (target_x <= 0.0 && init_vel < 0.0) {
                     init_vel = 0.0;
                 }

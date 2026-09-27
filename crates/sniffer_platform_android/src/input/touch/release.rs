@@ -25,7 +25,11 @@ pub fn handle_touch_release(
     if let Some(sv_id) = state.active_scrollview_drag {
         if let Some(phys) = state.scroll_physics.get_mut(&sv_id) {
             if phys.snap_x.is_some() {
-                phys.release_drag(fling_vel_x);
+                if state.gesture_axis == crate::app::state::GestureAxis::Vertical {
+                    phys.release_drag(0.0);
+                } else {
+                    phys.release_drag(fling_vel_x);
+                }
             } else {
                 phys.release_drag_y(fling_vel_y);
             }
@@ -130,7 +134,10 @@ pub fn handle_touch_release(
         let swipe_thresh = 120.0 * density;
         let flick_thresh = 50.0 * density;
 
-        if dy.abs() > dx.abs() * 1.3 {
+        if state.gesture_axis == crate::app::state::GestureAxis::Vertical
+            || (state.gesture_axis == crate::app::state::GestureAxis::Undetermined
+                && dy.abs() > dx.abs() * 1.3)
+        {
             if dy < 0.0 {
                 // SwipeUp: Open drawer from home screen
                 let upward_dist = -dy;
@@ -159,12 +166,14 @@ pub fn handle_touch_release(
         state.event_bus.push(UiEvent::ClickOutside);
     }
     state.active_scrollview_start_y = 0.0;
+    state.gesture_axis = crate::app::state::GestureAxis::Undetermined;
     InputStatus::Handled
 }
 
 pub fn handle_touch_cancel(state: &mut crate::app::AppState) -> InputStatus {
     state.active_scrollview_drag = None;
     state.active_scrollview_start_y = 0.0;
+    state.gesture_axis = crate::app::state::GestureAxis::Undetermined;
     state.drag_history.clear();
     let prev_hovered = state.hovered_btn;
     state.hovered_btn = None;

@@ -15,9 +15,18 @@ pub struct KineticScroll {
     pub velocity_y: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum GestureAxis {
+    #[default]
+    Undetermined,
+    Horizontal,
+    Vertical,
+}
+
 #[allow(clippy::struct_excessive_bools)]
 pub struct AppState {
     pub running: bool,
+    pub gesture_axis: GestureAxis,
     pub touch_start_pos: Point,
     pub last_touch_pos: Point,
     pub hovered_btn: Option<u64>,
@@ -42,6 +51,7 @@ pub struct AppState {
     pub cached_layout: Option<Arc<sniffer_core::layout::LayoutNode>>,
     pub cached_max_scroll: std::collections::HashMap<u64, f32>,
     pub last_ui_version: u64,
+    pub render_state_version: u64,
     pub layout_dirty: bool,
     pub memory_pressure_pending: bool,
     pub virtual_page_manager: sniffer_core::virtualization::VirtualPageManager,
@@ -96,6 +106,7 @@ impl AppState {
 
         Self {
             running: true,
+            gesture_axis: GestureAxis::Undetermined,
             touch_start_pos: Point::zero(),
             last_touch_pos: Point::zero(),
             hovered_btn: None,
@@ -120,6 +131,7 @@ impl AppState {
             cached_layout: None,
             cached_max_scroll: std::collections::HashMap::new(),
             last_ui_version: 0,
+            render_state_version: 0,
             layout_dirty: true,
             memory_pressure_pending: false,
             virtual_page_manager: sniffer_core::virtualization::VirtualPageManager::new(),

@@ -16,43 +16,46 @@ pub fn take_app_list_updated() -> bool {
 
 fn get_apps_cache_path() -> Option<String> {
     let jvm = vm();
-    jvm.attach_current_thread_for_scope::<_, _, JniError>(|env| {
-        let res = (|| -> Result<String, JniError> {
-            let ctx = context(env);
-            if ctx.is_null() {
-                return Err(JniError::NullPtr("context"));
-            }
-            let files_dir = env
-                .call_method(
-                    &ctx,
-                    jni_str!("getCacheDir"),
-                    jni_sig!("()Ljava/io/File;"),
-                    &[],
-                )?
-                .l()?;
-            if files_dir.is_null() {
-                return Err(JniError::NullPtr("files_dir"));
-            }
-            let path_obj = env
-                .call_method(
-                    &files_dir,
-                    jni_str!("getAbsolutePath"),
-                    jni_sig!("()Ljava/lang/String;"),
-                    &[],
-                )?
-                .l()?;
-            let path_jstring = env.as_cast::<JString>(&path_obj)?;
-            let path_str = path_jstring.try_to_string(env)?;
-            Ok(format!("{path_str}/apps_cache.json"))
-        })();
+    jvm.attach_current_thread_for_scope::<_, _, JniError>(
+        |env| -> Result<Option<String>, JniError> {
+            let res = (|| -> Result<String, JniError> {
+                let ctx = context(env);
+                if ctx.is_null() {
+                    return Err(JniError::NullPtr("context"));
+                }
+                let files_dir = env
+                    .call_method(
+                        &ctx,
+                        jni_str!("getCacheDir"),
+                        jni_sig!("()Ljava/io/File;"),
+                        &[],
+                    )?
+                    .l()?;
+                if files_dir.is_null() {
+                    return Err(JniError::NullPtr("files_dir"));
+                }
+                let path_obj = env
+                    .call_method(
+                        &files_dir,
+                        jni_str!("getAbsolutePath"),
+                        jni_sig!("()Ljava/lang/String;"),
+                        &[],
+                    )?
+                    .l()?;
+                let path_jstring = env.as_cast::<JString>(&path_obj)?;
+                let path_str = path_jstring.try_to_string(env)?;
+                Ok(format!("{path_str}/apps_cache.json"))
+            })();
 
-        if res.is_err() {
-            env.exception_clear();
-        }
+            if res.is_err() {
+                let _ = env.exception_clear();
+            }
 
-        res
-    })
+            Ok(res.ok())
+        },
+    )
     .ok()
+    .flatten()
 }
 
 pub fn init_app_list_cache() {
@@ -267,12 +270,12 @@ fn fetch_application_list_internal() -> Result<Vec<AppInfo>, String> {
             })();
 
             if res.is_err() {
-                env.exception_clear();
+                let _ = env.exception_clear();
             }
 
-            res
+            Ok(res.unwrap_or_default())
         })
-        .map_err(|e: JniError| e.to_string())?;
+        .unwrap_or_default();
 
     log::info!("[Apps] Total apps found: {}", app_list.len());
 

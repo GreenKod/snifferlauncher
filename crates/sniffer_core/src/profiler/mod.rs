@@ -253,17 +253,6 @@ fn draw_touch_hitboxes(
         ),
     };
 
-    if is_button && layout.rect.width > 2.0 && layout.rect.height > 2.0 {
-        let is_dock = elem_id.as_ref().is_some_and(|k| k.contains("dock"));
-        let (fill_color, border_color) = if is_dock {
-            (0x284A_DE80_u32, Some(0xEE4A_DE80_u32))
-        } else {
-            (0x2038_BDF8_u32, Some(0xDD38_BDF8_u32))
-        };
-
-        renderer.draw_rect(layout.rect, fill_color, 4.0, 1.5, border_color);
-    }
-
     let tx = element.style().transform.translate_x;
     let ty = element.style().transform.translate_y;
     let safe_tx = if tx.is_nan() || tx.is_infinite() {
@@ -277,6 +266,22 @@ fn draw_touch_hitboxes(
         ty
     };
     let has_tx = safe_tx.abs() > 0.001 || safe_ty.abs() > 0.001;
+    let is_scroll_view = matches!(element, crate::types::Element::ScrollView { .. });
+
+    if has_tx && !is_scroll_view {
+        renderer.push_transform(0.0, 0.0, 1.0, 0.0, safe_tx, safe_ty);
+    }
+
+    if is_button && layout.rect.width > 2.0 && layout.rect.height > 2.0 {
+        let is_dock = elem_id.as_ref().is_some_and(|k| k.contains("dock"));
+        let (fill_color, border_color) = if is_dock {
+            (0x284A_DE80_u32, Some(0xEE4A_DE80_u32))
+        } else {
+            (0x2038_BDF8_u32, Some(0xDD38_BDF8_u32))
+        };
+
+        renderer.draw_rect(layout.rect, fill_color, 4.0, 1.5, border_color);
+    }
 
     match element {
         crate::types::Element::ScrollView {
@@ -312,17 +317,15 @@ fn draw_touch_hitboxes(
         }
         crate::types::Element::Container { children, .. }
         | crate::types::Element::SharedView { children, .. } => {
-            if has_tx {
-                renderer.push_transform(0.0, 0.0, 1.0, 0.0, safe_tx, safe_ty);
-            }
             for (child_el, child_lay) in children.iter().zip(layout.children.iter()) {
                 draw_touch_hitboxes(renderer, child_el, child_lay, effective_opacity);
             }
-            if has_tx {
-                renderer.pop_transform();
-            }
         }
         _ => {}
+    }
+
+    if has_tx && !is_scroll_view {
+        renderer.pop_transform();
     }
 }
 
@@ -335,17 +338,47 @@ pub fn render_devkit_debug_overlays(
     layout_tree: &crate::layout::LayoutNode,
 ) {
     static SHOW_DEBUG_OVERLAYS: std::sync::atomic::AtomicBool =
-        std::sync::atomic::AtomicBool::new(true);
-    static CHECKED_ENV: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        std::sync::atomic::AtomicBool::new(false);
+    static CHECK_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
-    if !CHECKED_ENV.load(std::sync::atomic::Ordering::Relaxed) {
+    // Periodically re-check (every 60 frames) so adb setprop dynamically toggles overlays
+    let count = CHECK_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if count % 60 == 0 {
+        let mut enabled = false;
         if let Ok(val) = std::env::var("SNIFFER_DEBUG_HITBOXES")
             .or_else(|_| std::env::var("SNIFFER_DEBUG_OVERLAYS"))
         {
-            let disabled = val == "0" || val.eq_ignore_ascii_case("false");
-            SHOW_DEBUG_OVERLAYS.store(!disabled, std::sync::atomic::Ordering::Relaxed);
+            enabled = val == "1" || val.eq_ignore_ascii_case("true");
         }
-        CHECKED_ENV.store(true, std::sync::atomic::Ordering::Relaxed);
+
+        #[cfg(target_os = "android")]
+        {
+            unsafe extern "C" {
+                fn __system_property_get(
+                    name: *const std::ffi::c_char,
+                    value: *mut std::ffi::c_char,
+                ) -> std::ffi::c_int;
+            }
+            let check_prop = |prop_name: &[u8]| -> Option<bool> {
+                let mut buf = [0u8; 92];
+                let len = unsafe {
+                    __system_property_get(prop_name.as_ptr().cast(), buf.as_mut_ptr().cast())
+                };
+                if len > 0 {
+                    let s = std::str::from_utf8(&buf[..len as usize]).ok()?;
+                    Some(s == "1" || s.eq_ignore_ascii_case("true"))
+                } else {
+                    None
+                }
+            };
+            if let Some(prop_val) = check_prop(b"debug.sniffer.overlays\0")
+                .or_else(|| check_prop(b"debug.sniffer.hitboxes\0"))
+            {
+                enabled = prop_val;
+            }
+        }
+
+        SHOW_DEBUG_OVERLAYS.store(enabled, std::sync::atomic::Ordering::Relaxed);
     }
 
     if !SHOW_DEBUG_OVERLAYS.load(std::sync::atomic::Ordering::Relaxed) {

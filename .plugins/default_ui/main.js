@@ -150,12 +150,11 @@ if (typeof broadcastEvent === "function") {
 let _hasInitialRefreshed = false;
 
 // Invoked when Rust scroll physics completes a page snap.
-// Used to update page indicator dots.
+// Rust scroll physics natively updates indicator dots directly in the UI tree without tearing down the DOM.
 function onPageChanged(pageData) {
     const data = typeof pageData === "string" ? JSON.parse(pageData) : pageData;
     if (typeof data.page === "number") {
         state.currentPage = data.page;
-        SnifferUI.forceUpdate();
     }
 }
 

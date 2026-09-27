@@ -109,7 +109,9 @@ pub fn poll_and_handle_events(
                 needs_redraw = true;
             }
             MainEvent::TerminateWindow { .. } => {
-                let _ = render_tx.send(RenderMessage::TerminateWindow);
+                let (ack_tx, ack_rx) = crossbeam_channel::bounded(1);
+                let _ = render_tx.send(RenderMessage::TerminateWindow(Some(ack_tx)));
+                let _ = ack_rx.recv_timeout(Duration::from_millis(500));
             }
             MainEvent::LowMemory => {
                 let _ = render_tx.send(RenderMessage::LowMemory);
@@ -124,6 +126,10 @@ pub fn poll_and_handle_events(
         },
         _ => {}
     });
+
+    if needs_redraw {
+        let _ = render_tx.send(RenderMessage::RequestRedraw);
+    }
 
     needs_redraw
 }

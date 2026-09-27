@@ -4,11 +4,14 @@
 
 host_log("[Dock Plugin] Initializing Clean Android Dock plugin...");
 
-// 1. Request Permissions (INPUT, IPC, UI)
+// 1. Request Permissions (INPUT, IPC, UI, APP_LAUNCH)
 const granted = requestPermissions([
     "plugin.permission.INPUT",
     "plugin.permission.IPC",
-    "plugin.permission.UI"
+    "plugin.permission.UI",
+    "plugin.permission.APP_LAUNCH",
+    "android.permission.LAUNCH_APP",
+    "android.permission.QUERY_ALL_PACKAGES"
 ]);
 
 // Initial match

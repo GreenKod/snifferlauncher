@@ -22,16 +22,14 @@ pub fn handle_motion_event(
             state.last_touch_pos = point;
             state.last_drag_delta = (0.0, 0.0);
             state.total_touch_drag_distance = 0.0;
+            state.gesture_axis = crate::app::state::GestureAxis::Undetermined;
             (0.0, 0.0)
         }
         _ => {
-            let raw_delta_x = -(point.x - state.last_touch_pos.x);
-            let raw_delta_y = -(point.y - state.last_touch_pos.y);
+            let dx = -(point.x - state.last_touch_pos.x);
+            let dy = -(point.y - state.last_touch_pos.y);
             state.last_touch_pos = point;
-
-            let alpha = 0.85_f32;
-            let dx = alpha.mul_add(raw_delta_x, (1.0 - alpha) * state.last_drag_delta.0);
-            let dy = alpha.mul_add(raw_delta_y, (1.0 - alpha) * state.last_drag_delta.1);
+            state.last_drag_delta = (dx, dy);
             state.total_touch_drag_distance += dx.abs() + dy.abs();
             (dx, dy)
         }

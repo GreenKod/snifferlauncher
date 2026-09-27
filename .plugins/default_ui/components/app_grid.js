@@ -110,22 +110,18 @@ function PageIndicatorDots(totalPages, currentPage, isLandscape) {
     for (let p = 0; p < totalPages; p++) {
         const isActive = p === currentPage;
         if (isLandscape) {
-            // Landscape Mode: Vertical indicator dots on the right side
             dots.push(Container("page_dot_" + p, {
                 width: px(vmin(1.6)),
                 height: px(isActive ? vmin(3.6) : vmin(1.6)),
                 border_radius: vmin(0.8),
                 background_color: hex(isActive ? "#00E5FF" : "#55FFFFFF"),
-                transition: { duration: 0.2 },
             }, []));
         } else {
-            // Portrait Mode: Horizontal indicator dots on the bottom
             dots.push(Container("page_dot_" + p, {
                 width: px(isActive ? vmin(3.6) : vmin(1.6)),
                 height: px(vmin(1.6)),
                 border_radius: vmin(0.8),
                 background_color: hex(isActive ? "#00E5FF" : "#55FFFFFF"),
-                transition: { duration: 0.2 },
             }, []));
         }
     }

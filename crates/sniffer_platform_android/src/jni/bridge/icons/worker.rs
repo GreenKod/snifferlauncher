@@ -116,10 +116,8 @@ pub fn get_app_icon_pixels(package_name: &str) -> Option<(Vec<u8>, u32, u32)> {
     let jvm = vm();
 
     jvm.attach_current_thread_for_scope::<_, _, JniError>(|env: &mut Env| {
-        match get_app_icon_pixels_inner(env, package_name) {
-            Some(res) => Ok(res),
-            None => Err(JniError::JavaException),
-        }
+        Ok(get_app_icon_pixels_inner(env, package_name))
     })
     .ok()
+    .flatten()
 }

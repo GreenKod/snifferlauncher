@@ -5,9 +5,10 @@ use std::sync::Arc;
 pub enum RenderMessage {
     InitWindow(usize, f32, f32),
     WindowResized(usize, f32, f32),
-    TerminateWindow,
+    TerminateWindow(Option<crossbeam_channel::Sender<()>>),
     LowMemory,
     Destroy,
+    RequestRedraw,
 }
 
 #[derive(Clone)]
@@ -19,6 +20,7 @@ pub struct SharedRenderState {
     pub data_map: sniffer_core::ui::data_map::DataMap,
     pub transition_manager: sniffer_core::anim::TransitionManager,
     pub shaders_warmed_up: bool,
+    pub version: u64,
 }
 
 pub struct AndroidHostBridge;

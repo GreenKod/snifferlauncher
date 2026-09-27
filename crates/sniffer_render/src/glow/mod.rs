@@ -49,12 +49,19 @@ pub struct GlowRenderer {
     pub(crate) shape_uniforms: ShapeUniforms,
     pub(crate) image_uniforms: ImageUniforms,
     pub(crate) text_uniforms: TextUniforms,
+    #[allow(dead_code)]
     pub(crate) blur_uniforms: BlurUniforms,
+    #[allow(dead_code)]
     pub(crate) glass_uniforms: GlassUniforms,
     pub(crate) current_vao: Option<glow::VertexArray>,
+    #[allow(dead_code)]
     pub(crate) blur_pipeline: Option<blur::BlurPipeline>,
+    #[allow(dead_code)]
     pub(crate) blur_program: glow::Program,
+    #[allow(dead_code)]
     pub(crate) glass_program: glow::Program,
+    #[allow(dead_code)]
+    pub(crate) cached_blur_texture: Option<glow::Texture>,
 }
 
 #[allow(clippy::cast_possible_truncation)]
@@ -383,6 +390,7 @@ impl GlowRenderer {
                 blur_pipeline: None,
                 blur_program,
                 glass_program,
+                cached_blur_texture: None,
             })
         }
     }
@@ -444,11 +452,22 @@ impl GlowRenderer {
         height: i32,
         downsample_factor: f32,
     ) -> Result<(), String> {
+        #[cfg(target_os = "android")]
+        let max_dim = 360.0_f32;
+        #[cfg(not(target_os = "android"))]
         let max_dim = 960.0_f32;
+
         let factor = if downsample_factor > 0.0 {
             downsample_factor
         } else {
-            0.5
+            #[cfg(target_os = "android")]
+            {
+                0.25
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                0.5
+            }
         };
         let mut target_w = ((width as f32) * factor).max(1.0);
         let mut target_h = ((height as f32) * factor).max(1.0);

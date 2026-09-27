@@ -115,8 +115,8 @@ fn find_clicked_button_with_scroll_recursive(
                     return Some((
                         clicked_data.0,
                         Rect::new(
-                            clicked_data.1.x + safe_tx,
-                            clicked_data.1.y + safe_ty,
+                            clicked_data.1.x + safe_tx - active_x,
+                            clicked_data.1.y + safe_ty - active_y,
                             clicked_data.1.width,
                             clicked_data.1.height,
                         ),

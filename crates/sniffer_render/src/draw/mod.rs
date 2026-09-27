@@ -41,6 +41,8 @@ pub fn draw_ui(
         alpha_multiplier,
         accumulated_scroll_x,
         accumulated_scroll_y,
+        0.0,
+        0.0,
         is_animating,
     );
     renderer.flush();
@@ -60,6 +62,8 @@ pub(crate) fn draw_ui_node(
     alpha_multiplier: f32,
     accumulated_scroll_x: f32,
     accumulated_scroll_y: f32,
+    accumulated_tx: f32,
+    accumulated_ty: f32,
     is_animating: bool,
 ) -> usize {
     use sniffer_core::ui::data_map::DataValue;
@@ -100,13 +104,18 @@ pub(crate) fn draw_ui_node(
         ty = 0.0;
     }
 
-    let screen_x = rect.x + tx - accumulated_scroll_x;
-    let screen_y = rect.y + ty - accumulated_scroll_y;
+    let total_tx = accumulated_tx + tx;
+    let total_ty = accumulated_ty + ty;
+
+    let screen_x = rect.x + total_tx - accumulated_scroll_x;
+    let screen_y = rect.y + total_ty - accumulated_scroll_y;
     let eff_w = rect.width * base_style.transform.scale;
     let eff_h = rect.height * base_style.transform.scale;
 
-    let margin_x = (screen_w * 3.0).max(2000.0);
-    let margin_y = if is_animating { screen_h } else { 200.0_f32 };
+    // Tight ~15% viewport buffer prevents visual pop-in during fast swipes/transitions
+    // while eliminating off-screen entities from wasting GPU vertex and batch capacity.
+    let margin_x = (screen_w * 0.15).clamp(80.0, 200.0);
+    let margin_y = (screen_h * 0.15).clamp(100.0, 240.0);
     let node_rect = sniffer_core::Rect::new(screen_x, screen_y, eff_w, eff_h);
     let viewport_rect = sniffer_core::Rect::new(0.0, 0.0, screen_w, screen_h);
     let is_offscreen = screen_w > 0.0
@@ -117,16 +126,26 @@ pub(crate) fn draw_ui_node(
         return 0;
     }
 
-    renderer.push_transform(
-        rect.x + rect.width / 2.0,
-        rect.y + rect.height / 2.0,
-        base_style.transform.scale,
-        base_style.transform.rotate,
-        tx,
-        ty,
-    );
+    let has_transform = (base_style.transform.scale - 1.0).abs() >= 1e-4
+        || base_style.transform.rotate.abs() >= 1e-4
+        || tx.abs() >= 1e-4
+        || ty.abs() >= 1e-4;
 
-    renderer.set_global_alpha(final_alpha);
+    if has_transform {
+        renderer.push_transform(
+            rect.x + rect.width / 2.0,
+            rect.y + rect.height / 2.0,
+            base_style.transform.scale,
+            base_style.transform.rotate,
+            tx,
+            ty,
+        );
+    }
+
+    let alpha_changed = (final_alpha - alpha_multiplier).abs() >= 1e-4;
+    if alpha_changed {
+        renderer.set_global_alpha(final_alpha);
+    }
 
     if base_style.elevation > 0.0 {
         renderer.draw_elevation_shadow(
@@ -316,6 +335,8 @@ pub(crate) fn draw_ui_node(
         final_alpha,
         accumulated_scroll_x,
         accumulated_scroll_y,
+        total_tx,
+        total_ty,
         &base_style,
         rect,
         widget_id,
@@ -326,8 +347,12 @@ pub(crate) fn draw_ui_node(
         renderer.pop_clip_rect();
     }
 
-    renderer.set_global_alpha(alpha_multiplier);
-    renderer.pop_transform();
+    if alpha_changed {
+        renderer.set_global_alpha(alpha_multiplier);
+    }
+    if has_transform {
+        renderer.pop_transform();
+    }
 
     1 + children_count
 }

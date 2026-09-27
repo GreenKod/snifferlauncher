@@ -18,10 +18,24 @@ pub fn spawn_render_thread(
     render_rx: crossbeam_channel::Receiver<RenderMessage>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
+        unsafe {
+            let raw_vm = ndk_context::android_context()
+                .vm()
+                .cast::<jni::sys::JavaVM>();
+            if !raw_vm.is_null() {
+                let mut env: *mut std::ffi::c_void = std::ptr::null_mut();
+                let _ =
+                    ((**raw_vm).v1_4.AttachCurrentThread)(raw_vm, &mut env, std::ptr::null_mut());
+            }
+        }
         let mut egl_state: Option<EglContextState> = None;
         let mut is_window_bound = false;
+        let mut last_rendered_version: u64 = u64::MAX;
+        let mut pending_ack: Option<crossbeam_channel::Sender<()>> = None;
 
         loop {
+            let mut needs_draw = false;
+
             while let Ok(msg) = render_rx.try_recv() {
                 match msg {
                     RenderMessage::InitWindow(ptr, _w, _h) => {
@@ -40,16 +54,21 @@ pub fn spawn_render_thread(
                             } else {
                                 dev_log!("{}", obfstr!("[EGL] Window successfully bound to EGL"));
                                 is_window_bound = true;
+                                needs_draw = true;
                             }
                         }
                     }
                     RenderMessage::WindowResized(_ptr, _w, _h) => {
                         is_window_bound = true;
+                        needs_draw = true;
                     }
-                    RenderMessage::TerminateWindow => {
+                    RenderMessage::TerminateWindow(ack) => {
                         if let Some(ref mut egl) = egl_state {
                             egl.unbind();
-                            is_window_bound = false;
+                        }
+                        is_window_bound = false;
+                        if let Some(ch) = ack {
+                            let _ = ch.send(());
                         }
                     }
                     RenderMessage::LowMemory => {
@@ -68,148 +87,232 @@ pub fn spawn_render_thread(
                         }
                         return;
                     }
+                    RenderMessage::RequestRedraw => {
+                        needs_draw = true;
+                    }
                 }
             }
 
-            if is_window_bound {
+            if !is_window_bound {
                 if let Some(ref mut egl) = egl_state {
-                    if let Some(ref mut renderer) = egl.renderer {
-                        if let Ok(mut q) = action_queue.lock() {
-                            let mut unhandled = Vec::new();
-
-                            for action in q.drain(..) {
-                                match action {
-                                    Action::LoadImage { id, src } => {
-                                        if let Some(pkg_name) =
-                                            src.strip_prefix(obfstr!("app-icon://"))
-                                        {
-                                            crate::jni::bridge::request_async_app_icon(pkg_name);
-                                        } else {
-                                            crate::image_loader::request_async_image(
-                                                crate::image_loader::ImageLoadRequest::new(id, src),
-                                            );
-                                        }
-                                    }
-                                    _ => {
-                                        unhandled.push(action);
-                                    }
+                    egl.unbind();
+                }
+                if let Some(ch) = pending_ack.take() {
+                    let _ = ch.send(());
+                }
+                if let Ok(msg) = render_rx.recv() {
+                    match msg {
+                        RenderMessage::InitWindow(ptr, _w, _h) => {
+                            if egl_state.is_none() {
+                                match EglContextState::new() {
+                                    Ok(s) => egl_state = Some(s),
+                                    Err(e) => dev_err!(
+                                        "{}: {e}",
+                                        obfstr!("[EGL Error] Failed to create EGL state")
+                                    ),
                                 }
                             }
-
-                            if !unhandled.is_empty() {
-                                *q = unhandled;
-                            }
-                        }
-
-                        #[cfg(feature = "devkit")]
-                        let render_start = std::time::Instant::now();
-                        let current_state = shared_render_state.read().unwrap().clone();
-
-                        let width = current_state.metrics.physical_width;
-                        let height = current_state.metrics.physical_height;
-
-                        if width > 0.0
-                            && height > 0.0
-                            && !renderer.has_image("__system_wallpaper__")
-                        {
-                            crate::jni::bridge::request_system_wallpaper_async(
-                                width as u32,
-                                height as u32,
-                            );
-                        }
-
-                        while let Some(res) = crate::jni::bridge::poll_async_wallpaper() {
-                            renderer.load_wallpaper(&res.pixels, res.width, res.height);
-                        }
-
-                        while let Some(res) = crate::jni::bridge::poll_async_app_icon() {
-                            let image_id =
-                                format!("{}{}", obfstr!("app-icon://"), res.package_name);
-                            renderer.load_image(&image_id, &res.pixels, res.width, res.height);
-                        }
-
-                        const MAX_TEXTURE_UPLOADS_PER_FRAME: usize = 4;
-                        for res in
-                            crate::image_loader::poll_async_images(MAX_TEXTURE_UPLOADS_PER_FRAME)
-                        {
-                            if res.is_valid() {
-                                renderer.load_image(&res.src, &res.pixels, res.width, res.height);
-                                if !res.id.is_empty() && res.id != res.src {
-                                    renderer.load_image(
-                                        &res.id,
-                                        &res.pixels,
-                                        res.width,
-                                        res.height,
+                            if let Some(ref mut egl) = egl_state {
+                                if let Err(e) = egl.bind_window(ptr as *mut std::ffi::c_void) {
+                                    dev_err!(
+                                        "{}: {e}",
+                                        obfstr!("[EGL Error] Failed to bind window")
                                     );
+                                } else {
+                                    dev_log!(
+                                        "{}",
+                                        obfstr!("[EGL] Window successfully bound to EGL")
+                                    );
+                                    is_window_bound = true;
                                 }
                             }
                         }
-
-                        renderer.begin_frame(width, height);
-
-                        if !current_state.shaders_warmed_up {
-                            renderer.warm_up_shaders();
-                            if let Ok(mut rs) = shared_render_state.write() {
-                                let mut updated = (**rs).clone();
-                                updated.shaders_warmed_up = true;
-                                *rs = Arc::new(updated);
+                        RenderMessage::TerminateWindow(ack) => {
+                            if let Some(ref mut egl) = egl_state {
+                                egl.unbind();
+                            }
+                            is_window_bound = false;
+                            if let Some(ch) = ack {
+                                let _ = ch.send(());
                             }
                         }
-
-                        renderer.clear(0x0000_0000);
-                        renderer.draw_wallpaper(width, height);
-
-                        #[allow(unused_variables)]
-                        let rendered_nodes = draw_ui(
-                            renderer,
-                            &current_state.root_element,
-                            &current_state.layout_tree,
-                            &current_state.metrics,
-                            &current_state.style_map,
-                            &current_state.data_map,
-                            &current_state.transition_manager,
-                            1.0,
-                            0.0,
-                            0.0,
-                        );
-
-                        let mut layout_rects = std::collections::HashMap::new();
-                        collect_layout_rects(&current_state.layout_tree, &mut layout_rects);
-                        if let Ok(mut reg) = pkg_registry.write() {
-                            reg.render_widgets(renderer, &layout_rects, None);
-                        }
-
-                        #[cfg(feature = "devkit")]
-                        {
-                            if let Ok(prof) = profiler.lock() {
-                                sniffer_core::profiler::render_devkit_debug_overlays(
-                                    renderer,
-                                    &prof,
-                                    &current_state.root_element,
-                                    &current_state.layout_tree,
-                                );
+                        RenderMessage::Destroy => {
+                            if let Ok(mut reg) = pkg_registry.write() {
+                                reg.unload_all();
                             }
+                            return;
                         }
-
-                        renderer.end_frame();
-                        #[cfg(feature = "devkit")]
-                        let draw_end = std::time::Instant::now();
-
-                        egl.swap_buffers();
-                        #[cfg(feature = "devkit")]
-                        let swap_end = std::time::Instant::now();
-
-                        #[cfg(feature = "devkit")]
-                        if let Ok(mut prof) = profiler.lock() {
-                            let total_nodes =
-                                sniffer_core::profiler::count_elements(&current_state.root_element);
-                            prof.record_entities(rendered_nodes, total_nodes);
-                            prof.record_frame(render_start, render_start, draw_end, swap_end);
-                        }
+                        _ => {}
                     }
                 }
-            } else {
-                std::thread::sleep(Duration::from_millis(16));
+                continue;
+            }
+
+            if let Some(ref mut egl) = egl_state {
+                if let Some(ref mut renderer) = egl.renderer {
+                    if let Ok(mut q) = action_queue.lock() {
+                        let mut unhandled = Vec::new();
+
+                        for action in q.drain(..) {
+                            match action {
+                                Action::LoadImage { id, src } => {
+                                    if let Some(pkg_name) = src.strip_prefix(obfstr!("app-icon://"))
+                                    {
+                                        crate::jni::bridge::request_async_app_icon(pkg_name);
+                                    } else {
+                                        crate::image_loader::request_async_image(
+                                            crate::image_loader::ImageLoadRequest::new(id, src),
+                                        );
+                                    }
+                                }
+                                _ => {
+                                    unhandled.push(action);
+                                }
+                            }
+                        }
+
+                        if !unhandled.is_empty() {
+                            *q = unhandled;
+                        }
+                    }
+
+                    let current_state = shared_render_state.read().unwrap().clone();
+                    let width = current_state.metrics.physical_width;
+                    let height = current_state.metrics.physical_height;
+
+                    if width > 0.0 && height > 0.0 && !renderer.has_image("__system_wallpaper__") {
+                        crate::jni::bridge::request_system_wallpaper_async(
+                            width as u32,
+                            height as u32,
+                        );
+                    }
+
+                    while let Some(res) = crate::jni::bridge::poll_async_wallpaper() {
+                        renderer.load_wallpaper(&res.pixels, res.width, res.height);
+                        needs_draw = true;
+                    }
+
+                    const MAX_APP_ICONS_PER_FRAME: usize = 4;
+                    let mut icon_uploads = 0;
+                    while icon_uploads < MAX_APP_ICONS_PER_FRAME
+                        && let Some(res) = crate::jni::bridge::poll_async_app_icon()
+                    {
+                        let image_id = format!("{}{}", obfstr!("app-icon://"), res.package_name);
+                        renderer.load_image(&image_id, &res.pixels, res.width, res.height);
+                        needs_draw = true;
+                        icon_uploads += 1;
+                    }
+
+                    const MAX_TEXTURE_UPLOADS_PER_FRAME: usize = 4;
+                    for res in crate::image_loader::poll_async_images(MAX_TEXTURE_UPLOADS_PER_FRAME)
+                    {
+                        if res.is_valid() {
+                            renderer.load_image(&res.src, &res.pixels, res.width, res.height);
+                            if !res.id.is_empty() && res.id != res.src {
+                                renderer.load_image(&res.id, &res.pixels, res.width, res.height);
+                            }
+                            needs_draw = true;
+                        }
+                    }
+
+                    let is_animating = current_state.transition_manager.is_animating();
+                    let state_changed = current_state.version != last_rendered_version;
+                    let needs_warmup = !current_state.shaders_warmed_up;
+
+                    if state_changed || is_animating || needs_warmup {
+                        needs_draw = true;
+                    }
+
+                    if !needs_draw {
+                        if let Ok(msg) = render_rx.recv_timeout(Duration::from_millis(16)) {
+                            match msg {
+                                RenderMessage::RequestRedraw => {
+                                    needs_draw = true;
+                                }
+                                RenderMessage::TerminateWindow(ack) => {
+                                    pending_ack = ack;
+                                    is_window_bound = false;
+                                }
+                                RenderMessage::Destroy => {
+                                    if let Ok(mut reg) = pkg_registry.write() {
+                                        reg.unload_all();
+                                    }
+                                    return;
+                                }
+                                _ => {}
+                            }
+                        }
+                        if !is_window_bound || !needs_draw {
+                            continue;
+                        }
+                    }
+
+                    #[allow(unused_variables)]
+                    let render_start = std::time::Instant::now();
+                    last_rendered_version = current_state.version;
+
+                    renderer.begin_frame(width, height);
+
+                    if needs_warmup {
+                        renderer.warm_up_shaders();
+                        if let Ok(mut rs) = shared_render_state.write() {
+                            let mut updated = (**rs).clone();
+                            updated.shaders_warmed_up = true;
+                            *rs = Arc::new(updated);
+                        }
+                    }
+
+                    renderer.clear(0x0000_0000);
+                    renderer.draw_wallpaper(width, height);
+
+                    #[allow(unused_variables)]
+                    let rendered_nodes = draw_ui(
+                        renderer,
+                        &current_state.root_element,
+                        &current_state.layout_tree,
+                        &current_state.metrics,
+                        &current_state.style_map,
+                        &current_state.data_map,
+                        &current_state.transition_manager,
+                        1.0,
+                        0.0,
+                        0.0,
+                    );
+
+                    let mut layout_rects = std::collections::HashMap::new();
+                    collect_layout_rects(&current_state.layout_tree, &mut layout_rects);
+                    if let Ok(mut reg) = pkg_registry.write() {
+                        reg.render_widgets(renderer, &layout_rects, None);
+                    }
+
+                    #[cfg(feature = "devkit")]
+                    {
+                        if let Ok(prof) = profiler.lock() {
+                            sniffer_core::profiler::render_devkit_debug_overlays(
+                                renderer,
+                                &prof,
+                                &current_state.root_element,
+                                &current_state.layout_tree,
+                            );
+                        }
+                    }
+
+                    renderer.end_frame();
+                    #[cfg(feature = "devkit")]
+                    let draw_end = std::time::Instant::now();
+
+                    egl.swap_buffers();
+                    #[cfg(feature = "devkit")]
+                    let swap_end = std::time::Instant::now();
+
+                    #[cfg(feature = "devkit")]
+                    if let Ok(mut prof) = profiler.lock() {
+                        let total_nodes =
+                            sniffer_core::profiler::count_elements(&current_state.root_element);
+                        prof.record_entities(rendered_nodes, total_nodes);
+                        prof.record_frame(render_start, render_start, draw_end, swap_end);
+                    }
+                }
             }
         }
     })

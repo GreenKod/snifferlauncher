@@ -1,9 +1,55 @@
 // Dock State & Essential Apps Matching Service
 const ESSENTIAL_APPS_CONFIG = [
-    { id: "phone", name: "Telefon", iconLetter: "T", color: "#22C55E", keywords: ["dialer", "phone", "telefon", "contacts", "rehber"] },
-    { id: "messages", name: "Mesajlar", iconLetter: "M", color: "#3B82F6", keywords: ["messaging", "mms", "mesaj", "message", "sms", "chat"] },
-    { id: "camera", name: "Kamera", iconLetter: "K", color: "#EC4899", keywords: ["camera", "kamera", "camera2"] },
-    { id: "settings", name: "Ayarlar", iconLetter: "A", color: "#F59E0B", keywords: ["settings", "ayar", "setting"] }
+    {
+        id: "phone",
+        name: "Telefon",
+        iconLetter: "T",
+        color: "#22C55E",
+        preferredPackages: [
+            "com.sh.smart.caller",
+            "com.google.android.dialer",
+            "com.samsung.android.dialer",
+            "com.android.dialer"
+        ],
+        keywords: ["dialer", "phone", "telefon", "caller", "contacts", "rehber"]
+    },
+    {
+        id: "messages",
+        name: "Mesajlar",
+        iconLetter: "M",
+        color: "#3B82F6",
+        preferredPackages: [
+            "com.google.android.apps.messaging",
+            "com.transsion.smartmessage",
+            "com.samsung.android.messaging",
+            "com.android.mms"
+        ],
+        keywords: ["messaging", "mms", "mesaj", "message", "sms"],
+        excludeKeywords: ["chatgpt", "deepseek", "kimi", "openai", "copilot", "claude"]
+    },
+    {
+        id: "camera",
+        name: "Kamera",
+        iconLetter: "K",
+        color: "#EC4899",
+        preferredPackages: [
+            "com.transsion.camera",
+            "com.google.android.GoogleCamera",
+            "com.sec.android.app.camera",
+            "com.android.camera"
+        ],
+        keywords: ["camera", "kamera", "camera2"]
+    },
+    {
+        id: "settings",
+        name: "Ayarlar",
+        iconLetter: "A",
+        color: "#F59E0B",
+        preferredPackages: [
+            "com.android.settings"
+        ],
+        keywords: ["settings", "ayar", "setting"]
+    }
 ];
 
 const DEFAULT_ESSENTIAL_APPS = ESSENTIAL_APPS_CONFIG.map(function(cfg) {
@@ -115,17 +161,39 @@ function refreshEssentialApps() {
         for (const config of ESSENTIAL_APPS_CONFIG) {
             let foundApp = null;
 
-            for (const app of allApps) {
-                const pkgLower = (app.package_name || "").toLowerCase();
-                const nameLower = (app.name || "").toLowerCase();
+            // 1. Try preferred package match first
+            if (config.preferredPackages) {
+                for (const prefPkg of config.preferredPackages) {
+                    const match = allApps.find(function(a) {
+                        return (a.package_name || "").toLowerCase() === prefPkg.toLowerCase();
+                    });
+                    if (match) {
+                        foundApp = match;
+                        break;
+                    }
+                }
+            }
 
-                const isMatch = config.keywords.some(function(kw) {
-                    return pkgLower.includes(kw) || nameLower.includes(kw);
-                });
+            // 2. Fall back to keywords
+            if (!foundApp) {
+                for (const app of allApps) {
+                    const pkgLower = (app.package_name || "").toLowerCase();
+                    const nameLower = (app.name || "").toLowerCase();
 
-                if (isMatch) {
-                    foundApp = app;
-                    break;
+                    if (config.excludeKeywords && config.excludeKeywords.some(function(ex) {
+                        return pkgLower.includes(ex) || nameLower.includes(ex);
+                    })) {
+                        continue;
+                    }
+
+                    const isMatch = config.keywords.some(function(kw) {
+                        return pkgLower.includes(kw) || nameLower.includes(kw);
+                    });
+
+                    if (isMatch) {
+                        foundApp = app;
+                        break;
+                    }
                 }
             }
 
