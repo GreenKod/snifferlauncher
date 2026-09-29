@@ -107,23 +107,20 @@ function PageIndicatorDots(totalPages, currentPage, isLandscape) {
     if (totalPages <= 1) return null;
 
     const dots = [];
+    const activePage = typeof currentPage === "number" ? currentPage : 0;
+
     for (let p = 0; p < totalPages; p++) {
-        const isActive = p === currentPage;
-        if (isLandscape) {
-            dots.push(Container("page_dot_" + p, {
-                width: px(vmin(1.6)),
-                height: px(isActive ? vmin(3.6) : vmin(1.6)),
-                border_radius: vmin(0.8),
-                background_color: hex(isActive ? "#00E5FF" : "#55FFFFFF"),
-            }, []));
-        } else {
-            dots.push(Container("page_dot_" + p, {
-                width: px(isActive ? vmin(3.6) : vmin(1.6)),
-                height: px(vmin(1.6)),
-                border_radius: vmin(0.8),
-                background_color: hex(isActive ? "#00E5FF" : "#55FFFFFF"),
-            }, []));
-        }
+        const isActive = (p === activePage);
+        const dotWidth = isActive ? (isLandscape ? vmin(1.6) : vmin(3.6)) : vmin(1.6);
+        const dotHeight = isActive ? (isLandscape ? vmin(3.6) : vmin(1.6)) : vmin(1.6);
+        const dotBg = isActive ? hex("#00E5FF") : hex("#55FFFFFF");
+
+        dots.push(Container("page_dot_" + p, {
+            width: px(dotWidth),
+            height: px(dotHeight),
+            border_radius: vmin(0.8),
+            background_color: dotBg,
+        }, []));
     }
 
     if (isLandscape) {

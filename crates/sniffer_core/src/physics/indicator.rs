@@ -26,7 +26,9 @@ fn update_indicator_element_tree(
                 let mut changed = false;
                 for (p, child_el) in children.iter_mut().enumerate() {
                     let dist = (page_float - p as f32).abs();
-                    let activity = (1.0 - dist).clamp(0.0, 1.0);
+                    let raw_activity = (1.0 - dist).clamp(0.0, 1.0);
+                    // Hermite smoothstep for fluid visual transition without linear harshness
+                    let activity = raw_activity * raw_activity * (3.0 - 2.0 * raw_activity);
 
                     if let Element::Container {
                         style: dot_style, ..
@@ -78,12 +80,6 @@ fn update_indicator_element_tree(
                 return Some(changed);
             }
         }
-    } else if let Element::ScrollView { children, .. } = element {
-        for child in children {
-            if let Some(changed) = update_indicator_element_tree(child, page_float, vmin_px) {
-                return Some(changed);
-            }
-        }
     }
     None
 }
@@ -108,33 +104,48 @@ fn update_indicator_layout_tree(
 
         let gap = 1.2 * vmin_px;
         let dot_base = 1.6 * vmin_px;
+        let mut layout_changed = false;
 
         if is_landscape {
             let mut total_h = 0.0_f32;
             let mut dot_heights = Vec::with_capacity(count);
             for p in 0..count {
                 let dist = (page_float - p as f32).abs();
-                let activity = (1.0 - dist).clamp(0.0, 1.0);
+                let raw_activity = (1.0 - dist).clamp(0.0, 1.0);
+                let activity = raw_activity * raw_activity * (3.0 - 2.0 * raw_activity);
                 let h = (1.6 + 2.0 * activity) * vmin_px;
                 dot_heights.push((h, activity));
                 total_h += h;
             }
             total_h += (count.saturating_sub(1) as f32) * gap;
 
+            let center_x = layout_node.rect.x + (layout_node.rect.width - dot_base) * 0.5;
             let mut cur_y = layout_node.rect.y + (layout_node.rect.height - total_h) * 0.5;
             for (p, child) in layout_node.children.iter_mut().enumerate() {
                 let (h, activity) = dot_heights[p];
-                child.rect.y = cur_y;
-                child.rect.width = dot_base;
-                child.rect.height = h;
+                if (child.rect.x - center_x).abs() > 0.05
+                    || (child.rect.y - cur_y).abs() > 0.05
+                    || (child.rect.width - dot_base).abs() > 0.05
+                    || (child.rect.height - h).abs() > 0.05
+                {
+                    child.rect.x = center_x;
+                    child.rect.y = cur_y;
+                    child.rect.width = dot_base;
+                    child.rect.height = h;
+                    layout_changed = true;
+                }
                 cur_y += h + gap;
 
                 let a = (0x55 as f32 + (0xFF - 0x55) as f32 * activity).round() as u32;
                 let r = (0xFF as f32 * (1.0 - activity)).round() as u32;
                 let g = (0xFF as f32 - (0xFF - 0xE5) as f32 * activity).round() as u32;
                 let b = 0xFF_u32;
+                let new_bg = Some((a << 24) | (r << 16) | (g << 8) | b);
                 if let Element::Container { style, .. } = &mut child.element {
-                    style.background_color = Some((a << 24) | (r << 16) | (g << 8) | b);
+                    if style.background_color != new_bg {
+                        style.background_color = new_bg;
+                        layout_changed = true;
+                    }
                     style.transform.scale = 1.0;
                 }
             }
@@ -143,7 +154,8 @@ fn update_indicator_layout_tree(
             let mut dot_widths = Vec::with_capacity(count);
             for p in 0..count {
                 let dist = (page_float - p as f32).abs();
-                let activity = (1.0 - dist).clamp(0.0, 1.0);
+                let raw_activity = (1.0 - dist).clamp(0.0, 1.0);
+                let activity = raw_activity * raw_activity * (3.0 - 2.0 * raw_activity);
                 let w = (1.6 + 2.0 * activity) * vmin_px;
                 dot_widths.push((w, activity));
                 total_w += w;
@@ -151,24 +163,37 @@ fn update_indicator_layout_tree(
             total_w += (count.saturating_sub(1) as f32) * gap;
 
             let mut cur_x = layout_node.rect.x + (layout_node.rect.width - total_w) * 0.5;
+            let center_y = layout_node.rect.y + (layout_node.rect.height - dot_base) * 0.5;
             for (p, child) in layout_node.children.iter_mut().enumerate() {
                 let (w, activity) = dot_widths[p];
-                child.rect.x = cur_x;
-                child.rect.width = w;
-                child.rect.height = dot_base;
+                if (child.rect.x - cur_x).abs() > 0.05
+                    || (child.rect.y - center_y).abs() > 0.05
+                    || (child.rect.width - w).abs() > 0.05
+                    || (child.rect.height - dot_base).abs() > 0.05
+                {
+                    child.rect.x = cur_x;
+                    child.rect.y = center_y;
+                    child.rect.width = w;
+                    child.rect.height = dot_base;
+                    layout_changed = true;
+                }
                 cur_x += w + gap;
 
                 let a = (0x55 as f32 + (0xFF - 0x55) as f32 * activity).round() as u32;
                 let r = (0xFF as f32 * (1.0 - activity)).round() as u32;
                 let g = (0xFF as f32 - (0xFF - 0xE5) as f32 * activity).round() as u32;
                 let b = 0xFF_u32;
+                let new_bg = Some((a << 24) | (r << 16) | (g << 8) | b);
                 if let Element::Container { style, .. } = &mut child.element {
-                    style.background_color = Some((a << 24) | (r << 16) | (g << 8) | b);
+                    if style.background_color != new_bg {
+                        style.background_color = new_bg;
+                        layout_changed = true;
+                    }
                     style.transform.scale = 1.0;
                 }
             }
         }
-        return true;
+        return layout_changed;
     }
 
     for child in &mut layout_node.children {

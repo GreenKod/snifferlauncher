@@ -194,11 +194,16 @@ pub fn update_and_render_state(
                     }
 
                     let vmin_px = width.min(height) / 100.0;
+                    let target_page_float = if phys.snap_just_completed {
+                        clamped_page as f32
+                    } else {
+                        page_float
+                    };
                     let layout_mut = Arc::make_mut(&mut layout_tree);
                     let indicator_changed = physics_sync::update_indicator_dots_tracking(
                         root_element,
                         Some(layout_mut),
-                        page_float,
+                        target_page_float,
                         vmin_px,
                     );
 
