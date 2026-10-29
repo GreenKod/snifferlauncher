@@ -27,8 +27,27 @@ function Image(id, src, style) {
     return { Image: { id: id, src: String(src), style: style || {} } };
 }
 
-function ScrollView(id, opts, children) {
-    opts = opts || {};
+function ScrollView(idOrOpts, opts, children) {
+    let id = idOrOpts;
+    if (idOrOpts && typeof idOrOpts === "object" && !Array.isArray(idOrOpts)) {
+        opts = idOrOpts;
+        id = opts.id !== undefined ? opts.id : null;
+        children = opts.children !== undefined ? opts.children : (opts || []);
+    } else {
+        opts = opts || {};
+        if (children === undefined && Array.isArray(opts.children)) {
+            children = opts.children;
+        }
+    }
+
+    let dismissCfg = opts.dismiss_config !== undefined ? opts.dismiss_config : null;
+    if (dismissCfg && typeof dismissCfg === "object") {
+        dismissCfg = Object.assign({}, dismissCfg);
+        if (dismissCfg.threshold === undefined && dismissCfg.threshold_dp !== undefined) {
+            dismissCfg.threshold = dismissCfg.threshold_dp;
+        }
+    }
+
     return {
         ScrollView: {
             id: id,
@@ -43,6 +62,7 @@ function ScrollView(id, opts, children) {
             snap_x: opts.snap_x !== undefined ? opts.snap_x : null,
             snap_y: opts.snap_y !== undefined ? opts.snap_y : null,
             rubber_band: opts.rubber_band !== undefined ? opts.rubber_band : null,
+            dismiss_config: dismissCfg,
             page_count: opts.page_count !== undefined ? opts.page_count : null,
             on_snap: opts.on_snap !== undefined ? opts.on_snap : null,
         },

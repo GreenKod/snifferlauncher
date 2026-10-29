@@ -1,33 +1,33 @@
 {
-  "id": "com.sniffer.defaultui",
-  "name": "Default Interface",
-  "version": "1.0.0",
-  "isMaster": true,
-  "main": "main.js",
-  "scripts": [
-    "state.js",
-    "components/layout.js",
-    "components/app_grid.js",
-    "components/app_drawer.js",
-    "main.js"
-  ],
-  "preload": [
-    "../framework/sniffer_ui.js"
-  ],
-  "permissions": [
-    "plugin.permission.UI",
-    "plugin.permission.IPC",
-    "plugin.permission.INPUT",
-    "android.permission.QUERY_ALL_PACKAGES",
-    "android.permission.LAUNCH_APP"
-  ],
-  "maxMemoryMb": 16,
-  "checksums": {
-    "../framework/sniffer_ui.js": "ec2c17830ac7f67dda00a7e36e6058e54ff43c17b3b98e80a650f64461f9c4bb",
-    "state.js": "9e658bc0a4be6efa817828f5d9526656e877473b2f96d0e9c2cd4f0230941892",
-    "components/layout.js": "b75a27b3e7741863a2b01d3c9a20f94fde9dae2f3e4280d0077bc4162f7d17a7",
-    "components/app_grid.js": "a0474b453c492e9baca9911df4fe435a5677172bb00829b4c10dbd9a82ef1f87",
-    "components/app_drawer.js": "bbc8bb403c5327c113043bdcebe5745786205a79fb8159d733e2f1726c359905",
-    "main.js": "ba2ee145cbc598563a56daec8cc44cd8b1ddd4f681d6fb9f1463af7f41292f2f"
-  }
+    "id": "com.sniffer.defaultui",
+    "name": "Default Interface",
+    "version": "1.0.0",
+    "isMaster": true,
+    "main": "main.js",
+    "scripts": [
+        "state.js",
+        "components/layout.js",
+        "components/app_grid.js",
+        "components/app_drawer.js",
+        "main.js"
+    ],
+    "preload": [
+        "../framework/sniffer_ui.js"
+    ],
+    "permissions": [
+        "plugin.permission.UI",
+        "plugin.permission.IPC",
+        "plugin.permission.INPUT",
+        "android.permission.QUERY_ALL_PACKAGES",
+        "android.permission.LAUNCH_APP"
+    ],
+    "maxMemoryMb": 16,
+    "checksums": {
+        "../framework/sniffer_ui.js": "a4d869720ecca26464ec07d701df85f22b7a9d98490283ffd63d107d908c3b2e",
+        "state.js": "cfa0a4f3f6a88cd65b0f36ccb966004d57f57948e4e93e0755b56ee7710e0d43",
+        "components/layout.js": "b75a27b3e7741863a2b01d3c9a20f94fde9dae2f3e4280d0077bc4162f7d17a7",
+        "components/app_grid.js": "a0474b453c492e9baca9911df4fe435a5677172bb00829b4c10dbd9a82ef1f87",
+        "components/app_drawer.js": "b7817c1cf39b3015d2d0c37ad3f57ae0c865aeda37a4630b1739cf2daa4d6e5f",
+        "main.js": "3bd2e2e137929163c41ff161bcc9f8e2db65ee53e1fee63f97d59f33e05b5699"
+    }
 }

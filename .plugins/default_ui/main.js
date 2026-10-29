@@ -169,6 +169,9 @@ function onPageChanged(pageData) {
 }
 
 function matchTargetId(idStr, targets) {
+    if (typeof SnifferUI !== "undefined" && typeof SnifferUI.matchId === "function") {
+        return SnifferUI.matchId(idStr, targets);
+    }
     if (!idStr) return false;
     for (let i = 0; i < targets.length; i++) {
         const t = targets[i];
@@ -176,6 +179,23 @@ function matchTargetId(idStr, targets) {
         if (typeof host_hash === "function" && idStr === String(host_hash(t))) return true;
     }
     return false;
+}
+
+if (typeof SnifferUI !== "undefined") {
+    if (typeof SnifferUI.onBack === "function") {
+        SnifferUI.onBack(function() {
+            return state.onBack();
+        });
+    }
+    if (typeof SnifferUI.onDismiss === "function") {
+        SnifferUI.onDismiss("app_drawer_dismiss", function() {
+            if (state.currentFloor === "bottom") {
+                state.goToTopFloor();
+                return true;
+            }
+            return false;
+        });
+    }
 }
 
 globalThis.onEvent = function (eventJsonString) {
@@ -192,6 +212,12 @@ globalThis.onEvent = function (eventJsonString) {
     }
 
     const e = JSON.parse(eventJsonString);
+
+    if (typeof SnifferUI !== "undefined" && typeof SnifferUI.dispatchEvent === "function") {
+        if (SnifferUI.dispatchEvent(e)) {
+            return "[]";
+        }
+    }
 
     if (e.type === "WindowResized") {
         // Taffy layout engine calculates dynamic sizes on forceUpdate
@@ -215,8 +241,14 @@ globalThis.onEvent = function (eventJsonString) {
         return "[]";
     }
 
-    // SwipeDown: Go up to top floor (Home Screen)
-    if (e.type === "SwipeDown") {
+    // Back navigation event
+    if (e.type === "Back") {
+        state.onBack();
+        return "[]";
+    }
+
+    // SwipeDown or ScrollDismiss: Go up to top floor (Home Screen)
+    if (e.type === "SwipeDown" || e.type === "ScrollDismiss") {
         if (state.currentFloor === "bottom") {
             state.goToTopFloor();
         }

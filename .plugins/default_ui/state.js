@@ -72,6 +72,14 @@ class FloorManager {
             this.goToBottomFloor(onOpen);
         }
     }
+
+    onBack() {
+        if (this.currentFloor === "bottom") {
+            this.goToTopFloor();
+            return true;
+        }
+        return false;
+    }
 }
 
 // =============================================================================
@@ -303,6 +311,7 @@ let state = {
     goToTopFloor() { return this.floorManager.goToTopFloor(); },
     goToBottomFloor() { return this.floorManager.goToBottomFloor(() => this.rebuildCardHashCache()); },
     toggleFloor() { return this.floorManager.toggleFloor(() => this.rebuildCardHashCache()); },
+    onBack() { return this.floorManager.onBack(); },
 
     // AppRepository Delegation
     appRepository,

@@ -1,7 +1,7 @@
 fn main() {
     #[cfg(not(target_os = "android"))]
     {
-        if let Err(e) = sniffer_platform_desktop::run() {
+        if let Err(e) = sniffer_engine::run_desktop() {
             eprintln!("Error running Sniffer desktop: {e}");
             std::process::exit(1);
         }

@@ -1,5 +1,5 @@
 // =============================================================================
-// SnifferUI — React-like mini framework for SnifferLauncher plugins
+// SnifferUI — Generic Declarative UI Framework for SnifferEngine
 // =============================================================================
 
 const SnifferUI = (function () {
@@ -7,6 +7,8 @@ const SnifferUI = (function () {
     let _state = {};
     let _lastState = null;
     let _lastJson = null;
+    let _eventHandlers = {};
+    let _dismissHandlers = {};
 
     function _snapshotState(state) {
         if (!state || typeof state !== "object") return {};
@@ -69,6 +71,17 @@ const SnifferUI = (function () {
         host_set_ui(json);
     }
 
+    function _matchId(idStr, targets) {
+        if (!idStr) return false;
+        const list = Array.isArray(targets) ? targets : [targets];
+        for (let i = 0; i < list.length; i++) {
+            const t = list[i];
+            if (idStr === t) return true;
+            if (typeof host_hash === "function" && idStr === String(host_hash(t))) return true;
+        }
+        return false;
+    }
+
     return {
         start(renderFn, initialState) {
             _renderFn  = renderFn;
@@ -92,8 +105,84 @@ const SnifferUI = (function () {
         forceUpdate(force) {
             _commit(force === true);
         },
+
+        matchId(idStr, targets) {
+            return _matchId(idStr, targets);
+        },
+
+        on(eventType, targetOrHandler, maybeHandler) {
+            if (!eventType) return;
+            let handler = null;
+            if (typeof targetOrHandler === "function") {
+                handler = targetOrHandler;
+            } else if (targetOrHandler && typeof maybeHandler === "function") {
+                handler = function (e) {
+                    if (_matchId(e && e.id, targetOrHandler)) {
+                        return maybeHandler(e);
+                    }
+                    return false;
+                };
+            }
+            if (!handler) return;
+            if (!_eventHandlers[eventType]) {
+                _eventHandlers[eventType] = [];
+            }
+            _eventHandlers[eventType].push(handler);
+        },
+
+        onBack(handler) {
+            this.on("Back", handler);
+        },
+
+        onDismiss(actionOrHandler, maybeHandler) {
+            if (typeof actionOrHandler === "function") {
+                this.on("ScrollDismiss", actionOrHandler);
+            } else if (typeof actionOrHandler === "string" && typeof maybeHandler === "function") {
+                if (!_dismissHandlers[actionOrHandler]) {
+                    _dismissHandlers[actionOrHandler] = [];
+                }
+                _dismissHandlers[actionOrHandler].push(maybeHandler);
+            }
+        },
+
+        dispatchEvent(eventOrJson) {
+            const e = typeof eventOrJson === "string" ? JSON.parse(eventOrJson) : eventOrJson;
+            if (!e || !e.type) return false;
+
+            if (e.type === "ScrollDismiss" && e.action && _dismissHandlers[e.action]) {
+                const actionList = _dismissHandlers[e.action];
+                for (let i = 0; i < actionList.length; i++) {
+                    if (actionList[i](e) === true) return true;
+                }
+            }
+
+            const handlers = _eventHandlers[e.type];
+            if (handlers) {
+                for (let i = 0; i < handlers.length; i++) {
+                    if (handlers[i](e) === true) return true;
+                }
+            }
+
+            if (e.type === "Back" && _state && typeof _state.onBack === "function") {
+                if (_state.onBack(e) === true) return true;
+            }
+
+            if (e.type === "WindowResized") {
+                _commit(true);
+                return true;
+            }
+
+            return false;
+        },
     };
 })();
+
+if (typeof globalThis.onEvent !== "function") {
+    globalThis.onEvent = function (eventJsonString) {
+        SnifferUI.dispatchEvent(eventJsonString);
+        return "[]";
+    };
+}
 // =============================================================================
 // Channel Subscription Helper System
 // =============================================================================
@@ -226,8 +315,27 @@ function Image(id, src, style) {
     return { Image: { id: id, src: String(src), style: style || {} } };
 }
 
-function ScrollView(id, opts, children) {
-    opts = opts || {};
+function ScrollView(idOrOpts, opts, children) {
+    let id = idOrOpts;
+    if (idOrOpts && typeof idOrOpts === "object" && !Array.isArray(idOrOpts)) {
+        opts = idOrOpts;
+        id = opts.id !== undefined ? opts.id : null;
+        children = opts.children !== undefined ? opts.children : (opts || []);
+    } else {
+        opts = opts || {};
+        if (children === undefined && Array.isArray(opts.children)) {
+            children = opts.children;
+        }
+    }
+
+    let dismissCfg = opts.dismiss_config !== undefined ? opts.dismiss_config : null;
+    if (dismissCfg && typeof dismissCfg === "object") {
+        dismissCfg = Object.assign({}, dismissCfg);
+        if (dismissCfg.threshold === undefined && dismissCfg.threshold_dp !== undefined) {
+            dismissCfg.threshold = dismissCfg.threshold_dp;
+        }
+    }
+
     return {
         ScrollView: {
             id: id,
@@ -242,6 +350,7 @@ function ScrollView(id, opts, children) {
             snap_x: opts.snap_x !== undefined ? opts.snap_x : null,
             snap_y: opts.snap_y !== undefined ? opts.snap_y : null,
             rubber_band: opts.rubber_band !== undefined ? opts.rubber_band : null,
+            dismiss_config: dismissCfg,
             page_count: opts.page_count !== undefined ? opts.page_count : null,
             on_snap: opts.on_snap !== undefined ? opts.on_snap : null,
         },

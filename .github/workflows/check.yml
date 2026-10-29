@@ -96,7 +96,7 @@ jobs:
           cargo machete
 
       - name: Plugin Manifest & JavaScript Syntax Tests
-        run: cargo test --locked -p sniffer_plugin --test manifest_validation_tests
+        run: cargo test --locked --test launcher_ui_tests
 
       - name: Fast Workspace Compilation Sanity Check
         run: cargo check --locked --workspace

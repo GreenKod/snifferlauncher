@@ -1,5 +1,5 @@
 /**
- * SnifferLauncher Plugin Framework — TypeScript & IntelliSense Type Definitions
+ * SnifferEngine Plugin Framework — TypeScript & IntelliSense Type Definitions
  * 
  * Ambient script declaration file. No top-level export/import so all declarations
  * are placed into the global namespace for vanilla JavaScript plugins.
@@ -75,15 +75,46 @@ interface AppInfo {
     icon?: string;
 }
 
+interface ScrollDismissConfig {
+    direction: "Down" | "Up" | "Left" | "Right";
+    threshold?: number;
+    threshold_dp?: number;
+    target_container_id?: string | null;
+    action_event?: string | null;
+}
+
+interface ScrollViewOptions {
+    id?: string | null;
+    scroll_x?: number;
+    scroll_y?: number;
+    scroll_sensitivity?: number;
+    dynamic_sensitivity?: boolean;
+    momentum_scrolling?: boolean;
+    capture_drag?: boolean;
+    style?: Style;
+    children?: UIElement[];
+    snap_x?: number | null;
+    snap_y?: number | null;
+    rubber_band?: number | null;
+    dismiss_config?: ScrollDismissConfig | null;
+    page_count?: number | null;
+    on_snap?: string | null;
+}
+
 interface SnifferUIFramework {
     start(renderFn: () => UIElement, initialState?: any): void;
     getState?(): any;
     setState(patch: any): void;
     forceUpdate(force?: boolean): void;
+    matchId(idStr: string, targets: string | string[]): boolean;
+    on(eventType: string, targetOrHandler: string | string[] | ((event: UIEventData) => boolean | void), handler?: (event: UIEventData) => boolean | void): void;
+    onBack(handler: (event: UIEventData) => boolean | void): void;
+    onDismiss(actionOrHandler: string | ((event: UIEventData) => boolean | void), handler?: (event: UIEventData) => boolean | void): void;
+    dispatchEvent(eventOrJson: UIEventData | string): boolean;
 }
 
 interface UIEventData {
-    type: "Click" | "Hover" | "HoverEnd" | "PointerDown" | "PointerUp" | "TextInput" | "Backspace" | "Scroll" | "ClickOutside";
+    type: "Click" | "Hover" | "HoverEnd" | "PointerDown" | "PointerUp" | "TextInput" | "Backspace" | "Scroll" | "ClickOutside" | "WindowResized" | "PageSnapped" | "SwipeUp" | "SwipeDown" | "Back" | "ScrollDismiss";
     id?: string;
     width?: number;
     height?: number;
@@ -93,6 +124,11 @@ interface UIEventData {
     dx?: number;
     dy?: number;
     max_y?: number;
+    page?: number;
+    widget_id?: number;
+    displacement?: number;
+    velocity?: number;
+    action?: string | null;
 }
 
 // -----------------------------------------------------------------------------
