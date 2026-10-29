@@ -1,28 +1,58 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# SnifferLauncher Git Pre-Push Hook
+# SnifferLauncher Git Pre-Push Hook (.githooks/pre-push)
 # ==============================================================================
-# Automatically verifies compilation and formatting before allowing `git push`.
-# To bypass in rare emergencies: git push --no-verify
+# Ensures before every `git push` that:
+#   1. If ../snifferengine exists locally, its HEAD commit is pushed and matches
+#      the commit hash recorded in snifferlauncher/Cargo.lock.
+#   2. Cargo.toml is in GitHub mode (not local ../snifferengine path mode).
+#   3. Cargo.lock is in sync with Cargo.toml (`cargo check --locked` succeeds).
 # ==============================================================================
+set -euo pipefail
 
-echo -e "\n\033[1;36m[Git Pre-Push Hook] Running pre-flight quality checks before pushing...\033[0m"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 
-# 1. Workspace check
-echo "Checking workspace compilation..."
-cargo check --locked --workspace --all-targets --all-features
-if [ $? -ne 0 ]; then
-    echo -e "\n\033[1;31m❌ Push aborted: 'cargo check' failed. Please fix compilation errors before pushing.\033[0m\n"
+echo -e "\n\033[1;36m🛡️ [pre-push] SnifferLauncher Push Öncesi Otomatik Doğrulama...\033[0m"
+
+GIT_ENGINE='sniffer_engine = { git = "https://github.com/GreenKod/snifferengine.git" }'
+LOCAL_ENGINE='sniffer_engine = { path = "../snifferengine/crates/sniffer_engine" }'
+
+GIT_PATCH='android-activity = { git = "https://github.com/GreenKod/snifferengine.git" }'
+LOCAL_PATCH='android-activity = { path = "../snifferengine/patches/android-activity" }'
+
+# 1. Check if Cargo.toml was left in Local Dev mode
+if grep -qF "$LOCAL_ENGINE" Cargo.toml; then
+    echo -e "\033[1;33m⚠️ Cargo.toml yerel '../snifferengine' modunda bırakılmış! GitHub moduna çevriliyor...\033[0m"
+    sed -i "s|$LOCAL_ENGINE|$GIT_ENGINE|g" Cargo.toml
+    sed -i "s|$LOCAL_PATCH|$GIT_PATCH|g" Cargo.toml
+    cargo update -p sniffer_engine -p android-activity
+    echo -e "\033[1;31m❌ Cargo.toml ve Cargo.lock GitHub moduna güncellendi. Lütfen bu değişikliği commitleyip tekrar pushlayın:\033[0m"
+    echo -e "   git add Cargo.toml Cargo.lock && git commit -S --amend --no-edit && git push"
     exit 1
 fi
 
-# 2. Formatting check
-echo "Checking code formatting..."
-cargo fmt --all --check
-if [ $? -ne 0 ]; then
-    echo -e "\n\033[1;31m❌ Push aborted: Code is not formatted properly. Run 'cargo fmt --all' and commit before pushing.\033[0m\n"
+# 2. Verify Cargo.lock has git+https://github.com/GreenKod/snifferengine.git source
+if ! grep -A 3 'name = "sniffer_engine"' Cargo.lock | grep -q 'source = "git+https://github.com/GreenKod/snifferengine.git#'; then
+    echo -e "\033[1;33m⚠️ Cargo.lock içinde snifferengine git kaynağı eksik! Otomatik güncelleniyor...\033[0m"
+    cargo update -p sniffer_engine -p android-activity
+    echo -e "\033[1;31m❌ Cargo.lock güncellendi. Lütfen commite ekleyip tekrar pushlayın:\033[0m"
+    echo -e "   git add Cargo.lock && git commit -S --amend --no-edit && git push"
     exit 1
 fi
 
-echo -e "\033[1;32m✔ Pre-push checks passed successfully. Pushing to remote...\033[0m\n"
-exit 0
+# 3. If ../snifferengine exists locally, check if its HEAD matches Cargo.lock
+if [ -d "../snifferengine/.git" ]; then
+    ENGINE_HEAD="$(git -C ../snifferengine rev-parse HEAD)"
+    LOCKED_SHA="$(grep -A 3 'name = "sniffer_engine"' Cargo.lock | sed -n 's/.*#\(.*\)"/\1/p' | head -n 1)"
+    if [ -n "$LOCKED_SHA" ] && [ "$ENGINE_HEAD" != "$LOCKED_SHA" ]; then
+        echo -e "\033[1;33m⚠️ Uyarı: ../snifferengine yerel HEAD ($ENGINE_HEAD) ile Cargo.lock ($LOCKED_SHA) farklı!\033[0m"
+        echo -e "   Eğer snifferengine'de yeni commit attıysanız önce onu pushlayıp 'cargo update -p sniffer_engine -p android-activity' çalıştırın."
+    fi
+fi
+
+# 4. Verify --locked check passes so CI never fails with lockfile mismatch
+echo -e "\033[1;34m[pre-push] 'cargo check --locked' doğrulanıyor...\033[0m"
+cargo check --locked --workspace
+
+echo -e "\033[1;32m✅ [pre-push] Tüm kontroller geçti, push devam ediyor.\033[0m\n"

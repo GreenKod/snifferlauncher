@@ -49,7 +49,7 @@ git clone https://github.com/GreenKod/snifferlauncher.git
 cd snifferlauncher
 ```
 
-> **Local Engine Development:** If you also have `snifferengine` checked out at `../snifferengine`, run `bash onDevelop.sh` to toggle `Cargo.toml` between local `path` mode and GitHub `git` mode.
+> **Local Engine Development:** If you also have `snifferengine` checked out at `../snifferengine`, run `bash scripts/onDevelop.sh` to toggle `Cargo.toml` between local `path` mode and GitHub `git` mode.
 
 ### Desktop Simulator
 

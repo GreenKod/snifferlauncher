@@ -55,6 +55,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 [[package]]
 name = "android-activity"
 version = "0.6.1"
+source = "git+https://github.com/GreenKod/snifferengine.git#427d0def03e60c10388b4efa9150f844c345ca30"
 dependencies = [
  "android-properties",
  "bitflags 2.13.1",
@@ -1380,6 +1381,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 [[package]]
 name = "pkg_perfmon"
 version = "0.1.0"
+source = "git+https://github.com/GreenKod/snifferengine.git#427d0def03e60c10388b4efa9150f844c345ca30"
 dependencies = [
  "serde_json",
  "sniffer_core",
@@ -1390,6 +1392,7 @@ dependencies = [
 [[package]]
 name = "pkg_scroll"
 version = "0.1.0"
+source = "git+https://github.com/GreenKod/snifferengine.git#427d0def03e60c10388b4efa9150f844c345ca30"
 dependencies = [
  "serde_json",
  "sniffer_core",
@@ -1875,6 +1878,7 @@ dependencies = [
 [[package]]
 name = "sniffer_core"
 version = "0.1.0"
+source = "git+https://github.com/GreenKod/snifferengine.git#427d0def03e60c10388b4efa9150f844c345ca30"
 dependencies = [
  "obfstr",
  "serde",
@@ -1886,6 +1890,7 @@ dependencies = [
 [[package]]
 name = "sniffer_engine"
 version = "0.1.0"
+source = "git+https://github.com/GreenKod/snifferengine.git#427d0def03e60c10388b4efa9150f844c345ca30"
 dependencies = [
  "android-activity",
  "sniffer_core",
@@ -1899,6 +1904,7 @@ dependencies = [
 [[package]]
 name = "sniffer_pkg"
 version = "0.1.0"
+source = "git+https://github.com/GreenKod/snifferengine.git#427d0def03e60c10388b4efa9150f844c345ca30"
 dependencies = [
  "semver",
  "serde",
@@ -1910,6 +1916,7 @@ dependencies = [
 [[package]]
 name = "sniffer_platform_android"
 version = "0.1.0"
+source = "git+https://github.com/GreenKod/snifferengine.git#427d0def03e60c10388b4efa9150f844c345ca30"
 dependencies = [
  "android-activity",
  "crossbeam-channel",
@@ -1934,6 +1941,7 @@ dependencies = [
 [[package]]
 name = "sniffer_platform_desktop"
 version = "0.1.0"
+source = "git+https://github.com/GreenKod/snifferengine.git#427d0def03e60c10388b4efa9150f844c345ca30"
 dependencies = [
  "glow",
  "glutin",
@@ -1952,6 +1960,7 @@ dependencies = [
 [[package]]
 name = "sniffer_plugin"
 version = "0.1.0"
+source = "git+https://github.com/GreenKod/snifferengine.git#427d0def03e60c10388b4efa9150f844c345ca30"
 dependencies = [
  "chrono",
  "crossbeam-channel",
@@ -1969,6 +1978,7 @@ dependencies = [
 [[package]]
 name = "sniffer_render"
 version = "0.1.0"
+source = "git+https://github.com/GreenKod/snifferengine.git#427d0def03e60c10388b4efa9150f844c345ca30"
 dependencies = [
  "glow",
  "image",

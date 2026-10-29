@@ -20,10 +20,10 @@ By default, `Cargo.toml` pulls `sniffer_engine` directly from `https://github.co
 If you are developing `snifferengine` and `snifferlauncher` simultaneously side by side (`../snifferengine`), run:
 
 ```bash
-bash onDevelop.sh
+bash scripts/onDevelop.sh
 ```
 
-Running `bash onDevelop.sh` a second time switches `Cargo.toml` back to the default GitHub `git` dependency before committing.
+Running `bash scripts/onDevelop.sh` a second time switches `Cargo.toml` back to the default GitHub `git` dependency before committing.
 
 ### Running the Desktop Simulator
 
