@@ -20,7 +20,7 @@ default = []
 devkit = ["sniffer_engine/devkit"]
 
 [dependencies]
-sniffer_engine = { path = "crates/sniffer_engine" }
+sniffer_engine = { path = "../snifferengine/crates/sniffer_engine" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6.1", features = ["native-activity"] }
@@ -66,10 +66,10 @@ lto = "fat"
 codegen-units = 1
 panic = "abort"
 
-[workspace.lints.rust]
+[lints.rust]
 warnings = "deny"
 
-[workspace.lints.clippy]
+[lints.clippy]
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
@@ -111,9 +111,6 @@ cast_possible_truncation = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"
 
-[lints]
-workspace = true
-
 [[package.metadata.android.uses_permission]]
 name = "android.permission.QUERY_ALL_PACKAGES"
 
@@ -132,19 +129,6 @@ launch_mode = "singleTask"
 state_not_needed = "true"
 clear_task_on_launch = "true"
 
-[workspace]
-members = [
-    "crates/sniffer_core",
-    "crates/sniffer_render",
-    "crates/sniffer_plugin",
-    "crates/sniffer_pkg",
-    "crates/sniffer_platform_android",
-    "crates/sniffer_platform_desktop",
-    "crates/sniffer_engine",
-    "packages/*",
-]
-exclude = [".plugins"]
-
 [[package.metadata.android.application.activity.intent_filter]]
 actions = ["android.intent.action.MAIN"]
 categories = ["android.intent.category.HOME", "android.intent.category.DEFAULT"]
@@ -154,4 +138,4 @@ actions = ["android.intent.action.MAIN"]
 categories = ["android.intent.category.LAUNCHER"]
 
 [patch.crates-io]
-android-activity = { path = "patches/android-activity" }
+android-activity = { path = "../snifferengine/patches/android-activity" }
