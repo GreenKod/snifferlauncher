@@ -6,13 +6,9 @@
 
 source:
   - 'src/**'
-  - 'crates/**'
-  - 'packages/**'
-  - 'patches/**'
+  - 'tests/**'
   - 'android/**'
-  - 'AndroidManifest.xml'
   - '.plugins/**'
-  - 'build.rs'
   - 'Cargo.toml'
   - 'Cargo.lock'
   - 'rust-toolchain.toml'
