@@ -20,7 +20,7 @@ default = []
 devkit = ["sniffer_engine/devkit"]
 
 [dependencies]
-sniffer_engine = { path = "../snifferengine/crates/sniffer_engine" }
+sniffer_engine = { git = "https://github.com/GreenKod/snifferengine.git" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6.1", features = ["native-activity"] }
@@ -138,4 +138,4 @@ actions = ["android.intent.action.MAIN"]
 categories = ["android.intent.category.LAUNCHER"]
 
 [patch.crates-io]
-android-activity = { path = "../snifferengine/patches/android-activity" }
+android-activity = { git = "https://github.com/GreenKod/snifferengine.git" }

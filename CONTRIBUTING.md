@@ -15,15 +15,15 @@ Thank you for your interest in contributing to SnifferLauncher. SnifferLauncher 
 
 ## Development Setup
 
-### Workspace Layout
+By default, `Cargo.toml` pulls `sniffer_engine` directly from `https://github.com/GreenKod/snifferengine.git`.
 
-Ensure `snifferengine` is checked out as a sibling directory (`../snifferengine`):
+If you are developing `snifferengine` and `snifferlauncher` simultaneously side by side (`../snifferengine`), run:
 
-```text
-sniffers/
-├── snifferengine/
-└── snifferlauncher/
+```bash
+bash onDevelop.sh
 ```
+
+Running `bash onDevelop.sh` a second time switches `Cargo.toml` back to the default GitHub `git` dependency before committing.
 
 ### Running the Desktop Simulator
 

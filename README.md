@@ -42,14 +42,14 @@ sniffers/
 
 ## Quick Start
 
-Clone both `snifferengine` and `snifferlauncher` side by side inside a parent folder (e.g. `sniffers/`):
+Clone the repository and enter the project directory (Cargo automatically fetches `sniffer_engine` from GitHub):
 
 ```bash
-mkdir sniffers && cd sniffers
-git clone https://github.com/GreenKod/snifferengine.git
 git clone https://github.com/GreenKod/snifferlauncher.git
 cd snifferlauncher
 ```
+
+> **Local Engine Development:** If you also have `snifferengine` checked out at `../snifferengine`, run `bash onDevelop.sh` to toggle `Cargo.toml` between local `path` mode and GitHub `git` mode.
 
 ### Desktop Simulator
 
