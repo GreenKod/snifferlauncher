@@ -107,7 +107,7 @@ interface SnifferUIFramework {
     setState(patch: any): void;
     forceUpdate(force?: boolean): void;
     matchId(idStr: string, targets: string | string[]): boolean;
-    on(eventType: string, handler: (event: UIEventData) => boolean | void): void;
+    on(eventType: string, targetOrHandler: string | string[] | ((event: UIEventData) => boolean | void), handler?: (event: UIEventData) => boolean | void): void;
     onBack(handler: (event: UIEventData) => boolean | void): void;
     onDismiss(actionOrHandler: string | ((event: UIEventData) => boolean | void), handler?: (event: UIEventData) => boolean | void): void;
     dispatchEvent(eventOrJson: UIEventData | string): boolean;

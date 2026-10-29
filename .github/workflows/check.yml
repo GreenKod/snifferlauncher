@@ -52,6 +52,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout SnifferEngine
+        shell: bash
+        run: |
+          if [ ! -d "../snifferengine" ]; then
+            git clone --depth 1 https://github.com/GreenKod/snifferengine.git ../snifferengine
+          fi
+
       - name: Install and Run actionlint
         run: |
           bash <(curl -sL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.12 /usr/local/bin
@@ -96,7 +103,7 @@ jobs:
           cargo machete
 
       - name: Plugin Manifest & JavaScript Syntax Tests
-        run: cargo test --locked -p sniffer_plugin --test manifest_validation_tests
+        run: cargo test --locked --test launcher_ui_tests
 
       - name: Fast Workspace Compilation Sanity Check
         run: cargo check --locked --workspace
@@ -114,6 +121,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout SnifferEngine
+        shell: bash
+        run: |
+          if [ ! -d "../snifferengine" ]; then
+            git clone --depth 1 https://github.com/GreenKod/snifferengine.git ../snifferengine
+          fi
 
       - name: Install System Dependencies
         run: |
@@ -200,6 +214,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout SnifferEngine
+        shell: bash
+        run: |
+          if [ ! -d "../snifferengine" ]; then
+            git clone --depth 1 https://github.com/GreenKod/snifferengine.git ../snifferengine
+          fi
 
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # stable
@@ -298,6 +319,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Checkout SnifferEngine
+        shell: bash
+        run: |
+          if [ ! -d "../snifferengine" ]; then
+            git clone --depth 1 https://github.com/GreenKod/snifferengine.git ../snifferengine
+          fi
+
       - name: Install System Dependencies
         run: brew install pkg-config
 
@@ -369,6 +397,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout SnifferEngine
+        shell: bash
+        run: |
+          if [ ! -d "../snifferengine" ]; then
+            git clone --depth 1 https://github.com/GreenKod/snifferengine.git ../snifferengine
+          fi
 
       - name: Setup Java (JDK 17)
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1

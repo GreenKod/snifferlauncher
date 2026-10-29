@@ -110,8 +110,20 @@ const SnifferUI = (function () {
             return _matchId(idStr, targets);
         },
 
-        on(eventType, handler) {
-            if (!eventType || typeof handler !== "function") return;
+        on(eventType, targetOrHandler, maybeHandler) {
+            if (!eventType) return;
+            let handler = null;
+            if (typeof targetOrHandler === "function") {
+                handler = targetOrHandler;
+            } else if (targetOrHandler && typeof maybeHandler === "function") {
+                handler = function (e) {
+                    if (_matchId(e && e.id, targetOrHandler)) {
+                        return maybeHandler(e);
+                    }
+                    return false;
+                };
+            }
+            if (!handler) return;
             if (!_eventHandlers[eventType]) {
                 _eventHandlers[eventType] = [];
             }
@@ -155,10 +167,22 @@ const SnifferUI = (function () {
                 if (_state.onBack(e) === true) return true;
             }
 
+            if (e.type === "WindowResized") {
+                _commit(true);
+                return true;
+            }
+
             return false;
         },
     };
 })();
+
+if (typeof globalThis.onEvent !== "function") {
+    globalThis.onEvent = function (eventJsonString) {
+        SnifferUI.dispatchEvent(eventJsonString);
+        return "[]";
+    };
+}
 // =============================================================================
 // Channel Subscription Helper System
 // =============================================================================

@@ -1,30 +1,29 @@
 {
-  "id": "com.sniffer.dock",
-  "name": "Dock Interface",
-  "version": "1.0.0",
-  "main": "main.js",
-  "scripts": [
-    "services/apps.js",
-    "components/dock_bar.js",
-    "main.js"
-  ],
-  "preload": [
-    "../framework/sniffer_ui.js"
-  ],
-  "permissions": [
-    "plugin.permission.UI",
-    "plugin.permission.IPC",
-    "plugin.permission.INPUT",
-    "plugin.permission.APP_LAUNCH",
-    "android.permission.QUERY_ALL_PACKAGES",
-    "android.permission.LAUNCH_APP"
-  ],
-  "maxMemoryMb": 8,
-  "checksums": {
-    "../framework/sniffer_ui.js": "d86c3b43b23e4cfdf033365496bd21db7fbb041619c96859fbae2bb019c4d9c8",
-    "services/apps.js": "984dbd234c79e57174854a243e5f6ef1454ce99a3457c8fb0e537231108ea79a",
-    "components/dock_bar.js": "a8cc0a27078b7ed3da9e444275bb13baed7dc6f83ca957f20c70d02e0d74ed67",
-    "main.js": "7640076244631d80849ce30a22ac463e9674154b245d90968effd6f4e6d9493a"
-  }
+    "id": "com.sniffer.dock",
+    "name": "Dock Interface",
+    "version": "1.0.0",
+    "main": "main.js",
+    "scripts": [
+        "services/apps.js",
+        "components/dock_bar.js",
+        "main.js"
+    ],
+    "preload": [
+        "../framework/sniffer_ui.js"
+    ],
+    "permissions": [
+        "plugin.permission.UI",
+        "plugin.permission.IPC",
+        "plugin.permission.INPUT",
+        "plugin.permission.APP_LAUNCH",
+        "android.permission.QUERY_ALL_PACKAGES",
+        "android.permission.LAUNCH_APP"
+    ],
+    "maxMemoryMb": 8,
+    "checksums": {
+        "../framework/sniffer_ui.js": "a4d869720ecca26464ec07d701df85f22b7a9d98490283ffd63d107d908c3b2e",
+        "services/apps.js": "984dbd234c79e57174854a243e5f6ef1454ce99a3457c8fb0e537231108ea79a",
+        "components/dock_bar.js": "a8cc0a27078b7ed3da9e444275bb13baed7dc6f83ca957f20c70d02e0d74ed67",
+        "main.js": "7640076244631d80849ce30a22ac463e9674154b245d90968effd6f4e6d9493a"
+    }
 }
-
