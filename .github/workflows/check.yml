@@ -10,10 +10,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
-
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
@@ -291,7 +287,7 @@ jobs:
   # macOS verification on Apple Silicon
   validate-macos-aarch64:
     name: macOS Desktop (Quality & Smoke)
-    runs-on: macos-14
+    runs-on: macos-latest
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.source == 'true' || needs.changes.outputs.ci == 'true'
     steps:
