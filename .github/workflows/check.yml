@@ -530,6 +530,7 @@ jobs:
       actions: read
     env:
       VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+      VIRUSTOTAL_API_KEY_2: ${{ secrets.VIRUSTOTAL_API_KEY_2 }}
     steps:
       - name: Download Windows Desktop Binary
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -584,7 +585,8 @@ jobs:
             find scan_prepared -type f -exec ls -lh {} + 2>/dev/null | awk '{print "| `" $9 "` | " $5 " |"}' || echo "No artifacts found."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Scan Artifacts with VirusTotal
+      - name: Scan Artifacts with VirusTotal (Primary Key)
+        id: vt_primary
         uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 # v5.0.0
         continue-on-error: true # Reporting mode: non-blocking on API conflict (409) or rate limits
         if: env.VIRUSTOTAL_API_KEY != ''
@@ -594,14 +596,35 @@ jobs:
             scan_prepared/*
           request_rate: 4
 
-      - name: VirusTotal Scan Notice (Skipped)
-        if: env.VIRUSTOTAL_API_KEY == ''
+      - name: Scan Artifacts with VirusTotal (Fallback Key)
+        id: vt_fallback
+        uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 # v5.0.0
+        continue-on-error: true # Reporting mode: non-blocking on API conflict (409) or rate limits
+        if: env.VIRUSTOTAL_API_KEY_2 != '' && (env.VIRUSTOTAL_API_KEY == '' || steps.vt_primary.outcome == 'failure')
+        with:
+          vt_api_key: ${{ env.VIRUSTOTAL_API_KEY_2 }}
+          files: |
+            scan_prepared/*
+          request_rate: 4
+
+      - name: VirusTotal Fallback Notice
+        if: env.VIRUSTOTAL_API_KEY_2 != '' && steps.vt_primary.outcome == 'failure'
         run: |
-          echo "::warning title=VirusTotal Scan Skipped::VIRUSTOTAL_API_KEY secret is not configured in repository settings. Artifact malware scanning was skipped. To activate automated binary scanning, add VIRUSTOTAL_API_KEY to Repository Secrets."
+          echo "::notice title=VirusTotal Fallback::Primary VIRUSTOTAL_API_KEY encountered an error or quota exhaustion. Fallback to VIRUSTOTAL_API_KEY_2 was executed."
+          {
+            echo ""
+            echo "### 🔄 VirusTotal Yedek Anahtar Devreye Girdi"
+            echo "> **Bilgi:** Birincil anahtar (\`VIRUSTOTAL_API_KEY\`) hata veya kota sınırına ulaştığı için yedek \`VIRUSTOTAL_API_KEY_2\` anahtarı kullanılarak tarama gerçekleştirildi."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: VirusTotal Scan Notice (Skipped)
+        if: env.VIRUSTOTAL_API_KEY == '' && env.VIRUSTOTAL_API_KEY_2 == ''
+        run: |
+          echo "::warning title=VirusTotal Scan Skipped::Neither VIRUSTOTAL_API_KEY nor VIRUSTOTAL_API_KEY_2 secret is configured in repository settings. Artifact malware scanning was skipped. To activate automated binary scanning, add VIRUSTOTAL_API_KEY or VIRUSTOTAL_API_KEY_2 to Repository Secrets."
           {
             echo ""
             echo "### ⚠️ VirusTotal Taraması Atlandı"
-            echo "> **Uyarı:** \`VIRUSTOTAL_API_KEY\` gizli anahtarı tanımlanmadığı için ikili dosya ve APK taraması atlandı."
+            echo "> **Uyarı:** \`VIRUSTOTAL_API_KEY\` veya \`VIRUSTOTAL_API_KEY_2\` gizli anahtarı tanımlanmadığı için ikili dosya ve APK taraması atlandı."
             echo "> Otomatik antivirüs taramasını aktif etmek için GitHub reponuzda **Settings > Secrets and variables > Actions** sekmesine giderek anahtarınızı ekleyebilirsiniz."
           } >> "$GITHUB_STEP_SUMMARY"
 
