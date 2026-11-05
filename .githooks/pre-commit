@@ -11,10 +11,11 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-GIT_ENGINE='sniffer_engine = { git = "https://github.com/GreenKod/snifferengine.git" }'
+DEFAULT_REV="513de1dca3826d12c0a014351ed019f28f57d62a"
+GIT_ENGINE="sniffer_engine = { git = \"https://github.com/GreenKod/snifferengine.git\", rev = \"$DEFAULT_REV\" }"
 LOCAL_ENGINE='sniffer_engine = { path = "../snifferengine/crates/sniffer_engine" }'
 
-GIT_PATCH='android-activity = { git = "https://github.com/GreenKod/snifferengine.git" }'
+GIT_PATCH="android-activity = { git = \"https://github.com/GreenKod/snifferengine.git\", rev = \"$DEFAULT_REV\" }"
 LOCAL_PATCH='android-activity = { path = "../snifferengine/patches/android-activity" }'
 
 NEED_LOCK_SYNC=0
@@ -26,13 +27,13 @@ if grep -qF "$LOCAL_ENGINE" Cargo.toml; then
     NEED_LOCK_SYNC=1
 fi
 
-if ! grep -A 3 'name = "sniffer_engine"' Cargo.lock | grep -q 'source = "git+https://github.com/GreenKod/snifferengine.git#'; then
+if ! grep -A 3 'name = "sniffer_engine"' Cargo.lock | grep -q 'source = "git+https://github.com/GreenKod/snifferengine.git'; then
     NEED_LOCK_SYNC=1
 fi
 
 if [ "$NEED_LOCK_SYNC" -eq 1 ]; then
     echo -e "\033[1;34m[pre-commit] Cargo.lock GitHub snifferengine kaynağı ile senkronize ediliyor...\033[0m"
-    cargo update -p sniffer_engine -p android-activity
+    cargo update -w
     git add Cargo.toml Cargo.lock
     echo -e "\033[1;32m[pre-commit] ✔ Cargo.toml ve Cargo.lock güncellendi ve commite eklendi.\033[0m"
 fi
