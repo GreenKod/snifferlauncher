@@ -25,7 +25,7 @@ fi
 
 CARGO_TOML="$LAUNCHER_DIR/Cargo.toml"
 
-DEFAULT_REV="513de1dca3826d12c0a014351ed019f28f57d62a"
+DEFAULT_REV="eedbb840b1c87a96a808d3be1a86ae50aba19db6"
 GIT_ENGINE="sniffer_engine = { git = \"https://github.com/GreenKod/snifferengine.git\", rev = \"$DEFAULT_REV\" }"
 LOCAL_ENGINE='sniffer_engine = { path = "../snifferengine/crates/sniffer_engine" }'
 
