@@ -29,7 +29,7 @@ flowchart TD
 
 ```text
 sniffers/
-├── snifferengine/     # Standalone 120Hz UI, Physics & Graphics Engine repository
+├── snifferengine/     # Standalone UI, Physics & Graphics Engine repository
 └── snifferlauncher/   # This repository (Android/Desktop Launcher host & plugins)
     ├── .plugins/      # Launcher UI plugins (default_ui, dock, clock_widget, devkit_hud, logger)
     ├── android/       # AndroidManifest.xml and launcher icons/resources
