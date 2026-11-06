@@ -8,7 +8,7 @@ Thank you for your interest in contributing to SnifferLauncher. SnifferLauncher 
 
 - **Professional Tone**: Maintain a formal, technical, and objective communication style across issues, pull requests, and commit messages.
 - **Engine vs. Launcher Separation**:
-  - Changes to core layout, rendering, 120Hz scroll/spring physics, QuickJS sandboxing, or `SnifferUI` framework internals belong in the sibling **`snifferengine`** repository (`../snifferengine`).
+  - Changes to core layout, rendering, scroll/spring physics, QuickJS sandboxing, or `SnifferUI` framework internals belong in the sibling **`snifferengine`** repository (`../snifferengine`).
   - Changes to launcher screens (`default_ui`, `dock`, `clock_widget`), Android launcher manifest/resources (`android/`), and launcher UI tests (`tests/launcher_ui_tests.rs`) belong in **`snifferlauncher`**.
 
 ---
