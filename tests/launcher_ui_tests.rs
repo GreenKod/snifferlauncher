@@ -1086,3 +1086,91 @@ fn test_app_drawer_rapid_open_close_timer_cancellation() {
         assert!(find_element(&root_ui, "app_drawer_root").is_none());
     });
 }
+
+#[test]
+fn test_onboarding_manager_loads_and_persists_completion() {
+    use rquickjs::{Context, Runtime};
+
+    let plugins_dir = get_plugins_dir();
+    let default_ui_dir = plugins_dir.join("default_ui");
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+
+    ctx.with(|c| {
+        c.eval::<(), _>(
+            r#"
+            globalThis.vaultStore = {};
+            globalThis.host_vault_get = function(key) {
+                const value = globalThis.vaultStore[key];
+                return value === undefined ? null : JSON.stringify(value);
+            };
+            globalThis.host_vault_set = function(key, value) {
+                globalThis.vaultStore[key] = JSON.parse(value);
+                return true;
+            };
+            globalThis.host_vault_query_apps = function() {
+                return JSON.stringify({ apps: [], total_count: 0, page: 0, total_pages: 1 });
+            };
+            globalThis.host_log = function(message) {
+                globalThis.lastLogMessage = message;
+            };
+        "#,
+        )
+        .unwrap();
+
+        let system_code = fs::read_to_string(plugins_dir.join("framework/system.js")).unwrap();
+        c.eval::<(), _>(system_code).unwrap();
+
+        let state_code = fs::read_to_string(default_ui_dir.join("state.js")).unwrap();
+        c.eval::<(), _>(state_code).unwrap();
+
+        let initially_visible: bool = c.eval("state.isOnboardingVisible").unwrap();
+        let initial_step: i32 = c.eval("state.onboardingStep").unwrap();
+        let total_steps: i32 = c.eval("state.onboardingTotalSteps").unwrap();
+        assert!(
+            initially_visible,
+            "Onboarding should be visible on first run"
+        );
+        assert_eq!(initial_step, 0);
+        assert_eq!(total_steps, 5);
+
+        let valid_step: bool = c.eval("state.setOnboardingStep(2)").unwrap();
+        let invalid_step: bool = c.eval("state.setOnboardingStep(5)").unwrap();
+        assert!(valid_step);
+        assert!(!invalid_step);
+
+        let completed: bool = c.eval("state.completeOnboarding()").unwrap();
+        let persisted: bool = c
+            .eval("globalThis.vaultStore['system.onboarding_completed'] === true")
+            .unwrap();
+        let visible_after_completion: bool = c.eval("state.isOnboardingVisible").unwrap();
+        let loaded_completed: bool = c.eval("(new OnboardingManager()).completed").unwrap();
+        assert!(completed);
+        assert!(persisted, "Completion should be saved in the Vault");
+        assert!(!visible_after_completion);
+        assert!(
+            loaded_completed,
+            "A new manager should load saved completion"
+        );
+
+        c.eval::<(), _>(
+            r#"
+            delete globalThis.vaultStore["system.onboarding_completed"];
+            globalThis.host_vault_set = function() { return false; };
+            globalThis.failedManager = new OnboardingManager();
+        "#,
+        )
+        .unwrap();
+        let failed_completion: bool = c.eval("failedManager.complete()").unwrap();
+        let still_visible: bool = c.eval("failedManager.isVisible").unwrap();
+        let logged_failure: bool = c
+            .eval("globalThis.lastLogMessage.includes('Could not persist onboarding completion.')")
+            .unwrap();
+        assert!(!failed_completion);
+        assert!(
+            still_visible,
+            "Onboarding should remain visible if saving fails"
+        );
+        assert!(logged_failure, "Vault persistence failure should be logged");
+    });
+}

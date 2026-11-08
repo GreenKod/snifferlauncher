@@ -292,10 +292,53 @@ class AppRepository {
 // State Coordinator (Unified Facade)
 // Maintains 100% backward compatibility for all components & scripts.
 // =============================================================================
+class OnboardingManager {
+    constructor() {
+        this.storageKey = "system.onboarding_completed";
+        this.totalSteps = 5;
+        this.currentStep = 0;
+        this.completed = typeof Vault !== "undefined"
+            && typeof Vault.get === "function"
+            && Vault.get(this.storageKey, false) === true;
+        this.isVisible = !this.completed;
+    }
+
+    setStep(step) {
+        if (!Number.isInteger(step) || step < 0 || step >= this.totalSteps) {
+            return false;
+        }
+        this.currentStep = step;
+        return true;
+    }
+
+    complete() {
+        if (typeof Vault === "undefined" || typeof Vault.set !== "function"
+            || !Vault.set(this.storageKey, true)) {
+            if (typeof host_log === "function") {
+                host_log("[SnifferLauncher] Could not persist onboarding completion.");
+            }
+            return false;
+        }
+
+        this.completed = true;
+        this.isVisible = false;
+        return true;
+    }
+}
+
 const floorManager = new FloorManager();
 const appRepository = new AppRepository(APPS_PER_PAGE);
+const onboardingManager = new OnboardingManager();
 
 let state = {
+    // Onboarding
+    onboardingManager,
+    get isOnboardingVisible() { return this.onboardingManager.isVisible; },
+    get onboardingStep() { return this.onboardingManager.currentStep; },
+    get onboardingTotalSteps() { return this.onboardingManager.totalSteps; },
+    setOnboardingStep(step) { return this.onboardingManager.setStep(step); },
+    completeOnboarding() { return this.onboardingManager.complete(); },
+
     // FloorManager Delegation
     floorManager,
     get currentFloor() { return this.floorManager.currentFloor; },
